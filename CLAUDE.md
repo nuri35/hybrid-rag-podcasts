@@ -212,6 +212,7 @@ Current phase: **Phase 1 — Vector layer + CLI ingestion + basic Q&A endpoint**
 | Phase | Status | Goal |
 |---|---|---|
 | 1. Vector layer | 🟡 In progress | Working vector RAG with CLI ingestion |
+| &nbsp;&nbsp;1.1 Repo init | ✅ Done | NestJS + TS strict scaffold, ConfigModule (Zod-validated env), HealthModule (`GET /health`), AllExceptionsFilter, `cli.ts` via nest-commander, ESLint/Prettier, folder structure per module spec |
 | 2. Evaluation | ⚪ Pending | Ragas-style metrics + golden dataset (30–50 Q-A pairs) |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) |
 | 4. Hybrid retrieval | ⚪ Pending | Combine vector + graph (sequential + parallel strategies) |
