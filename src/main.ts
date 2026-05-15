@@ -28,10 +28,6 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((error: unknown) => {
-  Logger.error(
-    error instanceof Error ? error.stack : String(error),
-    undefined,
-    'Bootstrap',
-  );
+  Logger.error(error instanceof Error ? error.stack : String(error), undefined, 'Bootstrap');
   process.exit(1);
 });

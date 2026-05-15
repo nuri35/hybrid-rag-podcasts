@@ -24,7 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const { status, message } = this.normalize(exception);
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= 500) {
       this.logger.error(
         `${request.method} ${request.url} -> ${status}: ${message}`,
         exception instanceof Error ? exception.stack : undefined,
@@ -68,7 +68,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return response;
     }
     if (response !== null && typeof response === 'object' && 'message' in response) {
-      const raw = (response as { message: unknown }).message;
+      const raw: unknown = response.message;
       if (typeof raw === 'string') {
         return raw;
       }

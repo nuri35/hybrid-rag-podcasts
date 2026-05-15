@@ -1,0 +1,4 @@
+# Ignore real datasets (re-download via scripts/prepare_dataset.py)
+podcasts.csv
+*.csv
+!sample-podcasts.csv

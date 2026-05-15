@@ -13,7 +13,9 @@ function isCommanderControlFlow(error: unknown): error is CommanderLikeError {
     return false;
   }
   const code = (error as CommanderLikeError).code;
-  return code === 'commander.helpDisplayed' || code === 'commander.help' || code === 'commander.version';
+  return (
+    code === 'commander.helpDisplayed' || code === 'commander.help' || code === 'commander.version'
+  );
 }
 
 async function bootstrap(): Promise<void> {
@@ -33,10 +35,6 @@ bootstrap().catch((error: unknown) => {
   if (isCommanderControlFlow(error)) {
     process.exit(error.exitCode ?? 0);
   }
-  Logger.error(
-    error instanceof Error ? error.stack : String(error),
-    undefined,
-    'CLI',
-  );
+  Logger.error(error instanceof Error ? error.stack : String(error), undefined, 'CLI');
   process.exit(1);
 });

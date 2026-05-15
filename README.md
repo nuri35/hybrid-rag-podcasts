@@ -38,9 +38,40 @@ All env variables are validated at startup via a Zod schema (`src/common/config/
 | `CHROMA_PATH` | no | `./data/chroma` | Local Chroma collection path |
 | `CHROMA_COLLECTION` | no | `podcasts` | Chroma collection name |
 
-## Run
+## Data preparation
 
-### HTTP server (dev)
+This project requires a CSV of podcast transcripts before vector ingestion.
+
+### Option 1 — Sample dataset (instant)
+
+A 15-episode sample ships in `data/sample-podcasts.csv` for quick testing. Skip directly to "Usage".
+
+### Option 2 — Full dataset (Lex Fridman podcast, 325+ episodes)
+
+Run the one-time data prep script:
+
+```bash
+pip install -r scripts/requirements.txt
+python scripts/prepare_dataset.py
+```
+
+This writes `data/podcasts.csv` (gitignored due to size). Python 3.9+ required. This is the only Python dependency in the project — used purely for one-time data preparation, not at runtime.
+
+## Usage
+
+### Step 1: Ingest the CSV into the vector store
+
+```bash
+# With sample
+npm run cli -- ingest --csv data/sample-podcasts.csv --reset
+
+# With full dataset (after data preparation)
+npm run cli -- ingest --csv data/podcasts.csv --reset
+```
+
+> The `ingest` command lands in Phase 1.4. Until then, `npm run cli -- --help` lists the built-in CLI help.
+
+### Step 2: Start the HTTP server
 
 ```bash
 npm run start:dev
@@ -53,15 +84,17 @@ curl http://localhost:3000/health
 # {"status":"ok","timestamp":"..."}
 ```
 
-### CLI
+### Step 3: Ask questions
 
 ```bash
-npm run cli -- --help
+curl -X POST http://localhost:3000/api/v1/questions \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"What did guests say about AGI?"}'
 ```
 
-CLI commands (ingestion, etc.) are wired via `nest-commander` and will be filled in during Phase 1.2 onward.
+> The questions endpoint lands in Phase 1.7. Until then, only `/health` responds.
 
-### Other scripts
+## Other scripts
 
 | Command | Purpose |
 |---|---|
