@@ -6,11 +6,20 @@ A hybrid RAG (vector + graph) Q&A system over podcast transcripts. Users ask nat
 
 ## Prerequisites
 
+**Always required:**
+
 - Node.js >= 20 (developed on Node 24)
 - npm 10+
 - An OpenAI API key
 - Chroma (Phase 1+): local server reachable at the configured `CHROMA_PATH` collection
 - Neo4j (Phase 3+): community edition or Aura
+
+**Only required if you want the full Lex Fridman dataset (skip if you use the sample CSV):**
+
+- Python >= 3.9 (developed on 3.10) with `pip` available
+- ~300 MB free disk space for the HuggingFace dataset cache (one-time download) plus ~40 MB for the generated `data/podcasts.csv`
+- Internet connection for the first run (subsequent runs use the local HF cache)
+- *No HuggingFace account needed* — the `nmac/lex_fridman_podcast` dataset is public.
 
 ## Install
 
@@ -46,16 +55,72 @@ This project requires a CSV of podcast transcripts before vector ingestion.
 
 A 15-episode sample ships in `data/sample-podcasts.csv` for quick testing. Skip directly to "Usage".
 
-### Option 2 — Full dataset (Lex Fridman podcast, 325+ episodes)
+### Option 2 — Full dataset (Lex Fridman podcast, 319 episodes)
 
-Run the one-time data prep script:
+Run the one-time data prep script. This is the **only** time Python is used in the project; everything else is TypeScript.
+
+#### Step 1 — Verify Python
+
+```bash
+python --version    # must report 3.9 or newer
+python -m pip --version
+```
+
+If `pip` is missing, install it with `python -m ensurepip --upgrade`.
+
+#### Step 2 — Recommended: use a virtual environment
+
+A virtual environment isolates the dataset-prep packages from your system Python. It's strongly recommended — the script needs ~250 MB of Python dependencies.
+
+**Windows (PowerShell):**
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks the activation script with an execution-policy error, run once per user:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+**Windows (cmd.exe):**
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+```
+
+**macOS / Linux:**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+After activation your prompt should show `(.venv)`. The `.venv/` directory is gitignored.
+
+#### Step 3 — Install Python deps and run the script
 
 ```bash
 pip install -r scripts/requirements.txt
 python scripts/prepare_dataset.py
 ```
 
-This writes `data/podcasts.csv` (gitignored due to size). Python 3.9+ required. This is the only Python dependency in the project — used purely for one-time data preparation, not at runtime.
+This produces `data/podcasts.csv` (~40 MB, gitignored). First-run cost: ~215 MB downloaded into the HuggingFace cache at `~/.cache/huggingface/`; subsequent runs reuse it.
+
+When you're done with the prep script you can deactivate the venv (`deactivate`) — the resulting CSV is the only artifact the rest of the project cares about.
+
+#### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `ModuleNotFoundError: No module named 'huggingface_hub'` (or similar) when running the script | You skipped or partially ran `pip install`. Re-run `pip install -r scripts/requirements.txt` inside the activated venv. |
+| `TypeError: unsupported operand type(s) for /: 'str' and 'int'` | An old copy of `prepare_dataset.py` is in use. Pull the latest — the `end` column is a `HH:MM:SS.mmm` string and must go through `parse_timestamp_to_seconds`. |
+| Script hangs at "Loading dataset from HuggingFace…" on first run | Initial dataset download is ~200 MB; check your network. After the first successful run it loads from local cache instantly. |
+| PowerShell "running scripts is disabled" when activating venv | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then retry activation. |
+| Disk space pressure | Output CSV is ~40 MB; the HF cache (`~/.cache/huggingface/`) is ~215 MB. You can delete the cache after the CSV is generated — it will be re-downloaded on next run. |
 
 ## Usage
 

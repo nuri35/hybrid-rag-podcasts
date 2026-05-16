@@ -34,3 +34,19 @@ data/*.sqlite3
 
 # Build artifacts
 *.tsbuildinfo
+
+# Python (scripts/ tooling only — no Python runtime in production)
+.venv/
+.venv*/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# HuggingFace dataset cache (used by scripts/prepare_dataset.py if run inside repo)
+.cache/huggingface/
