@@ -4,6 +4,51 @@ A hybrid RAG (vector + graph) Q&A system over podcast transcripts. Users ask nat
 
 > The full project constitution — architectural decisions, hard constraints, conventions, and phase roadmap — lives in [`CLAUDE.md`](./CLAUDE.md). Read it first.
 
+## How it fits together
+
+```mermaid
+flowchart LR
+    subgraph DP["Data Prep — one-time"]
+        HF[HuggingFace<br/>nmac/lex_fridman_podcast]
+        Script[scripts/prepare_dataset.py]
+        CSV[data/podcasts.csv]
+    end
+
+    subgraph ING["Ingestion — CLI, offline"]
+        Loader[CsvLoaderService]
+        Chunker[ChunkerService]
+        Embedder[EmbedderService]
+        Chroma[(Chroma<br/>vector store)]
+    end
+
+    subgraph QRY["Query — per request"]
+        API["POST /api/v1/questions"]
+        VR[VectorRetriever]
+        QA[QaChain<br/>prompt + LLM]
+        Ans[Answer + citations]
+        GR[GraphRetriever]
+        Merge[Hybrid merge]
+    end
+
+    Neo4j[(Neo4j<br/>entity graph)]
+
+    HF --> Script --> CSV --> Loader
+    Loader --> Chunker --> Embedder --> Chroma
+    Chroma --> VR
+    API --> VR --> QA --> Ans
+
+    Chunker -.-> Neo4j
+    Neo4j -.-> GR
+    GR -.-> Merge
+    VR -.-> Merge
+    Merge -.-> QA
+
+    classDef future stroke-dasharray: 5 5,fill:#f8f8f8,stroke:#999,color:#666
+    class Neo4j,GR,Merge future
+```
+
+Data Prep and Ingestion run once at setup time while Query runs per user request, and the dashed nodes/edges (Neo4j entity graph, GraphRetriever, hybrid merge) are Phase 3+ additions not yet implemented — see [`docs/architecture.md`](./docs/architecture.md) for detailed sequence diagrams.
+
 ## Prerequisites
 
 **Always required:**
