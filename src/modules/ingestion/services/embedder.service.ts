@@ -177,7 +177,13 @@ export class EmbedderService {
       // name → 404, quota exhaustion → 429) by silently substituting
       // `Array(N).fill([])`. Treating that as success would poison the vector
       // store with zero vectors. We fail loud and stop the pipeline instead.
-      throw new EmbeddingFailedException(fulfilled - zeroCount, zeroCount, batches.length);
+      // Counts are at vector granularity here (not batch), which is the
+      // strongest signal a downstream operator needs.
+      throw new EmbeddingFailedException(
+        vectors.length - zeroCount,
+        zeroCount,
+        vectors.length,
+      );
     }
 
     // Post-normalization sanity check on the first non-zero vector: its
