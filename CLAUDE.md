@@ -84,6 +84,8 @@ Each was a deliberate choice. Do not revisit without an ADR.
 
 8. **CSV parsing uses csv-parse + Zod with skip-and-warn behavior.** A single malformed row never aborts ingestion; counts of skipped rows are logged. Chunking uses `RecursiveCharacterTextSplitter` with 800/100 default; chunk IDs are deterministic (`{episode_id}_chunk_{idx}`) for idempotent re-runs.
 
+9. **Embedding provider is Google Gemini `text-embedding-004` (768 dim, free tier).** Parallelism is 5 in-flight batches via `p-limit`; batch failures are isolated via `Promise.allSettled`; LangChain handles per-batch retry (3 attempts). Switching provider requires re-ingestion since vector spaces differ. (`@google/generative-ai` is installed at root with `--legacy-peer-deps` because chromadb 1.x declares a stale `^0.1.1` peer dep that doesn't affect actual chromadb usage — see `package.json`.)
+
 ---
 
 ## Hard constraints — never violate
@@ -220,6 +222,7 @@ Current phase: **Phase 1 — Vector layer + CLI ingestion + basic Q&A endpoint**
 | &nbsp;&nbsp;1.1 Repo init | ✅ Done | NestJS + TS strict scaffold, ConfigModule (Zod-validated env), HealthModule (`GET /health`), AllExceptionsFilter, `cli.ts` via nest-commander, ESLint/Prettier, folder structure per module spec |
 | &nbsp;&nbsp;1.2 Ingestion scaffold + data prep | ✅ Done | `IngestionModule` with four `@Injectable` service skeletons (CsvLoader, Chunker, Embedder, IngestionPipeline) wired into `AppModule`; ADR 0002 documents CSV → Document mapping (pageContent=transcript_text, metadata=rest); `scripts/prepare_dataset.py` (one-time Lex Fridman HF download + schema remap) is the project's sole Python dependency; README has Data preparation + Usage sections |
 | &nbsp;&nbsp;1.3.a + 1.3.b | ✅ Done | `CsvLoaderService` streams via csv-parse + Zod validation with skip+warn behavior (8 tests pass); `ChunkerService` uses `RecursiveCharacterTextSplitter` (800/100) and adds deterministic `chunk_id` + `chunk_index` + `total_chunks`; pipeline gained a `--dry-run` flag through `IngestCommand` and dry-run on full dataset reports 319 docs → 54,172 chunks |
+| &nbsp;&nbsp;1.3.c | ✅ Done | `EmbedderService` implemented with Gemini `text-embedding-004` (768 dim), batch=100, concurrency=5, `Promise.allSettled` error handling (6 tests pass); non-dry pipeline now runs load → chunk → embed and throws NotImplemented for 1.3.d storage |
 | 2. Evaluation | ⚪ Pending | Ragas-style metrics + golden dataset (30–50 Q-A pairs) |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) |
 | 4. Hybrid retrieval | ⚪ Pending | Combine vector + graph (sequential + parallel strategies) |

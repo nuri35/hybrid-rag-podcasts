@@ -50,6 +50,7 @@ export interface IngestionResult {
   rowsLoaded: number;
   rowsSkipped: number;
   chunksProduced: number;
+  vectorsProduced?: number;
   durationMs: number;
   dryRun: boolean;
 }

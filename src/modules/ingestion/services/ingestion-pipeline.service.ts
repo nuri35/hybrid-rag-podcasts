@@ -26,26 +26,28 @@ export class IngestionPipelineService {
     const documents = await this.csvLoader.load(options.csvPath);
     const chunks = await this.chunker.split(documents);
 
-    if (!isDryRun) {
-      void this.embedder;
-      throw new NotImplementedException(
-        'IngestionPipelineService.run write path (embedder/writer arrive in 1.3.c / 1.3.d)',
+    if (isDryRun) {
+      const durationMs = Date.now() - startedAt;
+      const result: IngestionResult = {
+        rowsLoaded: documents.length,
+        rowsSkipped: this.csvLoader.getLastStats()?.skipped ?? 0,
+        chunksProduced: chunks.length,
+        durationMs,
+        dryRun: true,
+      };
+      this.logger.log(
+        `Dry-run complete: ${result.rowsLoaded} docs, ${result.chunksProduced} chunks in ${durationMs}ms`,
       );
+      return result;
     }
 
-    const durationMs = Date.now() - startedAt;
-    const result: IngestionResult = {
-      rowsLoaded: documents.length,
-      rowsSkipped: this.csvLoader.getLastStats()?.skipped ?? 0,
-      chunksProduced: chunks.length,
-      durationMs,
-      dryRun: true,
-    };
-
+    const vectors = await this.embedder.embedBatch(chunks);
     this.logger.log(
-      `Dry-run complete: ${result.rowsLoaded} docs, ${result.chunksProduced} chunks in ${durationMs}ms`,
+      `Embedding complete: ${vectors.length} vectors produced in ${Date.now() - startedAt}ms; storage arrives in 1.3.d`,
     );
 
-    return result;
+    throw new NotImplementedException(
+      'IngestionPipelineService.run write path (vector storage arrives in 1.3.d ChromaRepository)',
+    );
   }
 }
