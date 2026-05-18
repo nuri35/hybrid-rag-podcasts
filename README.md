@@ -295,6 +295,18 @@ CHROMA_WRITE_TIMEOUT_MS=60000           # account for higher latency
 - [ ] Heartbeat reachable: `curl $CHROMA_URL/api/v1/heartbeat`
 - [ ] Health check passes at ingestion startup (logs `Chroma server reachable at ...`)
 
+## Rate limits
+
+Gemini Tier 1 (free) enforces ~15 RPM on the `gemini-embedding-001` endpoint. `EmbedderService` runs a two-layer rate limiter — a proactive token bucket plus a short adaptive retry for stray 429s — so full ingestion completes in a single run rather than failing midway. To accelerate, set `EMBEDDING_REQUESTS_PER_MINUTE` to your tier's limit:
+
+| Tier | Requirement | `EMBEDDING_REQUESTS_PER_MINUTE` | ~Full ingest (53K vectors) |
+|---|---|---|---|
+| 1 (free) | Default | `15` | ~50 minutes |
+| 2 | $250 spend + 30 days | `60` | ~15 minutes |
+| 3 | $1000+ spend | `200` | ~10 minutes |
+
+Adaptive retry (default 10 attempts × 200ms → 2000ms backoff × 1.5 growth) handles any 429s that slip through the bucket. Atomic-success: any unrecoverable failure aborts the run — no half-populated collections.
+
 ## Architecture overview
 
 See [`CLAUDE.md`](./CLAUDE.md) for the authoritative architecture, foundation reasoning, hard constraints, and phase tracking. In short:

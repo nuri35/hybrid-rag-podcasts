@@ -31,10 +31,38 @@ export class EmbedderService {
   private readonly embeddings: EmbeddingsClient;
   private hasLoggedNormalization = false;
 
+  // Two-layer rate limiting.
+  // Layer 1 — token bucket: a "next available slot" timestamp shared across all
+  // concurrent batches. Reservation is atomic: each call advances `lastRequestTime`
+  // by `minIntervalMs` BEFORE awaiting, so concurrent callers each get a unique
+  // slot. The race-prone "read-then-write" pattern is intentionally avoided.
+  // Layer 2 — adaptive retry: short exponential backoff that fires on 429s OR
+  // on the @langchain/google-genai 0.2.x silent-empty-array substitution that
+  // hides rate-limit rejections (see embedWithAdaptiveRetry below).
+  private readonly minIntervalMs: number;
+  private readonly retryMaxAttempts: number;
+  private readonly retryInitialDelay: number;
+  private readonly retryMaxDelay: number;
+  private readonly retryGrowthFactor: number;
+  private lastRequestTime = 0;
+
   constructor(config: ConfigService<Env, true>) {
     this.batchSize = config.get('EMBEDDING_BATCH_SIZE', { infer: true });
     this.concurrency = config.get('EMBEDDING_CONCURRENCY', { infer: true });
     this.embeddings = this.createEmbeddings(config);
+
+    const rpm = config.get('EMBEDDING_REQUESTS_PER_MINUTE', { infer: true });
+    this.minIntervalMs = Math.floor(60_000 / rpm);
+    this.retryMaxAttempts = config.get('EMBEDDING_RETRY_MAX_ATTEMPTS', { infer: true });
+    this.retryInitialDelay = config.get('EMBEDDING_RETRY_INITIAL_DELAY_MS', { infer: true });
+    this.retryMaxDelay = config.get('EMBEDDING_RETRY_MAX_DELAY_MS', { infer: true });
+    this.retryGrowthFactor = config.get('EMBEDDING_RETRY_GROWTH_FACTOR', { infer: true });
+
+    this.logger.log(
+      `Token bucket: ${rpm} RPM (${this.minIntervalMs}ms between requests); ` +
+        `adaptive retry: max=${this.retryMaxAttempts} attempts, ` +
+        `delay=${this.retryInitialDelay}→${this.retryMaxDelay}ms × ${this.retryGrowthFactor}`,
+    );
   }
 
   protected createEmbeddings(config: ConfigService<Env, true>): EmbeddingsClient {
@@ -42,7 +70,9 @@ export class EmbedderService {
       apiKey: config.get('GOOGLE_API_KEY', { infer: true }),
       model: config.get('EMBEDDING_MODEL', { infer: true }),
       taskType: TaskType.RETRIEVAL_DOCUMENT,
-      maxRetries: 3,
+      // Disable LangChain's internal retry — we centralize all retry logic in
+      // `embedWithAdaptiveRetry` so the token bucket gate runs on every attempt.
+      maxRetries: 0,
     });
   }
 
@@ -89,7 +119,7 @@ export class EmbedderService {
     const limit = pLimit(this.concurrency);
     const tasks = batches.map((batch) =>
       limit(async (): Promise<BatchOutcome> => {
-        const vectors = await this.embeddings.embedDocuments(batch.texts);
+        const vectors = await this.embedWithAdaptiveRetry(batch.texts);
         return { startIdx: batch.startIdx, vectors };
       }),
     );
@@ -220,6 +250,82 @@ export class EmbedderService {
     );
 
     return normalizedVectors;
+  }
+
+  /**
+   * Token bucket gate using "slot reservation" so it stays correct under
+   * concurrent callers. We atomically advance `lastRequestTime` by
+   * `minIntervalMs` BEFORE awaiting, so two concurrent calls each get a
+   * unique slot (one fires now, the next fires `minIntervalMs` later).
+   */
+  private async waitForToken(): Promise<void> {
+    const now = Date.now();
+    const targetTime = Math.max(now, this.lastRequestTime + this.minIntervalMs);
+    this.lastRequestTime = targetTime;
+    const wait = targetTime - now;
+    if (wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+
+  /**
+   * Rate-limit-aware embedding call. Two failure modes are handled here:
+   *
+   *   1. Direct 429 / quota / rate-limit error thrown by the SDK.
+   *   2. The SDK silently substituting `Array(N).fill([])` when an underlying
+   *      `batchEmbedContents` rejects. This is a known
+   *      `@langchain/google-genai` 0.2.x bug — `_embedDocumentsContent`
+   *      catches the rejection and returns empty arrays, which looks like a
+   *      success but is actually a rate-limit signal. We detect this and
+   *      treat it as a retryable 429.
+   *
+   * Token bucket is acquired on EVERY attempt so the retry honours the rate.
+   */
+  private async embedWithAdaptiveRetry(texts: string[]): Promise<number[][]> {
+    let delay = this.retryInitialDelay;
+    let lastError: Error | undefined;
+
+    for (let attempt = 1; attempt <= this.retryMaxAttempts; attempt += 1) {
+      await this.waitForToken();
+      try {
+        const result = await this.embeddings.embedDocuments(texts);
+        const hasEmpty = result.some(
+          (v) => !Array.isArray(v) || v.length === 0,
+        );
+        if (!hasEmpty) {
+          return result;
+        }
+        lastError = new Error(
+          'Empty embeddings returned — likely rate-limited (SDK silent-swallow). ' +
+            'Treating as 429 for adaptive retry.',
+        );
+        this.logger.debug(
+          `Empty-embedding hit (attempt ${attempt}/${this.retryMaxAttempts}); retrying after ${delay}ms`,
+        );
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const status = (err as { status?: number; statusCode?: number }).status;
+        const altStatus = (err as { statusCode?: number }).statusCode;
+        const message = lastError.message;
+        const isRateLimit =
+          status === 429 ||
+          altStatus === 429 ||
+          /quota|rate.?limit|exhausted|too many requests/i.test(message);
+        if (!isRateLimit) {
+          throw lastError;
+        }
+        this.logger.debug(
+          `Rate-limit error (attempt ${attempt}/${this.retryMaxAttempts}): ${message}; retrying after ${delay}ms`,
+        );
+      }
+
+      if (attempt < this.retryMaxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * this.retryGrowthFactor, this.retryMaxDelay);
+      }
+    }
+
+    throw lastError ?? new Error('Adaptive retry exhausted unexpectedly');
   }
 
   private normalizeVector(v: unknown): { normalized: number[]; isZero: boolean } {

@@ -22,14 +22,26 @@ interface ConfigOverrides {
   EMBEDDING_CONCURRENCY?: number;
   EMBEDDING_MODEL?: string;
   GOOGLE_API_KEY?: string;
+  EMBEDDING_REQUESTS_PER_MINUTE?: number;
+  EMBEDDING_RETRY_MAX_ATTEMPTS?: number;
+  EMBEDDING_RETRY_INITIAL_DELAY_MS?: number;
+  EMBEDDING_RETRY_MAX_DELAY_MS?: number;
+  EMBEDDING_RETRY_GROWTH_FACTOR?: number;
 }
 
 function makeConfig(overrides: ConfigOverrides = {}): ConfigService {
+  // Test-friendly defaults: huge RPM so the token bucket is effectively a no-op
+  // and tests run fast, and a small retry budget so failure paths exit quickly.
   const values: Record<string, unknown> = {
     GOOGLE_API_KEY: 'test-key',
-    EMBEDDING_MODEL: 'text-embedding-004',
+    EMBEDDING_MODEL: 'gemini-embedding-001',
     EMBEDDING_BATCH_SIZE: 10,
     EMBEDDING_CONCURRENCY: 5,
+    EMBEDDING_REQUESTS_PER_MINUTE: 60_000, // → minIntervalMs = 1ms
+    EMBEDDING_RETRY_MAX_ATTEMPTS: 1,
+    EMBEDDING_RETRY_INITIAL_DELAY_MS: 50,
+    EMBEDDING_RETRY_MAX_DELAY_MS: 200,
+    EMBEDDING_RETRY_GROWTH_FACTOR: 1.5,
     ...overrides,
   };
   return {
@@ -395,6 +407,133 @@ describe('EmbedderService', () => {
 
     const caught = await service.embedBatch(docs).catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(EmbeddingFailedException);
-    expect(caught).toMatchObject({ rejected: 3 });
+    // 3 docs fit in 1 batch (test batch size = 10). Adaptive retry exhausts and
+    // throws; Promise.allSettled records it as a single rejected batch.
+    expect(caught).toMatchObject({ rejected: 1, total: 1 });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Two-layer rate limiting: token bucket + adaptive retry
+  // ──────────────────────────────────────────────────────────────────
+
+  it('token bucket enforces minimum interval between sequential requests', async () => {
+    // RPM=600 → minIntervalMs=100ms (long enough to measure, short enough for jest).
+    mockEmbedDocuments.mockImplementation((texts) => Promise.resolve(texts.map(() => [1, 0])));
+
+    const service = await buildService({
+      EMBEDDING_BATCH_SIZE: 10,
+      EMBEDDING_CONCURRENCY: 1, // serial → measure interval directly
+      EMBEDDING_REQUESTS_PER_MINUTE: 600,
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 1,
+    });
+
+    const callTimes: number[] = [];
+    mockEmbedDocuments.mockImplementation((texts) => {
+      callTimes.push(Date.now());
+      return Promise.resolve(texts.map(() => [1, 0]));
+    });
+
+    const docs = Array.from({ length: 30 }, (_, i) => makeDoc(i)); // 3 batches of 10
+    await service.embedBatch(docs);
+
+    expect(callTimes).toHaveLength(3);
+    for (let i = 1; i < callTimes.length; i += 1) {
+      const gap = callTimes[i] - callTimes[i - 1];
+      // Allow generous jitter (-10ms) for timer / event-loop noise on Windows.
+      expect(gap).toBeGreaterThanOrEqual(90);
+    }
+  });
+
+  it('adaptive retry succeeds after a single 429 then a resolved response', async () => {
+    const rateLimitError = new Error('429 quota exceeded for project') as Error & {
+      status?: number;
+    };
+    rateLimitError.status = 429;
+    mockEmbedDocuments
+      .mockRejectedValueOnce(rateLimitError)
+      .mockResolvedValueOnce([[0.7, 0.7]]);
+    const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    const service = await buildService({
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 3,
+      EMBEDDING_RETRY_INITIAL_DELAY_MS: 50,
+    });
+    const result = await service.embedBatch([makeDoc(0, 'one prose')]);
+
+    expect(result).toHaveLength(1);
+    expect(mockEmbedDocuments).toHaveBeenCalledTimes(2);
+    const retryDebug = debugSpy.mock.calls.find((args) =>
+      String(args[0]).includes('Rate-limit error'),
+    );
+    expect(retryDebug).toBeDefined();
+
+    debugSpy.mockRestore();
+  });
+
+  it('adaptive retry throws after max attempts on persistent 429', async () => {
+    const rateLimitError = new Error('rate limit exceeded') as Error & { status?: number };
+    rateLimitError.status = 429;
+    mockEmbedDocuments.mockRejectedValue(rateLimitError);
+    jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    const service = await buildService({
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 3,
+      EMBEDDING_RETRY_INITIAL_DELAY_MS: 20,
+      EMBEDDING_RETRY_MAX_DELAY_MS: 50,
+    });
+
+    const caught = await service.embedBatch([makeDoc(0, 'persistent 429 prose')]).catch(
+      (e: unknown) => e,
+    );
+    expect(caught).toBeInstanceOf(EmbeddingFailedException);
+    expect(mockEmbedDocuments).toHaveBeenCalledTimes(3);
+  });
+
+  it('adaptive retry: non-429 errors fail fast without retry', async () => {
+    const serverError = new Error('500 internal server error') as Error & { status?: number };
+    serverError.status = 500;
+    mockEmbedDocuments.mockRejectedValueOnce(serverError);
+
+    const service = await buildService({ EMBEDDING_RETRY_MAX_ATTEMPTS: 5 });
+    const caught = await service.embedBatch([makeDoc(0, 'unreachable prose')]).catch(
+      (e: unknown) => e,
+    );
+    expect(caught).toBeInstanceOf(EmbeddingFailedException);
+    // Exactly one call: no retry happened because 500 is not transient at this layer.
+    expect(mockEmbedDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it('retry delay grows by growth factor up to the max-delay cap', async () => {
+    const rateLimitError = new Error('quota exhausted') as Error & { status?: number };
+    rateLimitError.status = 429;
+    mockEmbedDocuments.mockRejectedValue(rateLimitError);
+    jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    const sleepDelays: number[] = [];
+    const realSetTimeout = global.setTimeout;
+    type SetTimeoutFn = typeof global.setTimeout;
+    const fakeSetTimeout: SetTimeoutFn = ((cb: (...args: unknown[]) => void, ms?: number) => {
+      if (typeof ms === 'number' && ms >= 50) {
+        // Only capture adaptive-retry sleeps (token-bucket sleeps in tests
+        // are ≤ minIntervalMs which is 1ms at the default test RPM).
+        sleepDelays.push(ms);
+      }
+      return realSetTimeout(cb, 0);
+    }) as unknown as SetTimeoutFn;
+    const spy = jest.spyOn(global, 'setTimeout').mockImplementation(fakeSetTimeout);
+
+    const service = await buildService({
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 6,
+      EMBEDDING_RETRY_INITIAL_DELAY_MS: 100,
+      EMBEDDING_RETRY_MAX_DELAY_MS: 400,
+      EMBEDDING_RETRY_GROWTH_FACTOR: 1.5,
+    });
+
+    await service.embedBatch([makeDoc(0, 'growing delays prose')]).catch(() => undefined);
+
+    // 6 attempts → 5 sleeps. Delays grow 100 → 150 → 225 → 337.5 → 400 (cap).
+    expect(sleepDelays).toEqual([100, 150, 225, 337.5, 400]);
+
+    spy.mockRestore();
   });
 });
