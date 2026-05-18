@@ -12,6 +12,10 @@ export const envSchema = z.object({
   EMBEDDING_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(5),
   CHROMA_PATH: z.string().min(1).default('./data/chroma'),
   CHROMA_COLLECTION: z.string().min(1).default('podcasts'),
+  CLEANING_REMOVE_INTRO: z.coerce.boolean().default(true),
+  CLEANING_REMOVE_OUTRO: z.coerce.boolean().default(true),
+  CLEANING_REMOVE_SPONSORS: z.coerce.boolean().default(false),
+  CLEANING_REMOVE_FILLERS: z.coerce.boolean().default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

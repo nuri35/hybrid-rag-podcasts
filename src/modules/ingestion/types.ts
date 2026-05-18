@@ -49,6 +49,8 @@ export interface IngestionOptions {
 export interface IngestionResult {
   rowsLoaded: number;
   rowsSkipped: number;
+  bytesBeforeCleaning?: number;
+  bytesAfterCleaning?: number;
   chunksProduced: number;
   vectorsProduced?: number;
   durationMs: number;

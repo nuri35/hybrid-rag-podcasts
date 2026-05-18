@@ -16,6 +16,7 @@ flowchart LR
 
     subgraph ING["Ingestion — CLI, offline"]
         Loader[CsvLoaderService]
+        Cleaner[TextCleanerService]
         Chunker[ChunkerService]
         Embedder[EmbedderService]
         Chroma[(Chroma<br/>vector store)]
@@ -33,7 +34,7 @@ flowchart LR
     Neo4j[(Neo4j<br/>entity graph)]
 
     HF --> Script --> CSV --> Loader
-    Loader --> Chunker --> Embedder --> Chroma
+    Loader --> Cleaner --> Chunker --> Embedder --> Chroma
     Chroma --> VR
     API --> VR --> QA --> Ans
 
