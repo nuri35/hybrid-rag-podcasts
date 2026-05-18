@@ -8,6 +8,16 @@ and writes data/podcasts.csv in the schema used by hybrid-rag-podcasts.
 Run once after cloning the repo if you want to use the full dataset
 instead of the sample. The output is gitignored.
 
+Pipeline steps performed here:
+  1. Load HuggingFace dataset (cached after first run).
+  2. **Sort segment rows chronologically by `start` timestamp within each
+     episode.** Without this sort, pandas groupby joins segments in arbitrary
+     order, the outro phrase ends up mid-transcript, and downstream
+     TextCleanerService truncates legitimate conversation. See ADR 0005.
+  3. Group by (id, title, guest) and join `text` segments into one transcript.
+  4. Derive `duration_min` from the parsed `end` timestamp.
+  5. Map to the project CSV schema and write data/podcasts.csv.
+
 Usage:
     pip install -r scripts/requirements.txt
     python scripts/prepare_dataset.py
@@ -62,7 +72,24 @@ print(f"Columns in source: {list(df.columns)}")
 
 # Source schema (per HF dataset card): id, title, guest, start, end, text
 COL_ID, COL_TITLE, COL_GUEST = 'id', 'title', 'guest'
-COL_TEXT, COL_END = 'text', 'end'
+COL_TEXT, COL_END, COL_START = 'text', 'end', 'start'
+
+# Chronological sort of segment rows within each episode. HuggingFace returns
+# rows in arbitrary order; pandas groupby preserves row order within a group
+# during aggregation, so the joined transcript ends up non-chronological if we
+# skip this step. The visible symptom is the Lex Fridman outro phrase landing
+# mid-transcript, which then triggers an incorrect mid-transcript truncation
+# in TextCleanerService. See ADR 0005.
+if COL_START in df.columns:
+    print("Sorting segments by start timestamp for chronological order...")
+    df['_start_sec'] = pd.to_numeric(
+        df[COL_START].apply(parse_timestamp_to_seconds),
+        errors='coerce',
+    )
+    df = df.sort_values([COL_ID, '_start_sec'], ascending=True, kind='stable')
+    df = df.drop(columns=['_start_sec'])
+else:
+    print("Warning: 'start' column missing — skipping chronological sort.")
 
 print("Aggregating segments into per-episode transcripts...")
 agg = {COL_TEXT: lambda parts: ' '.join(parts.tolist())}
