@@ -35,6 +35,9 @@ data/*.sqlite3
 # Build artifacts
 *.tsbuildinfo
 
+# Docker compose user overrides (local-only customizations)
+docker-compose.override.yml
+
 # Python (scripts/ tooling only — no Python runtime in production)
 .venv/
 .venv*/

@@ -88,6 +88,25 @@ Each was a deliberate choice. Do not revisit without an ADR.
 
 10. **Text cleaning is a dedicated service between CSV load and chunking.** It applies three levels of normalization: unicode/whitespace/punctuation/sentence-dedup (always), Lex Fridman intro/outro stripping (default on, anchor-phrase-based with safe no-match fallback), sponsor/filler removal (deferred to Phase 2, currently warning-log stubs). All rules are deterministic regex — no LLM involvement, idempotent, dependency-free. See ADR 0004.
 
+11. **Chroma deployment and metric strategy.** Local Chroma server via docker-compose (named volume on Windows for performance, gitignored). Raw `chromadb` JS client (no LangChain wrapper — we supply pre-computed Gemini vectors and need direct control over `upsert`). **Distance metric uses Chroma's default L2; equivalence to cosine is achieved by normalizing all vectors to unit length at embed time** (see `EmbedderService.normalizeVector`). For unit vectors L2 distance ranking is mathematically identical to cosine similarity ranking (`cos(a,b) = 1 − L²(a,b)/2` when `||a||=||b||=1`). This is metric-agnostic, robust across Chroma versions, and matches how Sentence Transformers, OpenAI, and Pinecone recommend handling non-normalized embeddings like Gemini's. Query vectors must be normalized the same way at retrieval (Phase 1.5). The chromadb 1.10.x JS client does NOT expose the Configuration API for HNSW space; `metadata['hnsw:space']` is silently ignored, and direct POSTs to the configuration endpoint require Pydantic-internal `_type` discriminators that are not documented — we chose normalization over fragile internal-API hacking. See ADR 0006 decision 9.
+
+12. **Idempotent ingestion via deterministic `chunk_id` + Chroma `upsert()`.** Re-running ingestion overwrites cleanly; same `{episode_id}_chunk_{idx}` ID survives. `--reset` flag wipes the collection first when a clean state is required. Failures are atomic at the operation level (per-batch retry; throw `ChromaWriteFailedException` with full diagnostics if any batch fails after retries) — partial state on disk is benign because re-runs overwrite.
+
+13. **Configurable write concurrency mirrors Pinecone's `pool_threads` semaphore pattern.** Default `CHROMA_WRITE_CONCURRENCY=3` parallel batches via `p-limit`. Local Chroma serializes HNSW writes server-side, so concurrency yields no local speedup — but no harm either. Remote deployments (different VM, Chroma Cloud) gain 15–33 % via network overlap; tuning is a single env change, never a code change.
+
+14. **Production readiness baked in from day one.** Health check at module init via `client.heartbeat()` wrapped in a 5 s timeout — fails fast on a dead server before any Gemini quota is spent. Per-batch HTTP timeout (default 30 s, configurable). Retry-with-backoff for transient errors (`429`, 5xx, timeouts, `ECONNRESET`): up to 3 attempts with `1s → 2s → 4s` exponential delays plus ±200 ms jitter; permanent errors (4xx auth/validation) fail fast. Structured logs prefix events (`chroma_write_complete`, `chroma_batch_retry`) for log aggregators. Graceful shutdown via `OnModuleDestroy` + `SIGINT`/`SIGTERM` handling. Chroma Cloud auth via optional `CHROMA_API_KEY` + `CHROMA_API_KEY_HEADER` (default `X-Chroma-Token`) plumbed through `fetchOptions.headers`.
+
+---
+
+## Future optimizations
+
+Tracked here so they are not forgotten when Phase 2 evaluation establishes the baseline:
+
+- **1.3.f Streaming embed/write overlap.** Pipe embedder output into Chroma writer via async iterators so the next batch embeds while the previous batch writes. Estimated ~30 % wall-clock saving on full-dataset ingestion. Deferred because the current batch-then-write architecture is observable and easier to reason about; revisit after Phase 2.
+- **Older-format Lex intro/outro anchors.** Pre-2020 episodes use `"The following is a conversation with…"` instead of `"And now, dear friends, here's…"`. Add to `LEX_INTRO_ANCHORS` once Phase 2 eval confirms the older-format episodes are being over-retrieved on intro-like queries.
+- **Sponsor segment removal (Level 2c).** Stub exists; turn on once Phase 2 eval can measure faithfulness/recall delta. Risk: high false-positive rate on guests who naturally promote their own work.
+- **Filler word removal (Level 3).** Stub exists; same gating — only enable once eval can show retrieval improves.
+
 ---
 
 ## Hard constraints — never violate
@@ -105,6 +124,7 @@ Each was a deliberate choice. Do not revisit without an ADR.
 - Bypass Repository pattern by injecting raw `ChromaClient` or `neo4j-driver` into a domain service.
 - Mix Pinecone-style batching ("chunks of vectors") terminology with LangChain chunking ("text chunks"). They are different things; document accordingly.
 - Assume the HuggingFace `nmac/lex_fridman_podcast` dataset `end` column is numeric seconds — it is a colon-delimited string (`"HH:MM:SS.mmm"` or `"MM:SS.mmm"`). Always parse via `parse_timestamp_to_seconds` in `scripts/prepare_dataset.py` before arithmetic. Earlier code did `end / 60` directly and crashed with `TypeError`.
+- Assume the HuggingFace dataset's source `id` column is unique per episode — at least one collision exists (id=14 covers both an AMA and the Kyle Vogt interview). `scripts/prepare_dataset.py` disambiguates by appending `_0`, `_1`, … to every member of a collision group; downstream code can rely on `episode_id` being unique in `data/podcasts.csv`. See ADR 0002 addendum.
 
 ### DO
 
@@ -226,7 +246,8 @@ Current phase: **Phase 1 — Vector layer + CLI ingestion + basic Q&A endpoint**
 | &nbsp;&nbsp;1.3.a + 1.3.b | ✅ Done | `CsvLoaderService` streams via csv-parse + Zod validation with skip+warn behavior (8 tests pass); `ChunkerService` uses `RecursiveCharacterTextSplitter` (800/100) and adds deterministic `chunk_id` + `chunk_index` + `total_chunks`; pipeline gained a `--dry-run` flag through `IngestCommand` and dry-run on full dataset reports 319 docs → 54,172 chunks |
 | &nbsp;&nbsp;1.3.c | ✅ Done | `EmbedderService` implemented with Gemini `text-embedding-004` (768 dim), batch=100, concurrency=5, `Promise.allSettled` error handling (6 tests pass); non-dry pipeline now runs load → chunk → embed and throws NotImplemented for 1.3.e storage |
 | &nbsp;&nbsp;1.3.d | ✅ Done | `TextCleanerService` — 3-level regex cleaning sits between load and chunk: Level 1 (unicode/quotes/spaces/newlines/punctuation/sentence-dedup) always on; Level 2 (Lex Fridman intro/outro anchor stripping) config-gated, default on; Level 3 (sponsors/fillers) deferred to Phase 2 with warning-log stubs; idempotent, dependency-free; 10 spec scenarios pass |
-| &nbsp;&nbsp;1.3.e (was 1.3.d) | ⚪ Pending | `ChromaRepository` — vector storage layer |
+| &nbsp;&nbsp;1.3.e | ✅ Done | Production-grade `ChromaRepository` (15 unit tests pass): docker-compose-managed Chroma 0.5.23 server with healthcheck; configurable concurrency (default 3 via `p-limit`), batch size, retries, timeouts; per-batch retry-with-exponential-backoff for transient errors; `Promise.allSettled` + `ChromaWriteFailedException` on partial failure; module-init heartbeat fails fast; idempotent `upsert` semantics; `--reset` flag; Chroma Cloud auth support; graceful shutdown via `SIGINT`/`SIGTERM` + `OnModuleDestroy`. End-to-end pipeline wired (load → clean → chunk → embed → store). See ADR 0006. |
+| &nbsp;&nbsp;1.3.f | ⚪ Pending | Streaming embed/write overlap — deferred, see Future optimizations |
 | 2. Evaluation | ⚪ Pending | Ragas-style metrics + golden dataset (30–50 Q-A pairs) |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) |
 | 4. Hybrid retrieval | ⚪ Pending | Combine vector + graph (sequential + parallel strategies) |

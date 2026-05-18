@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Document } from '@langchain/core/documents';
-import { NotImplementedException } from '../../../common/exceptions';
+import { ChromaRepository } from '../../../common/repositories/chroma.repository';
+import type { Env } from '../../../common/config/env.schema';
 import type { IngestionOptions, IngestionResult, PodcastMetadata } from '../types';
 import { CsvLoaderService } from './csv-loader.service';
 import { ChunkerService } from './chunker.service';
@@ -10,13 +12,20 @@ import { TextCleanerService } from './text-cleaner.service';
 @Injectable()
 export class IngestionPipelineService {
   private readonly logger = new Logger(IngestionPipelineService.name);
+  private readonly defaultBatchSize: number;
+  private readonly defaultConcurrency: number;
 
   constructor(
     private readonly csvLoader: CsvLoaderService,
     private readonly textCleaner: TextCleanerService,
     private readonly chunker: ChunkerService,
     private readonly embedder: EmbedderService,
-  ) {}
+    private readonly chromaRepository: ChromaRepository,
+    config: ConfigService<Env, true>,
+  ) {
+    this.defaultBatchSize = config.get('CHROMA_WRITE_BATCH_SIZE', { infer: true });
+    this.defaultConcurrency = config.get('CHROMA_WRITE_CONCURRENCY', { infer: true });
+  }
 
   async run(options: IngestionOptions): Promise<IngestionResult> {
     const startedAt = Date.now();
@@ -25,6 +34,10 @@ export class IngestionPipelineService {
     this.logger.log(
       `Starting ingestion (csv=${options.csvPath}, reset=${options.reset === true}, dryRun=${isDryRun})`,
     );
+
+    if (!isDryRun && options.reset === true) {
+      await this.chromaRepository.resetCollection();
+    }
 
     const documents = await this.csvLoader.load(options.csvPath);
 
@@ -66,12 +79,30 @@ export class IngestionPipelineService {
     }
 
     const vectors = await this.embedder.embedBatch(chunks);
-    this.logger.log(
-      `Embedding complete: ${vectors.length} vectors produced in ${Date.now() - startedAt}ms; storage arrives in 1.3.e`,
-    );
+    await this.chromaRepository.addDocuments(chunks, vectors);
+    const collectionCount = await this.chromaRepository.count();
 
-    throw new NotImplementedException(
-      'IngestionPipelineService.run write path (vector storage arrives in 1.3.e ChromaRepository)',
+    const writeBatches = Math.ceil(chunks.length / this.defaultBatchSize);
+    const durationMs = Date.now() - startedAt;
+    const result: IngestionResult = {
+      rowsLoaded: documents.length,
+      rowsSkipped: this.csvLoader.getLastStats()?.skipped ?? 0,
+      bytesBeforeCleaning: bytesBefore,
+      bytesAfterCleaning: bytesAfter,
+      chunksProduced: chunks.length,
+      vectorsProduced: vectors.length,
+      vectorsWritten: vectors.length,
+      collectionCount,
+      writeBatches,
+      writeBatchSize: this.defaultBatchSize,
+      writeConcurrency: this.defaultConcurrency,
+      durationMs,
+      dryRun: false,
+    };
+    this.logger.log(
+      `Ingestion complete: ${result.vectorsWritten} vectors written in ${durationMs}ms; ` +
+        `collection now holds ${collectionCount}`,
     );
+    return result;
   }
 }

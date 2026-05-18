@@ -16,7 +16,14 @@ Pipeline steps performed here:
      TextCleanerService truncates legitimate conversation. See ADR 0005.
   3. Group by (id, title, guest) and join `text` segments into one transcript.
   4. Derive `duration_min` from the parsed `end` timestamp.
-  5. Map to the project CSV schema and write data/podcasts.csv.
+  5. **Disambiguate duplicate episode_ids.** The HF dataset reuses at least
+     one numeric `id` across two distinct episodes (e.g. id=14 covers both an
+     AMA and the Kyle Vogt interview). Without disambiguation, downstream
+     ChunkerService produces colliding chunk_ids and ChromaRepository rejects
+     the upsert. We append a numeric suffix (`_0`, `_1`, …) to every member
+     of a collision group. Non-colliding episode_ids pass through unchanged.
+     See ADR 0002 addendum.
+  6. Map to the project CSV schema and write data/podcasts.csv.
 
 Usage:
     pip install -r scripts/requirements.txt
@@ -123,6 +130,26 @@ result = pd.DataFrame({
     'guest_role':        '',  # not in source
     'transcript_text':   grouped[COL_TEXT],
 })
+
+# Disambiguate duplicate episode_ids (HF dataset has at least one collision:
+# id=14 has two distinct episodes — an AMA and the Kyle Vogt interview).
+# Every member of a collision group is renamed (`14` → `14_0`, `14_1`) so no
+# row keeps a bare ambiguous id. Non-colliding ids pass through unchanged.
+duplicate_mask = result.duplicated(subset='episode_id', keep=False)
+if duplicate_mask.any():
+    n_dupes = int(duplicate_mask.sum())
+    print(f"Found {n_dupes} rows with duplicate episode_ids; disambiguating with numeric suffix...")
+
+    result.loc[duplicate_mask, 'episode_id'] = (
+        result.loc[duplicate_mask, 'episode_id'].astype(str)
+        + '_'
+        + result.loc[duplicate_mask].groupby('episode_id').cumcount().astype(str)
+    )
+
+    renamed = result.loc[duplicate_mask, ['episode_id', 'title', 'guest_name']]
+    print("Disambiguated rows:")
+    for _, row in renamed.iterrows():
+        print(f"  {str(row['episode_id']):20s} — {str(row['guest_name']):30s} — {row['title']}")
 
 output = Path('data/podcasts.csv')
 output.parent.mkdir(parents=True, exist_ok=True)

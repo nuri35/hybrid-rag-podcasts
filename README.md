@@ -19,6 +19,7 @@ flowchart LR
         Cleaner[TextCleanerService]
         Chunker[ChunkerService]
         Embedder[EmbedderService]
+        ChromaRepo[ChromaRepository]
         Chroma[(Chroma<br/>vector store)]
     end
 
@@ -34,7 +35,8 @@ flowchart LR
     Neo4j[(Neo4j<br/>entity graph)]
 
     HF --> Script --> CSV --> Loader
-    Loader --> Cleaner --> Chunker --> Embedder --> Chroma
+    Loader --> Cleaner --> Chunker --> Embedder --> ChromaRepo --> Chroma
+    ChromaRepo -.->|heartbeat| Chroma
     Chroma --> VR
     API --> VR --> QA --> Ans
 
@@ -56,8 +58,9 @@ Data Prep and Ingestion run once at setup time while Query runs per user request
 
 - Node.js >= 20 (developed on Node 24)
 - npm 10+
-- An OpenAI API key
-- Chroma (Phase 1+): local server reachable at the configured `CHROMA_PATH` collection
+- An OpenAI API key (for chat / generation — Phase 1.6+)
+- A Google AI Studio API key (free tier — for embeddings)
+- Docker Desktop (or any Docker engine + `docker compose`) — runs the local Chroma server
 - Neo4j (Phase 3+): community edition or Aura
 
 **Only required if you want the full Lex Fridman dataset (skip if you use the sample CSV):**
@@ -87,11 +90,44 @@ All env variables are validated at startup via a Zod schema (`src/common/config/
 |---|---|---|---|
 | `NODE_ENV` | no | `development` | Runtime mode |
 | `PORT` | no | `3000` | HTTP server port |
-| `OPENAI_API_KEY` | yes | — | OpenAI credential |
+| `OPENAI_API_KEY` | yes | — | OpenAI credential (Phase 1.6+ chat) |
 | `OPENAI_MODEL` | no | `gpt-4o-mini` | Generation model |
-| `EMBEDDING_MODEL` | no | `text-embedding-3-small` | Embedding model |
-| `CHROMA_PATH` | no | `./data/chroma` | Local Chroma collection path |
+| `GOOGLE_API_KEY` | yes | — | Google Gemini credential (embeddings) |
+| `EMBEDDING_PROVIDER` | no | `gemini` | Reserved for future swap |
+| `EMBEDDING_MODEL` | no | `text-embedding-004` | Gemini embedding model (768 dim) |
+| `EMBEDDING_BATCH_SIZE` | no | `100` | Chunks per Gemini API call |
+| `EMBEDDING_CONCURRENCY` | no | `5` | Parallel in-flight embedding batches |
+| `CHROMA_URL` | no | `http://localhost:8000` | Chroma HTTP endpoint |
 | `CHROMA_COLLECTION` | no | `podcasts` | Chroma collection name |
+| `CHROMA_DISTANCE_METRIC` | no | `cosine` | HNSW distance metric |
+| `CHROMA_WRITE_BATCH_SIZE` | no | `500` | Vectors per upsert call |
+| `CHROMA_WRITE_CONCURRENCY` | no | `3` | Parallel in-flight upsert batches |
+| `CHROMA_WRITE_TIMEOUT_MS` | no | `30000` | Per-batch timeout (ms) |
+| `CHROMA_WRITE_MAX_RETRIES` | no | `3` | Retry budget per batch on transient errors |
+| `CHROMA_API_KEY` | no | — | Required for Chroma Cloud / auth-enabled servers |
+| `CHROMA_API_KEY_HEADER` | no | `X-Chroma-Token` | Header name carrying the API key |
+| `CLEANING_REMOVE_INTRO` | no | `true` | Strip Lex Fridman intro anchor |
+| `CLEANING_REMOVE_OUTRO` | no | `true` | Strip Lex Fridman outro anchor |
+
+> For full descriptions and production tuning hints, see `.env.example`.
+
+## Run Chroma locally
+
+Chroma is the vector store. We run it via `docker compose`; the same image and config work locally and in production.
+
+```bash
+docker compose up -d chroma       # start in the background
+docker compose ps                 # show status (look for "healthy")
+docker compose logs -f chroma     # tail server logs
+docker compose down               # stop and remove containers (data volume persists)
+```
+
+The container exposes Chroma on `http://localhost:8000` and persists data to a Docker-managed named volume (`chroma-data`). We use a named volume rather than a host bind mount because on Windows the bind-mount filesystem translation makes Chroma's many-small-writes pattern 10-20× slower; the named volume keeps storage on Docker's internal Linux filesystem at native speed and matches production Kubernetes / Docker patterns. On Linux/macOS the speed is identical either way. The healthcheck runs every 10 s; ingestion fails fast if Chroma is not reachable. Verify manually with:
+
+```bash
+curl http://localhost:8000/api/v1/heartbeat
+# {"nanosecond heartbeat": 1700000000000000000}
+```
 
 ## Data preparation
 
@@ -172,15 +208,20 @@ When you're done with the prep script you can deactivate the venv (`deactivate`)
 
 ### Step 1: Ingest the CSV into the vector store
 
+Make sure Chroma is running (`docker compose up -d chroma`), then:
+
 ```bash
-# With sample
+# With sample (15 episodes, ~3-5 s)
 npm run cli -- ingest --csv data/sample-podcasts.csv --reset
 
-# With full dataset (after data preparation)
+# With full dataset (319 episodes, ~45-55 s)
 npm run cli -- ingest --csv data/podcasts.csv --reset
+
+# Override write concurrency for high-latency Chroma endpoints
+npm run cli -- ingest --csv data/podcasts.csv --reset --concurrency 10
 ```
 
-> The `ingest` command lands in Phase 1.4. Until then, `npm run cli -- --help` lists the built-in CLI help.
+The `--reset` flag wipes the collection before writing. Without it, re-runs upsert idempotently — same `chunk_id` overwrites the same vector.
 
 ### Step 2: Start the HTTP server
 
@@ -214,6 +255,45 @@ curl -X POST http://localhost:3000/api/v1/questions \
 | `npm run lint` | ESLint (`no-explicit-any` and `no-floating-promises` are errors) |
 | `npm run format` | Prettier write |
 | `npm test` | Jest unit tests |
+
+## Production deployment
+
+The codebase is designed to run unchanged in any deployment topology. Only env variables change.
+
+### Same host (Docker compose)
+
+```env
+CHROMA_URL=http://chroma:8000          # service name in compose network
+CHROMA_WRITE_CONCURRENCY=3             # default is fine
+CHROMA_WRITE_BATCH_SIZE=500            # default is fine
+```
+
+### Different VM, same datacenter
+
+```env
+CHROMA_URL=http://chroma.internal:8000  # private DNS
+CHROMA_WRITE_CONCURRENCY=5              # network latency benefits parallelism
+CHROMA_WRITE_BATCH_SIZE=1000            # fewer round-trips
+```
+
+### Chroma Cloud or different region
+
+```env
+CHROMA_URL=https://your-instance.chroma.run
+CHROMA_API_KEY=<your-api-key>           # required for Chroma Cloud
+CHROMA_WRITE_CONCURRENCY=10             # high latency rewards aggressive parallelism
+CHROMA_WRITE_BATCH_SIZE=2000            # minimize round-trips
+CHROMA_WRITE_TIMEOUT_MS=60000           # account for higher latency
+```
+
+### Pre-deployment checklist
+
+- [ ] `CHROMA_URL` points to the production endpoint
+- [ ] `CHROMA_API_KEY` set if using Chroma Cloud
+- [ ] `CHROMA_WRITE_CONCURRENCY` tuned to network latency
+- [ ] `CHROMA_WRITE_BATCH_SIZE` tuned to network latency
+- [ ] Heartbeat reachable: `curl $CHROMA_URL/api/v1/heartbeat`
+- [ ] Health check passes at ingestion startup (logs `Chroma server reachable at ...`)
 
 ## Architecture overview
 

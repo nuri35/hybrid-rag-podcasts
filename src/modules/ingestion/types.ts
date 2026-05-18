@@ -53,6 +53,11 @@ export interface IngestionResult {
   bytesAfterCleaning?: number;
   chunksProduced: number;
   vectorsProduced?: number;
+  vectorsWritten?: number;
+  collectionCount?: number;
+  writeBatches?: number;
+  writeBatchSize?: number;
+  writeConcurrency?: number;
   durationMs: number;
   dryRun: boolean;
 }

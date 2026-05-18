@@ -29,6 +29,7 @@ export class EmbedderService {
   private readonly batchSize: number;
   private readonly concurrency: number;
   private readonly embeddings: EmbeddingsClient;
+  private hasLoggedNormalization = false;
 
   constructor(config: ConfigService<Env, true>) {
     this.batchSize = config.get('EMBEDDING_BATCH_SIZE', { infer: true });
@@ -117,12 +118,56 @@ export class EmbedderService {
       throw new EmbeddingFailedException(fulfilled, rejected, batches.length);
     }
 
+    // Gemini text-embedding-004 outputs are NOT unit-normalized. We normalize
+    // here so downstream retrieval works with Chroma's default L2 metric:
+    //   for ||a|| = ||b|| = 1,  cos(a, b) = 1 − L2²(a, b) / 2
+    // i.e. L2 distance ranking is identical to cosine similarity ranking.
+    // This keeps us metric-agnostic across vector DBs. Query-time vectors
+    // must be normalized the same way at retrieval (Phase 1.5).
+    if (!this.hasLoggedNormalization) {
+      this.logger.debug('Normalizing vectors to unit length for L2-cosine equivalence');
+      this.hasLoggedNormalization = true;
+    }
+    let zeroVectorCount = 0;
+    const normalized: number[][] = new Array<number[]>(vectors.length);
+    for (let i = 0; i < vectors.length; i += 1) {
+      const result = this.normalizeVector(vectors[i]);
+      if (result.wasZero) {
+        zeroVectorCount += 1;
+      }
+      normalized[i] = result.vector;
+    }
+    if (zeroVectorCount > 0) {
+      this.logger.warn(
+        `Encountered ${zeroVectorCount} zero-magnitude vector(s) during normalization; left unchanged.`,
+      );
+    }
+
     const elapsedMs = Date.now() - startedAt;
     this.logger.log(
-      `Embedded ${vectors.length}/${documents.length} chunks (skipped ${skipped}); ` +
+      `Embedded ${normalized.length}/${documents.length} chunks (skipped ${skipped}); ` +
         `batches=${fulfilled}/${batches.length}; concurrency=${this.concurrency}; batchSize=${this.batchSize}; ${elapsedMs}ms`,
     );
 
-    return vectors;
+    return normalized;
+  }
+
+  private normalizeVector(v: number[]): { vector: number[]; wasZero: boolean } {
+    let magnitudeSquared = 0;
+    for (let i = 0; i < v.length; i += 1) {
+      magnitudeSquared += v[i] * v[i];
+    }
+    const magnitude = Math.sqrt(magnitudeSquared);
+    if (magnitude === 0) {
+      // Defensive: zero vector should never happen with real Gemini output.
+      // Returning as-is keeps the array shape stable; caller is warned upstream.
+      return { vector: v, wasZero: true };
+    }
+    const inv = 1 / magnitude;
+    const out = new Array<number>(v.length);
+    for (let i = 0; i < v.length; i += 1) {
+      out[i] = v[i] * inv;
+    }
+    return { vector: out, wasZero: false };
   }
 }

@@ -76,6 +76,28 @@ Chunking happens after this mapping: `RecursiveCharacterTextSplitter` splits `pa
 - `episode_id` and `guest_name` are reusable as Neo4j keys in Phase 3 without re-ingestion (the "bridge" pattern in CLAUDE.md is already wired at this layer).
 - Idempotency is straightforward: deterministic chunk ID = `{episode_id}_chunk_{idx}`.
 
+### Addendum (2026-05-18) — `episode_id` uniqueness enforcement
+
+The source HuggingFace dataset contains at least one numeric `id` value shared by two distinct episodes (different `title` and `guest`). Concretely, id=14 maps to BOTH:
+
+- "Ask Me Anything – AMA January 2021" with guest "Lex Fridman"
+- "Cruise Automation" with guest "Kyle Vogt"
+
+Since our chunk-id derivation (`{episode_id}_chunk_{idx}`) and our Chroma `upsert()` semantics both require globally unique chunk ids per collection, two episodes sharing an `episode_id` would collide on every chunk and cause Chroma to reject the upsert with HTTP 400 "IDs must be unique". The repository correctly fails fast on this (it is a non-transient 4xx, not retried). The fix belongs upstream.
+
+**Rule:** `scripts/prepare_dataset.py` detects rows with duplicate `episode_id` after groupby aggregation and appends a numeric suffix (`_0`, `_1`, …) to **every member** of a collision group. Non-colliding ids pass through unchanged. The script prints an explicit per-row log of what got renamed, e.g.:
+
+```
+Found 2 rows with duplicate episode_ids; disambiguating with numeric suffix...
+Disambiguated rows:
+  14_0    — Lex Fridman   — Ask Me Anything – AMA January 2021
+  14_1    — Kyle Vogt     — Cruise Automation
+```
+
+The suffix scheme is deterministic — same source ⇒ same output — and assigns suffixes by `groupby(...).cumcount()` over the colliding rows. If the HF dataset is ever re-released with additional collisions or an existing collision is resolved upstream, the disambiguation step adapts automatically without code changes.
+
+This addendum supersedes the bare statement above that `id → episode_id` is a direct passthrough: the mapping is direct for non-colliding ids, suffix-appended for colliding ones.
+
 ### Negative / trade-offs
 
 - Chroma metadata payload grows linearly with chunk count (7 fields × N chunks per episode). For the sample (15 episodes × ~10 chunks each) this is trivial; for the full Lex Fridman dataset (~325 episodes × tens of chunks each) total metadata is still well under Chroma's per-collection limits — estimated single-digit MB. Acceptable.

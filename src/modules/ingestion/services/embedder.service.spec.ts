@@ -61,8 +61,16 @@ describe('EmbedderService', () => {
   });
 
   it('preserves input order across multiple batches', async () => {
+    // Encode the doc index in v[0] while keeping v[1] constant. Normalization
+    // collapses magnitude but preserves the v[0]/v[1] ratio = idx, so each
+    // returned slot still maps back to its original document index.
     mockEmbedDocuments.mockImplementation((texts) =>
-      Promise.resolve(texts.map((t) => [Number(t.replace('doc-', ''))])),
+      Promise.resolve(
+        texts.map((t) => {
+          const idx = Number(t.replace('doc-', ''));
+          return [idx, 1];
+        }),
+      ),
     );
 
     const service = await buildService({ EMBEDDING_BATCH_SIZE: 10, EMBEDDING_CONCURRENCY: 5 });
@@ -73,7 +81,9 @@ describe('EmbedderService', () => {
     expect(vectors).toHaveLength(25);
     expect(mockEmbedDocuments).toHaveBeenCalledTimes(3);
     vectors.forEach((v, i) => {
-      expect(v).toEqual([i]);
+      const magnitude = Math.sqrt(v[0] ** 2 + v[1] ** 2);
+      expect(magnitude).toBeCloseTo(1, 10);
+      expect(v[0] / v[1]).toBeCloseTo(i, 8);
     });
   });
 
@@ -124,8 +134,10 @@ describe('EmbedderService', () => {
   });
 
   it('returns a full vector array when every batch fulfills', async () => {
+    // Use an already-unit vector so the post-normalization output is identical
+    // to the mock return; lets the test focus on length and call count.
     mockEmbedDocuments.mockImplementation((texts) =>
-      Promise.resolve(texts.map(() => [0.5, 0.5, 0.5])),
+      Promise.resolve(texts.map(() => [1, 0, 0])),
     );
 
     const service = await buildService({ EMBEDDING_BATCH_SIZE: 10, EMBEDDING_CONCURRENCY: 5 });
@@ -136,7 +148,7 @@ describe('EmbedderService', () => {
     expect(vectors).toHaveLength(15);
     expect(mockEmbedDocuments).toHaveBeenCalledTimes(2);
     vectors.forEach((v) => {
-      expect(v).toEqual([0.5, 0.5, 0.5]);
+      expect(v).toEqual([1, 0, 0]);
     });
   });
 
@@ -186,6 +198,86 @@ describe('EmbedderService', () => {
       /is \d+ chars/.test(String(args[0])),
     );
     expect(longChunkWarnings.length).toBeGreaterThanOrEqual(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('normalizes vectors to unit length (||v|| == 1 after embed)', async () => {
+    // Gemini mock returns [3, 4] — magnitude 5 — expected normalized [0.6, 0.8].
+    mockEmbedDocuments.mockResolvedValue([[3, 4]]);
+
+    const service = await buildService();
+    const docs = [makeDoc(0, 'some content for the embedder')];
+
+    const vectors = await service.embedBatch(docs);
+
+    expect(vectors).toHaveLength(1);
+    expect(vectors[0][0]).toBeCloseTo(0.6, 10);
+    expect(vectors[0][1]).toBeCloseTo(0.8, 10);
+    const magnitude = Math.sqrt(vectors[0][0] ** 2 + vectors[0][1] ** 2);
+    expect(magnitude).toBeCloseTo(1, 10);
+  });
+
+  it('preserves input order after normalization across multiple batches', async () => {
+    // Distinguish documents by a per-doc magnitude (idx + 1) while keeping the
+    // direction identical, then post-normalize they all collapse to the same
+    // unit vector. The order verification is instead done via the mock's
+    // recorded call args — each batch must contain the contiguous slice of
+    // docs in the original sequence, proving batching does not shuffle.
+    mockEmbedDocuments.mockImplementation((texts) =>
+      Promise.resolve(
+        texts.map((t) => {
+          const idx = Number(t.replace('doc-', ''));
+          return [(idx + 1) * 2, (idx + 1) * 3];
+        }),
+      ),
+    );
+
+    const service = await buildService({ EMBEDDING_BATCH_SIZE: 10, EMBEDDING_CONCURRENCY: 5 });
+    const docs = Array.from({ length: 25 }, (_, i) => makeDoc(i));
+
+    const vectors = await service.embedBatch(docs);
+
+    expect(vectors).toHaveLength(25);
+    // Every output vector must be unit-length after normalization.
+    vectors.forEach((v) => {
+      const magnitude = Math.sqrt(v[0] ** 2 + v[1] ** 2);
+      expect(magnitude).toBeCloseTo(1, 10);
+    });
+    // The direction (v[0]/v[1] = 2/3) is identical for all docs since each
+    // mock vector lies on the same ray; magnitude info is lost on purpose.
+    vectors.forEach((v) => {
+      expect(v[0] / v[1]).toBeCloseTo(2 / 3, 10);
+    });
+    // Mock call args prove batching kept order: each call should receive a
+    // contiguous slice of the input texts in ascending index order.
+    expect(mockEmbedDocuments).toHaveBeenCalledTimes(3);
+    const callTexts = mockEmbedDocuments.mock.calls.map((c) => c[0]);
+    const flattened = callTexts.flat();
+    flattened.forEach((t, i) => {
+      expect(t).toBe(`doc-${i}`);
+    });
+  });
+
+  it('leaves zero-magnitude vectors unchanged and logs a warning', async () => {
+    mockEmbedDocuments.mockResolvedValue([
+      [0, 0, 0],
+      [1, 0, 0],
+    ]);
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const service = await buildService();
+    const docs = [makeDoc(0, 'first content'), makeDoc(1, 'second content')];
+
+    const vectors = await service.embedBatch(docs);
+
+    expect(vectors).toHaveLength(2);
+    expect(vectors[0]).toEqual([0, 0, 0]);
+    expect(vectors[1]).toEqual([1, 0, 0]);
+    const zeroWarn = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('zero-magnitude vector'),
+    );
+    expect(zeroWarn).toBeDefined();
 
     warnSpy.mockRestore();
   });
