@@ -7,7 +7,7 @@ export const envSchema = z.object({
   OPENAI_MODEL: z.string().min(1).default('gpt-4o-mini'),
   GOOGLE_API_KEY: z.string().min(1, 'GOOGLE_API_KEY is required'),
   EMBEDDING_PROVIDER: z.enum(['gemini']).default('gemini'),
-  EMBEDDING_MODEL: z.string().min(1).default('text-embedding-004'),
+  EMBEDDING_MODEL: z.string().min(1).default('gemini-embedding-001'),
   EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(100),
   EMBEDDING_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(5),
 

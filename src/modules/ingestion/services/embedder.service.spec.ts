@@ -163,7 +163,7 @@ describe('EmbedderService', () => {
       return new Promise((resolve) => {
         setTimeout(() => {
           inFlight -= 1;
-          resolve(texts.map(() => [0]));
+          resolve(texts.map(() => [1, 0]));
         }, 25);
       });
     });
@@ -259,26 +259,142 @@ describe('EmbedderService', () => {
     });
   });
 
-  it('leaves zero-magnitude vectors unchanged and logs a warning', async () => {
+  it('throws EmbeddingFailedException when any zero-magnitude vector is encountered (SDK-bug guard)', async () => {
     mockEmbedDocuments.mockResolvedValue([
       [0, 0, 0],
       [1, 0, 0],
     ]);
-    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     const service = await buildService();
     const docs = [makeDoc(0, 'first content'), makeDoc(1, 'second content')];
 
+    const caught = await service.embedBatch(docs).catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(EmbeddingFailedException);
+    expect(caught).toMatchObject({ rejected: 1 });
+  });
+
+  it('detects realistic Gemini-magnitude vectors as non-zero and normalizes correctly', async () => {
+    // Realistic Gemini text-embedding-004 vectors have tiny per-dimension
+    // values (~10^-2 to 10^-1) summing to a magnitude in the 0.05-2.0 range.
+    // Construct three 32-dim vectors at different magnitudes within that range.
+    const buildGeminiLike = (seed: number): number[] => {
+      const dims = 32;
+      const out = new Array<number>(dims);
+      for (let i = 0; i < dims; i += 1) {
+        out[i] = (seed + 1) * (i + 1) * 0.005;
+      }
+      return out;
+    };
+    const inputVectors = [buildGeminiLike(0), buildGeminiLike(1), buildGeminiLike(2)];
+    const expectedRawMagnitudes = inputVectors.map((v) =>
+      Math.sqrt(v.reduce((s, x) => s + x * x, 0)),
+    );
+    // Sanity: raw magnitudes must be non-zero and in the realistic range.
+    expectedRawMagnitudes.forEach((m) => {
+      expect(m).toBeGreaterThan(0.05);
+      expect(m).toBeLessThan(2.0);
+    });
+
+    mockEmbedDocuments.mockResolvedValue(inputVectors);
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const service = await buildService();
+    const docs = [
+      makeDoc(0, 'realistic content one'),
+      makeDoc(1, 'realistic content two'),
+      makeDoc(2, 'realistic content three'),
+    ];
+
     const vectors = await service.embedBatch(docs);
 
-    expect(vectors).toHaveLength(2);
-    expect(vectors[0]).toEqual([0, 0, 0]);
-    expect(vectors[1]).toEqual([1, 0, 0]);
+    expect(vectors).toHaveLength(3);
+    vectors.forEach((v) => {
+      const magnitude = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+      expect(magnitude).toBeCloseTo(1, 10);
+    });
+    // Direction preserved: ratios between consecutive dims survive normalization.
+    vectors.forEach((v, idx) => {
+      const raw = inputVectors[idx];
+      const scale = 1 / expectedRawMagnitudes[idx];
+      for (let i = 0; i < v.length; i += 1) {
+        expect(v[i]).toBeCloseTo(raw[i] * scale, 10);
+      }
+    });
     const zeroWarn = warnSpy.mock.calls.find((args) =>
       String(args[0]).includes('zero-magnitude vector'),
     );
-    expect(zeroWarn).toBeDefined();
+    expect(zeroWarn).toBeUndefined();
 
     warnSpy.mockRestore();
+  });
+
+  it('treats tiny but non-zero vectors as non-zero (above the 1e-12 magnitudeSquared threshold)', async () => {
+    // Each component is 1e-7 → magnitudeSquared = 3 × (1e-7)² = 3e-14.
+    // That is BELOW the 1e-12 threshold, so this *would* be treated as zero.
+    // Use 1e-6 per component → magnitudeSquared = 3 × (1e-6)² = 3e-12 (above
+    // 1e-12) so the helper normalizes it.
+    const tinyButNonZero = [1e-6, 1e-6, 1e-6];
+    mockEmbedDocuments.mockResolvedValue([tinyButNonZero]);
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const service = await buildService();
+    const vectors = await service.embedBatch([makeDoc(0, 'tiny but real content')]);
+
+    expect(vectors).toHaveLength(1);
+    const magnitude = Math.sqrt(vectors[0].reduce((s, x) => s + x * x, 0));
+    expect(magnitude).toBeCloseTo(1, 10);
+    // No zero-magnitude warning should fire.
+    const zeroWarn = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('zero-magnitude vector'),
+    );
+    expect(zeroWarn).toBeUndefined();
+
+    warnSpy.mockRestore();
+  });
+
+  it('normalizes a 768-dim Gemini-shaped vector and never logs a zero warning', async () => {
+    // Realistic Gemini text-embedding-004 vector: 768 dims, values in roughly
+    // [-0.1, +0.1], magnitude ~1.0-2.0. We use Math.sin to produce a stable,
+    // non-trivial direction without depending on randomness.
+    const fakeGeminiVector = new Array(768).fill(0).map((_, i) => Math.sin(i) * 0.05);
+    const rawMagnitude = Math.sqrt(fakeGeminiVector.reduce((s, x) => s + x * x, 0));
+    expect(rawMagnitude).toBeGreaterThan(0.1);
+    expect(rawMagnitude).toBeLessThan(3);
+
+    mockEmbedDocuments.mockResolvedValueOnce([fakeGeminiVector]);
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const service = await buildService();
+    const result = await service.embedBatch([makeDoc(0, 'test')]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toHaveLength(768);
+    const outMag = Math.sqrt(result[0].reduce((s, x) => s + x * x, 0));
+    expect(outMag).toBeCloseTo(1.0, 4);
+    const zeroWarn = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('zero-magnitude vector'),
+    );
+    expect(zeroWarn).toBeUndefined();
+
+    warnSpy.mockRestore();
+  });
+
+  it('throws when SDK silently substitutes empty arrays (Array(N).fill([]) bug)', async () => {
+    // Simulates the @langchain/google-genai 0.2.x bug where a rejected
+    // batchEmbedContents call (e.g. 404 model-not-found) gets converted to
+    // an array of empty arrays — losing the real error and silently feeding
+    // zero vectors downstream. Our guard converts this to a loud failure.
+    mockEmbedDocuments.mockResolvedValue([[], [], []]);
+
+    const service = await buildService();
+    const docs = [
+      makeDoc(0, 'first prose'),
+      makeDoc(1, 'second prose'),
+      makeDoc(2, 'third prose'),
+    ];
+
+    const caught = await service.embedBatch(docs).catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(EmbeddingFailedException);
+    expect(caught).toMatchObject({ rejected: 3 });
   });
 });

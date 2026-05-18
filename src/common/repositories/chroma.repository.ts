@@ -338,7 +338,7 @@ export class ChromaRepository implements OnModuleInit, OnModuleDestroy {
 
     const results: SimilarityResult[] = ids.map((id, idx) => {
       const distance = distances[idx] ?? 1;
-      // For cosine on normalized embeddings (Gemini text-embedding-004),
+      // For cosine on normalized embeddings (Gemini gemini-embedding-001),
       // distance ∈ [0, 1] and score = 1 - distance is a similarity ∈ [0, 1].
       // For l2/ip metrics this is not a probability; callers should be aware.
       const score = 1 - distance;

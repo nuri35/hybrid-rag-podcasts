@@ -125,49 +125,136 @@ export class EmbedderService {
     // This keeps us metric-agnostic across vector DBs. Query-time vectors
     // must be normalized the same way at retrieval (Phase 1.5).
     if (!this.hasLoggedNormalization) {
-      this.logger.debug('Normalizing vectors to unit length for L2-cosine equivalence');
+      this.logger.log('Normalizing vectors to unit length for L2-cosine equivalence');
       this.hasLoggedNormalization = true;
     }
-    let zeroVectorCount = 0;
-    const normalized: number[][] = new Array<number[]>(vectors.length);
+
+    // Pre-normalization diagnostic: inspect the first raw Gemini vector so we
+    // can see what the API actually returned. Logged at info level so it shows
+    // up under the default logger config.
+    if (vectors.length > 0) {
+      const sample: unknown = vectors[0];
+      if (Array.isArray(sample) || ArrayBuffer.isView(sample)) {
+        const arr = sample as ArrayLike<number>;
+        let rawSumSq = 0;
+        for (let i = 0; i < arr.length; i += 1) {
+          const x = Number(arr[i]);
+          if (Number.isFinite(x)) {
+            rawSumSq += x * x;
+          }
+        }
+        const previewSlice: number[] = [];
+        for (let i = 0; i < Math.min(3, arr.length); i += 1) {
+          previewSlice.push(Number(arr[i]));
+        }
+        this.logger.log(
+          `Pre-normalization sample: type=${sample.constructor.name}, ` +
+            `dims=${arr.length}, ` +
+            `first 3 values=[${previewSlice.map((n) => n.toFixed(6)).join(', ')}], ` +
+            `magnitude=${Math.sqrt(rawSumSq).toFixed(6)}`,
+        );
+      } else {
+        this.logger.warn(
+          `Pre-normalization sample is not an array-like: typeof=${typeof sample}`,
+        );
+      }
+    }
+
+    let zeroCount = 0;
+    const normalizedVectors: number[][] = new Array<number[]>(vectors.length);
     for (let i = 0; i < vectors.length; i += 1) {
       const result = this.normalizeVector(vectors[i]);
-      if (result.wasZero) {
-        zeroVectorCount += 1;
+      if (result.isZero) {
+        zeroCount += 1;
       }
-      normalized[i] = result.vector;
+      normalizedVectors[i] = result.normalized;
     }
-    if (zeroVectorCount > 0) {
-      this.logger.warn(
-        `Encountered ${zeroVectorCount} zero-magnitude vector(s) during normalization; left unchanged.`,
+
+    if (zeroCount > 0) {
+      // Empty / zero-magnitude vectors should never come from a healthy Gemini
+      // response. The @langchain/google-genai 0.2.x `_embedDocumentsContent`
+      // swallows underlying `batchEmbedContents` rejections (e.g. wrong model
+      // name → 404, quota exhaustion → 429) by silently substituting
+      // `Array(N).fill([])`. Treating that as success would poison the vector
+      // store with zero vectors. We fail loud and stop the pipeline instead.
+      throw new EmbeddingFailedException(fulfilled - zeroCount, zeroCount, batches.length);
+    }
+
+    // Post-normalization sanity check on the first non-zero vector: its
+    // magnitude must be ≈ 1.0 (well within float-tolerance). Logged at info
+    // level so the operator can confirm normalization actually ran in prod.
+    const firstNonZeroIdx = normalizedVectors.findIndex((nv, idx) => {
+      const original = vectors[idx];
+      if (!Array.isArray(original) && !ArrayBuffer.isView(original)) return false;
+      const arr = original as ArrayLike<number>;
+      let sumSq = 0;
+      for (let k = 0; k < arr.length; k += 1) {
+        const x = Number(arr[k]);
+        if (Number.isFinite(x)) sumSq += x * x;
+      }
+      return sumSq >= 1e-12 && nv.length > 0;
+    });
+    if (firstNonZeroIdx !== -1) {
+      const nv = normalizedVectors[firstNonZeroIdx];
+      let postSumSq = 0;
+      for (let i = 0; i < nv.length; i += 1) {
+        postSumSq += nv[i] * nv[i];
+      }
+      this.logger.log(
+        `Post-normalization sanity check: first non-zero vector magnitude = ${Math.sqrt(
+          postSumSq,
+        ).toFixed(6)} (expected ≈ 1.0)`,
       );
     }
 
     const elapsedMs = Date.now() - startedAt;
     this.logger.log(
-      `Embedded ${normalized.length}/${documents.length} chunks (skipped ${skipped}); ` +
+      `Embedded ${normalizedVectors.length}/${documents.length} chunks (skipped ${skipped}); ` +
         `batches=${fulfilled}/${batches.length}; concurrency=${this.concurrency}; batchSize=${this.batchSize}; ${elapsedMs}ms`,
     );
 
-    return normalized;
+    return normalizedVectors;
   }
 
-  private normalizeVector(v: number[]): { vector: number[]; wasZero: boolean } {
-    let magnitudeSquared = 0;
-    for (let i = 0; i < v.length; i += 1) {
-      magnitudeSquared += v[i] * v[i];
+  private normalizeVector(v: unknown): { normalized: number[]; isZero: boolean } {
+    // Defensive: only normalize real number arrays (plain Array or TypedArray).
+    // Anything else (undefined, null, non-array, object) is reported as zero
+    // and returned as an empty array so the upsert payload stays well-typed.
+    if (!Array.isArray(v) && !ArrayBuffer.isView(v)) {
+      return { normalized: [], isZero: true };
     }
-    const magnitude = Math.sqrt(magnitudeSquared);
-    if (magnitude === 0) {
-      // Defensive: zero vector should never happen with real Gemini output.
-      // Returning as-is keeps the array shape stable; caller is warned upstream.
-      return { vector: v, wasZero: true };
+    const arr = v as ArrayLike<number>;
+    if (arr.length === 0) {
+      return { normalized: [], isZero: true };
     }
-    const inv = 1 / magnitude;
-    const out = new Array<number>(v.length);
-    for (let i = 0; i < v.length; i += 1) {
-      out[i] = v[i] * inv;
+    let sumSquares = 0;
+    for (let i = 0; i < arr.length; i += 1) {
+      const value = Number(arr[i]);
+      if (!Number.isFinite(value)) {
+        // Malformed value (NaN, Infinity, non-numeric) — bail out as zero.
+        const out = new Array<number>(arr.length);
+        for (let j = 0; j < arr.length; j += 1) {
+          out[j] = 0;
+        }
+        return { normalized: out, isZero: true };
+      }
+      sumSquares += value * value;
     }
-    return { vector: out, wasZero: false };
+    // Floating-point safe check. Threshold 1e-20 is far below any realistic
+    // Gemini magnitude (~0.05-2.0, so magnitudeSquared ~0.0025-4.0) but still
+    // catches degenerate or numerically-vanishing inputs.
+    if (sumSquares < 1e-20) {
+      const out = new Array<number>(arr.length);
+      for (let j = 0; j < arr.length; j += 1) {
+        out[j] = Number(arr[j]);
+      }
+      return { normalized: out, isZero: true };
+    }
+    const inverseMagnitude = 1 / Math.sqrt(sumSquares);
+    const normalized = new Array<number>(arr.length);
+    for (let i = 0; i < arr.length; i += 1) {
+      normalized[i] = Number(arr[i]) * inverseMagnitude;
+    }
+    return { normalized, isZero: false };
   }
 }

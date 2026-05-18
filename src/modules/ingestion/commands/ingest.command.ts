@@ -86,7 +86,7 @@ export class IngestCommand extends CommandRunner {
     lines.push(row('Chunks', formatNumber(result.chunksProduced)));
 
     if (typeof result.vectorsProduced === 'number') {
-      lines.push(row('Vectors', `${formatNumber(result.vectorsProduced)} (768 dim)`));
+      lines.push(row('Vectors', formatNumber(result.vectorsProduced)));
     }
     if (typeof result.collectionCount === 'number') {
       lines.push(
