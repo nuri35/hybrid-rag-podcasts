@@ -246,6 +246,58 @@ curl -X POST http://localhost:3000/api/v1/questions \
 
 > The questions endpoint lands in Phase 1.7. Until then, only `/health` responds.
 
+## Retrieval (Phase 1.5)
+
+`VectorRetrieverService` (`src/modules/retrieval/`) turns a natural-language query into the top-K most relevant chunks from the Chroma collection. The HTTP endpoint that wraps it lands in Phase 1.7; until then the service is consumed programmatically — and from Phase 1.6 onward via LCEL composition inside the QA chain.
+
+### Programmatic use
+
+```typescript
+import { VectorRetrieverService } from './modules/retrieval/vector-retriever.service';
+
+const retriever = app.get(VectorRetrieverService);
+
+// Default top-5
+const chunks = await retriever.retrieve('What is consciousness?');
+
+// All knobs
+const chunks = await retriever.retrieve('artificial intelligence', {
+  topK: 10,
+  scoreThreshold: 0.5,                    // optional cosine-similarity floor
+  filter: { episode_id: 'ep_001' },       // Chroma metadata filter
+});
+
+// chunks: RetrievedChunk[] — id, document, score ∈ [0, 1], metadata, chunkIndex
+```
+
+### LCEL composition (preview of Phase 1.6)
+
+`toRunnable(options)` adapts the retriever for LangChain chain composition. Phase 1.6 will pipe it into the QA chain:
+
+```typescript
+const ragChain = retriever
+  .toRunnable({ topK: 5 })           // Runnable<string, RetrievedChunk[]>
+  .pipe(formatContext)               // chunks → context string
+  .pipe(promptTemplate)              // (context, question) → prompt
+  .pipe(llm)                         // prompt → LLM response
+  .pipe(new StringOutputParser());
+
+const answer = await ragChain.invoke('What is consciousness?');
+```
+
+### Tuning
+
+| Env var | Default | Effect |
+|---|---|---|
+| `RETRIEVAL_DEFAULT_TOP_K` | `5` | Default `topK` when caller omits it |
+| `RETRIEVAL_MAX_TOP_K` | `50` | Hard upper bound on `topK` (rejected with 400) |
+| `RETRIEVAL_MIN_QUERY_LENGTH` | `3` | Reject queries below this (after trim) |
+| `RETRIEVAL_MAX_QUERY_LENGTH` | `1000` | Reject queries above this (DoS guard) |
+
+Query embeddings use Gemini `RETRIEVAL_QUERY` task type (separate from `RETRIEVAL_DOCUMENT` used during ingest). Both share the same project-level rate budget — see [Rate limits](#rate-limits).
+
+The cosine score on returned chunks is `1 − L²/2` of the L2 distance reported by Chroma, clamped to `[0, 1]`. The math is exact for unit-normalized vectors; see [`docs/ADR/0003-vector-store-module-and-retrieval.md`](./docs/ADR/0003-vector-store-module-and-retrieval.md).
+
 ## Other scripts
 
 | Command | Purpose |

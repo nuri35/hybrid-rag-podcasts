@@ -238,7 +238,7 @@ See the `langchain-js-lcel` skill for full guidance.
 
 ## Phase tracking
 
-Current phase: **Phase 1 — Vector layer + CLI ingestion + basic Q&A endpoint**
+Current phase: **Phase 1.6 — QA chain (LCEL composition)**, in progress within the broader Phase 1 ("Vector layer + CLI ingestion + basic Q&A endpoint").
 
 | Phase | Status | Goal |
 |---|---|---|
@@ -250,6 +250,9 @@ Current phase: **Phase 1 — Vector layer + CLI ingestion + basic Q&A endpoint**
 | &nbsp;&nbsp;1.3.d | ✅ Done | `TextCleanerService` — 3-level regex cleaning sits between load and chunk: Level 1 (unicode/quotes/spaces/newlines/punctuation/sentence-dedup) always on; Level 2 (Lex Fridman intro/outro anchor stripping) config-gated, default on; Level 3 (sponsors/fillers) deferred to Phase 2 with warning-log stubs; idempotent, dependency-free; 10 spec scenarios pass |
 | &nbsp;&nbsp;1.3.e | ✅ Done | Production-grade `ChromaRepository` (15 unit tests pass): docker-compose-managed Chroma 0.5.23 server with healthcheck; configurable concurrency (default 3 via `p-limit`), batch size, retries, timeouts; per-batch retry-with-exponential-backoff for transient errors; `Promise.allSettled` + `ChromaWriteFailedException` on partial failure; module-init heartbeat fails fast; idempotent `upsert` semantics; `--reset` flag; Chroma Cloud auth support; graceful shutdown via `SIGINT`/`SIGTERM` + `OnModuleDestroy`. End-to-end pipeline wired (load → clean → chunk → embed → store). See ADR 0006. |
 | &nbsp;&nbsp;1.3.f | ⚪ Pending | Streaming embed/write overlap — deferred, see Future optimizations |
+| &nbsp;&nbsp;1.5 Retrieval | ✅ Done | `VectorStoreModule` extracted as shared infrastructure; `EmbedderService.embedQuery` added with `RETRIEVAL_QUERY` task type and a dedicated client; new `RetrievalModule` with `VectorRetrieverService implements IRetriever` (top-K + score threshold + metadata filter + LCEL `toRunnable()` factory, 16 unit tests, 100% statement coverage); 4 integration tests against live Chroma+Gemini (skipped by default); cosine score formula fix in `ChromaRepository` (`1 − L2²/2`). See ADR 0003. |
+| &nbsp;&nbsp;1.6 QA chain | ⚪ Pending | `LlmModule` + `QaModule` + `QaChainService` (LCEL `retriever | format | prompt | llm`) |
+| &nbsp;&nbsp;1.7 HTTP endpoint | ⚪ Pending | `POST /api/v1/questions` + Swagger |
 | 2. Evaluation | ⚪ Pending | Ragas-style metrics + golden dataset (30–50 Q-A pairs) |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) |
 | 4. Hybrid retrieval | ⚪ Pending | Combine vector + graph (sequential + parallel strategies) |
