@@ -39,6 +39,12 @@ export const envSchema = z.object({
   RETRIEVAL_MAX_TOP_K: z.coerce.number().int().min(1).max(500).default(50),
   RETRIEVAL_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).max(100).default(3),
   RETRIEVAL_MAX_QUERY_LENGTH: z.coerce.number().int().min(10).max(10_000).default(1000),
+
+  // LLM (Phase 1.6) — chat model for QA chain. Reuses GOOGLE_API_KEY above.
+  LLM_MODEL: z.string().min(1).default('gemini-2.0-flash'),
+  LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0),
+  LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(8192).default(1024),
+  LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
