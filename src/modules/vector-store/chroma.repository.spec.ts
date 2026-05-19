@@ -288,7 +288,7 @@ describe('ChromaRepository', () => {
     expect(mockGetOrCreateCollection).toHaveBeenCalled();
   });
 
-  it('similaritySearch transforms response and computes score = 1 - distance', async () => {
+  it('similaritySearch transforms response and computes score = 1 - L2²/2 (L2-on-unit-vectors → cosine)', async () => {
     mockHeartbeat.mockResolvedValue(0);
     mockQuery.mockResolvedValue({
       ids: [['id1', 'id2']],
@@ -303,9 +303,12 @@ describe('ChromaRepository', () => {
     expect(results).toHaveLength(2);
     const first = results[0];
     expect(first.id).toBe('id1');
-    expect(first.score).toBeCloseTo(0.9, 5);
+    // distance=0.1 → score = 1 - 0.01/2 = 0.995
+    expect(first.score).toBeCloseTo(0.995, 5);
     expect(first.metadata).toEqual({ episode_id: 'ep_a' });
     expect(first.document).toBe('doc one');
+    // distance=0.4 → score = 1 - 0.16/2 = 0.92
+    expect(results[1].score).toBeCloseTo(0.92, 5);
     expect(mockQuery).toHaveBeenCalledWith(
       expect.objectContaining({ nResults: 2, where: { episode_id: 'ep_a' } }),
     );

@@ -337,11 +337,15 @@ export class ChromaRepository implements OnModuleInit, OnModuleDestroy {
     const documents = response.documents?.[0] ?? [];
 
     const results: SimilarityResult[] = ids.map((id, idx) => {
-      const distance = distances[idx] ?? 1;
-      // For cosine on normalized embeddings (Gemini gemini-embedding-001),
-      // distance ∈ [0, 1] and score = 1 - distance is a similarity ∈ [0, 1].
-      // For l2/ip metrics this is not a probability; callers should be aware.
-      const score = 1 - distance;
+      const distance = distances[idx] ?? 0;
+      // Chroma's default L2 metric on unit-normalized vectors (see ADR 0006
+      // decision 9): cosine similarity is recoverable as
+      //   cos(θ) = 1 - L2²(a,b) / 2
+      // which maps the practical L2 range [0, √2] (cos ∈ [0, 1]) cleanly.
+      // For semantically dissimilar vectors L2 can exceed √2 → score below 0;
+      // clamp at 0 so the contract `score ∈ [0, 1]` always holds.
+      const rawScore = 1 - (distance * distance) / 2;
+      const score = rawScore < 0 ? 0 : rawScore;
       const meta: Record<string, unknown> = metadatas[idx] ?? {};
       return {
         id,
