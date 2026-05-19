@@ -45,6 +45,10 @@ export const envSchema = z.object({
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0),
   LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(8192).default(1024),
   LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+
+  // QA chain (Phase 1.6)
+  QA_DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
+  QA_SOURCE_EXCERPT_LENGTH: z.coerce.number().int().min(20).max(2000).default(200),
 });
 
 export type Env = z.infer<typeof envSchema>;
