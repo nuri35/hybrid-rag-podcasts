@@ -13,8 +13,8 @@ import {
   ChromaUnreachableException,
   ChromaWriteFailedException,
   type FailedBatch,
-} from '../exceptions';
-import type { Env } from '../config/env.schema';
+} from './exceptions';
+import type { Env } from '../../common/config/env.schema';
 
 const HEARTBEAT_TIMEOUT_MS = 5_000;
 const BACKOFF_BASE_MS = 1_000;

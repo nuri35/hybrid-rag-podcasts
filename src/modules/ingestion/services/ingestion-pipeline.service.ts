@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Document } from '@langchain/core/documents';
-import { ChromaRepository } from '../../../common/repositories/chroma.repository';
+import { ChromaRepository } from '../../vector-store/chroma.repository';
 import type { Env } from '../../../common/config/env.schema';
 import type { IngestionOptions, IngestionResult, PodcastMetadata } from '../types';
 import { CsvLoaderService } from './csv-loader.service';

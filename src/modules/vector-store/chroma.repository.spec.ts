@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { Document } from '@langchain/core/documents';
-import { ChromaUnreachableException, ChromaWriteFailedException } from '../exceptions';
+import { ChromaUnreachableException, ChromaWriteFailedException } from './exceptions';
 import { ChromaRepository, isTransientError } from './chroma.repository';
 
 const mockHeartbeat = jest.fn<Promise<number>, []>();
