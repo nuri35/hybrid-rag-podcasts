@@ -6,15 +6,20 @@ import { EmbeddingFailedException } from '../../../common/exceptions';
 import { EmbedderService } from './embedder.service';
 
 const mockEmbedDocuments = jest.fn<Promise<number[][]>, [string[]]>();
+const mockEmbedQuery = jest.fn<Promise<number[]>, [string]>();
 
 jest.mock('@langchain/google-genai', () => ({
   GoogleGenerativeAIEmbeddings: jest.fn().mockImplementation(() => ({
     embedDocuments: (texts: string[]) => mockEmbedDocuments(texts),
+    embedQuery: (text: string) => mockEmbedQuery(text),
   })),
 }));
 
 jest.mock('@google/generative-ai', () => ({
-  TaskType: { RETRIEVAL_DOCUMENT: 'RETRIEVAL_DOCUMENT' },
+  TaskType: {
+    RETRIEVAL_DOCUMENT: 'RETRIEVAL_DOCUMENT',
+    RETRIEVAL_QUERY: 'RETRIEVAL_QUERY',
+  },
 }));
 
 interface ConfigOverrides {
@@ -70,6 +75,7 @@ describe('EmbedderService', () => {
 
   beforeEach(() => {
     mockEmbedDocuments.mockReset();
+    mockEmbedQuery.mockReset();
   });
 
   it('preserves input order across multiple batches', async () => {
@@ -535,5 +541,103 @@ describe('EmbedderService', () => {
     expect(sleepDelays).toEqual([100, 150, 225, 337.5, 400]);
 
     spy.mockRestore();
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // embedQuery — query-side embedding with RETRIEVAL_QUERY task type
+  // ──────────────────────────────────────────────────────────────────
+
+  it('embedQuery returns a normalized vector for a valid query', async () => {
+    mockEmbedQuery.mockResolvedValueOnce([3, 4]);
+
+    const service = await buildService();
+    const result = await service.embedQuery('What is consciousness?');
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBeCloseTo(0.6, 10);
+    expect(result[1]).toBeCloseTo(0.8, 10);
+    expect(mockEmbedQuery).toHaveBeenCalledTimes(1);
+    expect(mockEmbedQuery).toHaveBeenCalledWith('What is consciousness?');
+  });
+
+  it('embedQuery throws EmbeddingFailedException for empty string', async () => {
+    const service = await buildService();
+    await expect(service.embedQuery('')).rejects.toBeInstanceOf(EmbeddingFailedException);
+    expect(mockEmbedQuery).not.toHaveBeenCalled();
+  });
+
+  it('embedQuery throws EmbeddingFailedException for whitespace-only query', async () => {
+    const service = await buildService();
+    await expect(service.embedQuery('   \n\t  ')).rejects.toBeInstanceOf(
+      EmbeddingFailedException,
+    );
+    expect(mockEmbedQuery).not.toHaveBeenCalled();
+  });
+
+  it('embedQuery throws EmbeddingFailedException on zero-magnitude vector', async () => {
+    mockEmbedQuery.mockResolvedValueOnce([0, 0, 0]);
+
+    const service = await buildService();
+    await expect(service.embedQuery('a real question')).rejects.toBeInstanceOf(
+      EmbeddingFailedException,
+    );
+  });
+
+  it('embedQuery produces a vector with magnitude ≈ 1.0 after normalization', async () => {
+    // Realistic Gemini-shaped vector: 768 dims, magnitude ~0.5-2.0 before normalize.
+    const fakeGeminiVector = new Array(768).fill(0).map((_, i) => Math.sin(i) * 0.05);
+    mockEmbedQuery.mockResolvedValueOnce(fakeGeminiVector);
+
+    const service = await buildService();
+    const result = await service.embedQuery('relevant question');
+
+    expect(result).toHaveLength(768);
+    const magnitude = Math.sqrt(result.reduce((s, x) => s + x * x, 0));
+    expect(magnitude).toBeCloseTo(1.0, 6);
+  });
+
+  it('embedQuery respects token bucket rate limiting between sequential calls', async () => {
+    // RPM=600 → minIntervalMs=100ms.
+    const callTimes: number[] = [];
+    mockEmbedQuery.mockImplementation(() => {
+      callTimes.push(Date.now());
+      return Promise.resolve([0.5, 0.5]);
+    });
+
+    const service = await buildService({
+      EMBEDDING_REQUESTS_PER_MINUTE: 600,
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 1,
+    });
+
+    await service.embedQuery('first question');
+    await service.embedQuery('second question');
+    await service.embedQuery('third question');
+
+    expect(callTimes).toHaveLength(3);
+    for (let i = 1; i < callTimes.length; i += 1) {
+      const gap = callTimes[i] - callTimes[i - 1];
+      expect(gap).toBeGreaterThanOrEqual(90);
+    }
+  });
+
+  it('embedQuery retries on rate-limit error and succeeds on next attempt', async () => {
+    const rateLimitError = new Error('429 quota exceeded for project') as Error & {
+      status?: number;
+    };
+    rateLimitError.status = 429;
+    mockEmbedQuery
+      .mockRejectedValueOnce(rateLimitError)
+      .mockResolvedValueOnce([1, 0]);
+    jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    const service = await buildService({
+      EMBEDDING_RETRY_MAX_ATTEMPTS: 3,
+      EMBEDDING_RETRY_INITIAL_DELAY_MS: 30,
+    });
+
+    const result = await service.embedQuery('rate-limited question');
+
+    expect(result).toEqual([1, 0]);
+    expect(mockEmbedQuery).toHaveBeenCalledTimes(2);
   });
 });

@@ -12,6 +12,7 @@ const STACK_LOG_MAX = 500;
 
 interface EmbeddingsClient {
   embedDocuments(texts: string[]): Promise<number[][]>;
+  embedQuery(text: string): Promise<number[]>;
 }
 
 interface BatchOutcome {
@@ -29,6 +30,11 @@ export class EmbedderService {
   private readonly batchSize: number;
   private readonly concurrency: number;
   private readonly embeddings: EmbeddingsClient;
+  // A second LangChain client constructed with `taskType: RETRIEVAL_QUERY`.
+  // The wrapper bakes `taskType` into the client at construction time, so we
+  // cannot override per-call — Gemini embeds documents and queries with
+  // different task types for best retrieval quality, hence two instances.
+  private readonly queryEmbeddings: EmbeddingsClient;
   private hasLoggedNormalization = false;
 
   // Two-layer rate limiting.
@@ -50,6 +56,7 @@ export class EmbedderService {
     this.batchSize = config.get('EMBEDDING_BATCH_SIZE', { infer: true });
     this.concurrency = config.get('EMBEDDING_CONCURRENCY', { infer: true });
     this.embeddings = this.createEmbeddings(config);
+    this.queryEmbeddings = this.createQueryEmbeddings(config);
 
     const rpm = config.get('EMBEDDING_REQUESTS_PER_MINUTE', { infer: true });
     this.minIntervalMs = Math.floor(60_000 / rpm);
@@ -72,6 +79,15 @@ export class EmbedderService {
       taskType: TaskType.RETRIEVAL_DOCUMENT,
       // Disable LangChain's internal retry — we centralize all retry logic in
       // `embedWithAdaptiveRetry` so the token bucket gate runs on every attempt.
+      maxRetries: 0,
+    });
+  }
+
+  protected createQueryEmbeddings(config: ConfigService<Env, true>): EmbeddingsClient {
+    return new GoogleGenerativeAIEmbeddings({
+      apiKey: config.get('GOOGLE_API_KEY', { infer: true }),
+      model: config.get('EMBEDDING_MODEL', { infer: true }),
+      taskType: TaskType.RETRIEVAL_QUERY,
       maxRetries: 0,
     });
   }
@@ -326,6 +342,94 @@ export class EmbedderService {
     }
 
     throw lastError ?? new Error('Adaptive retry exhausted unexpectedly');
+  }
+
+  /**
+   * Embeds a single query string with `taskType: RETRIEVAL_QUERY`.
+   *
+   * Mirrors the document pipeline (token bucket + adaptive retry + zero-vector
+   * guard + unit normalization) but on a separate LangChain client so the task
+   * type is correct. For `gemini-embedding-001` the raw output is already
+   * unit-normalized, so the normalize step is idempotent — kept defensively.
+   */
+  async embedQuery(text: string): Promise<number[]> {
+    if (!text || text.trim().length === 0) {
+      throw new EmbeddingFailedException(0, 1, 1);
+    }
+
+    const rawVector = await this.embedQueryWithAdaptiveRetry(text);
+
+    const magnitude = this.computeMagnitude(rawVector);
+    if (magnitude < 1e-10) {
+      throw new EmbeddingFailedException(0, 1, 1);
+    }
+
+    const { normalized } = this.normalizeVector(rawVector);
+
+    this.logger.debug(
+      `embedQuery completed: dims=${normalized.length}, magnitude=${magnitude.toFixed(6)}`,
+    );
+
+    return normalized;
+  }
+
+  /**
+   * Same adaptive retry contract as `embedWithAdaptiveRetry` but for the
+   * single-text query path. `embedQuery` on `@langchain/google-genai` hits
+   * Gemini's `embedContent` endpoint (singular) which propagates errors
+   * cleanly — no silent-empty-array substitution to detect — but we still
+   * cover network blips / 429s with the same exponential backoff.
+   */
+  private async embedQueryWithAdaptiveRetry(text: string): Promise<number[]> {
+    let delay = this.retryInitialDelay;
+    let lastError: Error | undefined;
+
+    for (let attempt = 1; attempt <= this.retryMaxAttempts; attempt += 1) {
+      await this.waitForToken();
+      try {
+        const result = await this.queryEmbeddings.embedQuery(text);
+        if (!Array.isArray(result) || result.length === 0) {
+          lastError = new Error(
+            'Empty query embedding returned — likely rate-limited (SDK silent-swallow).',
+          );
+          this.logger.debug(
+            `Empty query embedding (attempt ${attempt}/${this.retryMaxAttempts}); retrying after ${delay}ms`,
+          );
+        } else {
+          return result;
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const status = (err as { status?: number; statusCode?: number }).status;
+        const altStatus = (err as { statusCode?: number }).statusCode;
+        const message = lastError.message;
+        const isRateLimit =
+          status === 429 ||
+          altStatus === 429 ||
+          /quota|rate.?limit|exhausted|too many requests/i.test(message);
+        if (!isRateLimit) {
+          throw lastError;
+        }
+        this.logger.debug(
+          `Query rate-limit error (attempt ${attempt}/${this.retryMaxAttempts}): ${message}; retrying after ${delay}ms`,
+        );
+      }
+
+      if (attempt < this.retryMaxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * this.retryGrowthFactor, this.retryMaxDelay);
+      }
+    }
+
+    throw lastError ?? new Error('Adaptive retry exhausted unexpectedly');
+  }
+
+  private computeMagnitude(v: number[]): number {
+    let sumSquares = 0;
+    for (let i = 0; i < v.length; i += 1) {
+      sumSquares += v[i] * v[i];
+    }
+    return Math.sqrt(sumSquares);
   }
 
   private normalizeVector(v: unknown): { normalized: number[]; isZero: boolean } {
