@@ -11,6 +11,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
     "cli": "ts-node -r tsconfig-paths/register src/cli.ts",
+    "qa": "ts-node -r tsconfig-paths/register scripts/test_qa.ts",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
