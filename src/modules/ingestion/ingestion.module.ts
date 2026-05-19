@@ -17,5 +17,8 @@ import { IngestCommand } from './commands/ingest.command';
     IngestionPipelineService,
     IngestCommand,
   ],
+  // EmbedderService is shared with RetrievalModule (Phase 1.5+). Only this
+  // provider crosses the module boundary; the rest stay encapsulated.
+  exports: [EmbedderService],
 })
 export class IngestionModule {}

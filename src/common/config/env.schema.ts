@@ -33,6 +33,12 @@ export const envSchema = z.object({
   CLEANING_REMOVE_OUTRO: z.coerce.boolean().default(true),
   CLEANING_REMOVE_SPONSORS: z.coerce.boolean().default(false),
   CLEANING_REMOVE_FILLERS: z.coerce.boolean().default(false),
+
+  // Retrieval (Phase 1.5) — query validation + topK bounds
+  RETRIEVAL_DEFAULT_TOP_K: z.coerce.number().int().min(1).max(100).default(5),
+  RETRIEVAL_MAX_TOP_K: z.coerce.number().int().min(1).max(500).default(50),
+  RETRIEVAL_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).max(100).default(3),
+  RETRIEVAL_MAX_QUERY_LENGTH: z.coerce.number().int().min(10).max(10_000).default(1000),
 });
 
 export type Env = z.infer<typeof envSchema>;
