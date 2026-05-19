@@ -45,7 +45,12 @@ function makeMockRetriever(): MockRetriever {
   };
 }
 
-function makeFakeChunk(id: string, document: string, score = 0.9, episodeId = 'ep_001'): RetrievedChunk {
+function makeFakeChunk(
+  id: string,
+  document: string,
+  score = 0.9,
+  episodeId = 'ep_001',
+): RetrievedChunk {
   return {
     id,
     document,
@@ -179,7 +184,7 @@ describe('QaChainService', () => {
 
     const caught = await service.ask('a valid question').catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(QaChainFailedException);
-    expect(caught).toMatchObject({ message: expect.stringContaining('upstream LLM outage') });
+    expect((caught as QaChainFailedException).message).toContain('upstream LLM outage');
   });
 
   it('re-throws retrieval validation exceptions unwrapped', async () => {
@@ -227,10 +232,11 @@ describe('QaChainService', () => {
 
     expect(invokeSpy).toHaveBeenCalledTimes(1);
     // PromptTemplate.invoke produces a StringPromptValue whose .value field
-    // holds the final formatted prompt text. We inspect that here.
-    const promptValue = invokeSpy.mock.calls[0][0] as { value?: string };
-    const promptText =
-      typeof promptValue?.value === 'string' ? promptValue.value : String(promptValue);
+    // holds the final formatted prompt text. We assert that contract first,
+    // then inspect the value directly.
+    const promptValue = invokeSpy.mock.calls[0][0] as unknown as { value: string };
+    expect(typeof promptValue.value).toBe('string');
+    const promptText = promptValue.value;
 
     expect(promptText).toContain('[Source 1]\nfirst chunk text');
     expect(promptText).toContain('[Source 2]\nsecond chunk text');
