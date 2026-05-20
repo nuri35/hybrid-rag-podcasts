@@ -18,6 +18,7 @@ import {
   QueryTooShortException,
   RetrievalFailedException,
 } from './exceptions';
+import { METADATA_KEYS } from './retrieval.constants';
 import type { IRetriever, RetrievalOptions, RetrievedChunk } from './retrieval.types';
 import type { Env } from '../../common/config/env.schema';
 
@@ -187,16 +188,33 @@ export class VectorRetrieverService implements IRetriever {
   private mapToRetrievedChunks(results: SimilarityResult[]): RetrievedChunk[] {
     // ChromaRepository already converted L2 distance → cosine-equivalent score
     // (`1 - L2²/2`, clamped to `[0, 1]`). We pass it through and surface the
-    // chunk_index hint from metadata for downstream consumers.
+    // chunk_index hint from metadata for downstream consumers. The metadata key
+    // is held in `METADATA_KEYS.CHUNK_INDEX` so ingestion and retrieval cannot
+    // drift on a magic string; a missing or non-numeric value falls back to
+    // the array index with a warn log so the schema mismatch is observable.
     return results.map((result, idx) => {
-      const rawIndex = result.metadata['chunk_index'];
-      const chunkIndex = typeof rawIndex === 'number' ? rawIndex : idx;
+      const rawIndex = result.metadata[METADATA_KEYS.CHUNK_INDEX];
+      if (typeof rawIndex === 'number') {
+        return {
+          id: result.id,
+          document: result.document,
+          score: result.score,
+          metadata: result.metadata,
+          chunkIndex: rawIndex,
+        };
+      }
+      this.logger.warn(
+        `metadata_chunk_index_fallback id=${result.id} ` +
+          `expected_key=${METADATA_KEYS.CHUNK_INDEX} ` +
+          `received_type=${typeof rawIndex} ` +
+          `using_array_idx=${idx}`,
+      );
       return {
         id: result.id,
         document: result.document,
         score: result.score,
         metadata: result.metadata,
-        chunkIndex,
+        chunkIndex: idx,
       };
     });
   }

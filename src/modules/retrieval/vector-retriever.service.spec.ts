@@ -283,6 +283,68 @@ describe('VectorRetrieverService', () => {
     expect(chunks[1].chunkIndex).toBe(1);
   });
 
+  it('logs warning when chunk_index is missing from metadata (fallback to array idx)', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockResolvedValue([
+        {
+          id: 'no_idx_chunk',
+          score: 0.8,
+          document: 'doc with no chunk_index',
+          metadata: { episode_id: 'ep_z' }, // chunk_index deliberately missing
+        },
+      ]);
+      const { service } = await buildService({}, embedder, chroma);
+
+      const chunks = await service.retrieve('valid query', { topK: 1 });
+
+      expect(chunks[0].chunkIndex).toBe(0); // fell back to array index
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const warnArg = warnSpy.mock.calls[0][0] as string;
+      expect(warnArg).toContain('metadata_chunk_index_fallback');
+      expect(warnArg).toContain('id=no_idx_chunk');
+      expect(warnArg).toContain('expected_key=chunk_index');
+      expect(warnArg).toContain('received_type=undefined');
+      expect(warnArg).toContain('using_array_idx=0');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('logs warning when chunk_index is a non-number type (string)', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockResolvedValue([
+        {
+          id: 'string_idx_chunk',
+          score: 0.7,
+          document: 'doc with stringified chunk_index',
+          metadata: { episode_id: 'ep_q', chunk_index: '5' }, // wrong type
+        },
+      ]);
+      const { service } = await buildService({}, embedder, chroma);
+
+      const chunks = await service.retrieve('valid query', { topK: 1 });
+
+      // String '5' is rejected; falls back to array index 0, NOT 5.
+      expect(chunks[0].chunkIndex).toBe(0);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const warnArg = warnSpy.mock.calls[0][0] as string;
+      expect(warnArg).toContain('metadata_chunk_index_fallback');
+      expect(warnArg).toContain('id=string_idx_chunk');
+      expect(warnArg).toContain('received_type=string');
+      expect(warnArg).toContain('using_array_idx=0');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it('toRunnable returns a Runnable that produces chunks when invoked', async () => {
     const embedder = makeMockEmbedder();
     const chroma = makeMockChroma();
