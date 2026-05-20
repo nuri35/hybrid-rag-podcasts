@@ -5,6 +5,57 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.6] — QaChainService + LlmModule (LCEL composition) — 2026-05-20
+
+### Added
+- `src/modules/llm/` — `LlmModule` and `LlmService.createChatModel()`, a
+  factory that returns a fresh `ChatGoogleGenerativeAI` per call so future
+  callers (evaluation harness, query router) can override `temperature`
+  or `maxOutputTokens` without sharing state.
+- `src/modules/qa/` — `QaModule` with `QaChainService.ask(question, options)`:
+  - LCEL chain `PromptTemplate | ChatGoogleGenerativeAI | StringOutputParser`.
+  - Retrieval runs OUTSIDE the chain so an empty-chunks fallback can
+    short-circuit the LLM call (cost + latency win on out-of-domain queries).
+  - Pass-through routing (`instanceof`, not constructor-name) for known
+    retrieval / embedding / Chroma exceptions — preserves HTTP status codes
+    once Phase 1.7 wires the controller.
+- `QaChainFailedException` — wraps unknown LLM / chain errors as 500.
+- `QaResult`, `QaSource`, `QaOptions` public contract types.
+- 6 environment variables: `LLM_MODEL`, `LLM_TEMPERATURE`,
+  `LLM_MAX_OUTPUT_TOKENS`, `LLM_TIMEOUT_MS`, `QA_DEFAULT_TOP_K`,
+  `QA_SOURCE_EXCERPT_LENGTH`. All Zod-validated in the central env schema.
+- `scripts/test_qa.ts` (`npm run qa -- "<question>"`) — manual smoke test
+  CLI; bootstraps `AppModule` (no HTTP server), runs one question, prints
+  answer + 5 sources + duration, exits cleanly.
+- ADR-0007 — `LlmModule` + `QaChainService` design (10 decisions).
+
+### Changed
+- `LLM_MODEL` migrated from `gemini-2.0-flash` to `gemini-2.5-flash-lite`
+  (commit 55a1942). Google deprecated `gemini-2.0-flash` for new accounts
+  on 2026-03-06; the project's API key returned 404 once the smoke test
+  hit the live endpoint. Flash-lite selected for GA stability, free-tier
+  quota, and reproducible pinned version (no `-latest` alias).
+- `AppModule` imports `LlmModule` and `QaModule` so the smoke test CLI
+  and the Phase 1.7 controller can resolve `QaChainService`.
+
+### Tests
+- 9 unit tests for `QaChainService` (100 % statement coverage, 93.75 %
+  branch coverage) using `FakeListChatModel` from
+  `@langchain/core/utils/testing` — exercises the real LCEL composition
+  without burning Gemini quota.
+- 3 integration tests against live Chroma + Gemini (skipped by default,
+  same convention as Phase 1.5 retrieval integration).
+- Project total: 83 passed / 8 skipped (5 prior integration + 3 new QA
+  integration). Lint clean across `src/**/*.ts`.
+
+### Manual verification
+- 6 smoke-test queries against the populated 53 427-vector collection:
+  specific-entity, generic-concept, multi-perspective synthesis, and
+  off-topic fallback all returned grounded answers with valid sources.
+- Latency baseline on `gemini-2.5-flash-lite` free tier: ~6 s warm, 15–18 s
+  on cold start or longer answers. Phase 2 evaluation will decide whether
+  this is acceptable or whether to bump to `gemini-2.5-flash` paid tier.
+
 ## [Phase 1.5] — VectorRetrieverService — 2026-05-19
 
 ### Added
