@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RunnableLambda, type Runnable } from '@langchain/core/runnables';
@@ -106,7 +107,7 @@ export class VectorRetrieverService implements IRetriever {
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`retrieve_failed duration_ms=${totalDuration} error=${message}`);
+      const errorClass = error instanceof Error ? error.constructor.name : typeof error;
 
       // Pass-through known exceptions so the controller boundary keeps their
       // HTTP status codes (`AllExceptionsFilter` maps `BadRequestException`
@@ -135,9 +136,28 @@ export class VectorRetrieverService implements IRetriever {
         error instanceof ChromaUnreachableException ||
         error instanceof ChromaWriteFailedException
       ) {
+        this.logger.error(
+          `retrieve_failed duration_ms=${totalDuration} ` +
+            `error_class=${errorClass} error_message=${message}`,
+        );
         throw error;
       }
-      throw new RetrievalFailedException(`Retrieval failed: ${message}`);
+
+      // Wrap path: the underlying error is unexpected. Its message may carry
+      // SDK URLs, partial credentials, payload fragments, or stack details
+      // that should not leak to the HTTP response body. We generate a
+      // correlation ID, log it alongside the full original detail (so on-call
+      // can grep `correlation_id=<id>` and recover everything), then throw a
+      // public-safe exception that exposes ONLY the correlation ID and a
+      // generic phrase. UUID source is Node's built-in `node:crypto` —
+      // cryptographically strong, no new dependency.
+      const correlationId = randomUUID();
+      this.logger.error(
+        `retrieve_failed_wrapped correlation_id=${correlationId} ` +
+          `duration_ms=${totalDuration} ` +
+          `error_class=${errorClass} error_message=${message}`,
+      );
+      throw new RetrievalFailedException(correlationId);
     }
   }
 

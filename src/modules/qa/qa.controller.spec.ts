@@ -89,7 +89,10 @@ describe('QaController', () => {
 
   it.each([
     ['QaChainFailedException', new QaChainFailedException('upstream LLM outage')],
-    ['RetrievalFailedException', new RetrievalFailedException('chroma query failed')],
+    [
+      'RetrievalFailedException',
+      new RetrievalFailedException('00000000-0000-4000-8000-000000000001'),
+    ],
     [
       'ChromaUnreachableException',
       new ChromaUnreachableException('http://localhost:8000', 'ECONNREFUSED'),

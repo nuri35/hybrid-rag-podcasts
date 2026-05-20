@@ -208,16 +208,58 @@ describe('VectorRetrieverService', () => {
     expect(chroma.similaritySearch).toHaveBeenCalledWith([0.1], 5, { episode_id: 'ep_007' });
   });
 
-  it('wraps unknown errors in RetrievalFailedException', async () => {
+  it('wraps unknown errors in RetrievalFailedException with a correlation ID, hiding the original message', async () => {
     const embedder = makeMockEmbedder();
     const chroma = makeMockChroma();
     embedder.embedQuery.mockResolvedValue([0.1]);
-    chroma.similaritySearch.mockRejectedValue(new Error('unexpected DB explosion'));
+    chroma.similaritySearch.mockRejectedValue(
+      new Error('secret internal detail: https://api.example.com/v1/x?key=AIza_TEST'),
+    );
     const { service } = await buildService({}, embedder, chroma);
 
     const caught = await service.retrieve('valid query').catch((e: unknown) => e);
+
     expect(caught).toBeInstanceOf(RetrievalFailedException);
-    expect(caught).toMatchObject({ message: expect.stringContaining('unexpected DB explosion') });
+    const wrapped = caught as RetrievalFailedException;
+
+    // correlationId is a UUID v4 (8-4-4-4-12 lowercase hex).
+    expect(wrapped.correlationId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    // The public message exposes ONLY the correlation ID and a generic phrase.
+    expect(wrapped.message).toContain(wrapped.correlationId);
+    expect(wrapped.message).toContain('Retrieval failed');
+    // The original SDK detail must NOT leak through the exception surface.
+    expect(wrapped.message).not.toContain('secret internal detail');
+    expect(wrapped.message).not.toContain('AIza_TEST');
+    expect(wrapped.message).not.toContain('api.example.com');
+  });
+
+  it('wrap path logs include correlation_id alongside the original error class and message', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockRejectedValue(
+        new Error('API key starts with AIza_TEST'),
+      );
+      const { service } = await buildService({}, embedder, chroma);
+
+      const caught = await service.retrieve('valid query').catch((e: unknown) => e);
+      const wrapped = caught as RetrievalFailedException;
+
+      // Exactly one error log fires on the wrap path (the `retrieve_failed_wrapped` line).
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const logArg = errorSpy.mock.calls[0][0] as string;
+      expect(logArg).toContain('retrieve_failed_wrapped');
+      expect(logArg).toContain(`correlation_id=${wrapped.correlationId}`);
+      expect(logArg).toContain('error_class=Error');
+      // The full original detail IS in the log, so on-call can recover it.
+      expect(logArg).toContain('API key starts with AIza_TEST');
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('re-throws EmbeddingFailedException without wrapping', async () => {
