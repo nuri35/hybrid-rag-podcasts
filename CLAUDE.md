@@ -98,6 +98,8 @@ Each was a deliberate choice. Do not revisit without an ADR.
 
 15. **Two-layer rate limiting in `EmbedderService` — token bucket (proactive) + adaptive retry (reactive).** Gemini Tier 1 caps the embedding endpoint at ~15 RPM and LangChain's default 7-second exponential backoff is shorter than Gemini's 60-second reset window, so the wrapper-level retry never escapes. `EmbedderService.waitForToken()` reserves atomic per-request slots via a monotonically advancing `lastRequestTime` (slot-reservation pattern is safe under concurrency, unlike a naive read-then-write). `EmbedderService.embedWithAdaptiveRetry()` then handles stray 429s AND the `@langchain/google-genai` 0.2.x silent-empty-array substitution (`Array(N).fill([])` returned when a `batchEmbedContents` call rejects) — both routes through short exponential backoff (200 ms → 2 s cap × 1.5 growth × up to 10 attempts by default). LangChain's internal retry is disabled (`maxRetries: 0`) to centralize retry logic. Atomic-success semantics preserved: a fully exhausted batch throws → `Promise.allSettled` records rejection → `EmbeddingFailedException` aborts ingestion. Tier-aware via env (`EMBEDDING_REQUESTS_PER_MINUTE` — Tier 1=15, Tier 2=60, Tier 3=200+), code unchanged across tiers. See ADR 0006 decision 10.
 
+16. **HTTP endpoint design — URI versioning + strict global ValidationPipe + thin controller.** `app.enableVersioning({ type: VersioningType.URI, prefix: 'api/v' })` mounts every versioned controller under `/api/v<N>/...`; URI versioning was chosen over header- or media-type-based variants because (a) it shows up in curl/docs, (b) Swagger UI generates one path entry per version automatically, (c) future Phase 4 hybrid endpoints can opt into `version: '2'` without disturbing v1 consumers. `ValidationPipe` is global with `whitelist + forbidNonWhitelisted + transform + enableImplicitConversion`; `forbidNonWhitelisted` (reject, not silently strip) is deliberate so client typos surface as 400s instead of silent data loss. `QaController` is a thin pass-through (5 lines of logic): it converts the DTO into a service call and returns the result. Errors propagate unwrapped — `AllExceptionsFilter` (Phase 1.1) maps `QaChainFailedException`/`RetrievalFailedException` (extends `InternalServerErrorException` → 500) and `EmptyQueryException`/`QueryTooShort/Long/InvalidRetrievalOptions` (extends `BadRequestException` → 400) to the right HTTP status. No try/catch in the controller — that would just re-throw, since the filter already handles formatting. See ADR 0008.
+
 ---
 
 ## Future optimizations
@@ -168,23 +170,24 @@ src/
         ingest.command.ts         # nest-commander entry
       dto/
       ingestion.module.ts
-    rag/                          # Retrievers, chains, prompts
-      retrievers/
-        vector-retriever.service.ts
-        graph-retriever.service.ts          # Phase 3+
-        hybrid-retriever.service.ts         # Phase 4+
-      chains/
-        qa-chain.service.ts
-      prompts/
-        qa-prompt.ts
-      rag.module.ts
-    questions/                    # Public HTTP endpoint
-      questions.controller.ts
-      questions.service.ts
+    vector-store/                 # Shared Chroma infrastructure (Phase 1.5)
+      chroma.repository.ts
+      vector-store.module.ts
+    retrieval/                    # Retrievers (Phase 1.5+)
+      vector-retriever.service.ts
+      graph-retriever.service.ts          # Phase 3+
+      hybrid-retriever.service.ts         # Phase 4+
+      retrieval.module.ts
+    llm/                          # Shared chat-model factory (Phase 1.6)
+      llm.service.ts
+      llm.module.ts
+    qa/                           # QA chain + HTTP endpoint (Phase 1.6 + 1.7)
+      qa-chain.service.ts         # LCEL: prompt | llm | StringOutputParser
+      qa.controller.ts            # POST /api/v1/questions
       dto/
         ask-question.dto.ts
-        question-response.dto.ts
-      questions.module.ts
+        qa-response.dto.ts
+      qa.module.ts
   common/
     config/                       # ConfigService, env schema (Zod-validated)
     constants/                    # All magic values centralized
@@ -238,11 +241,11 @@ See the `langchain-js-lcel` skill for full guidance.
 
 ## Phase tracking
 
-Current phase: **Phase 1.7 — HTTP endpoint (`POST /api/v1/questions` + Swagger)**, within the broader Phase 1 ("Vector layer + CLI ingestion + basic Q&A endpoint").
+Current phase: **Phase 1 complete.** Next: **Phase 2 — Evaluation (Ragas-style metrics + golden dataset).**
 
 | Phase | Status | Goal |
 |---|---|---|
-| 1. Vector layer | 🟡 In progress | Working vector RAG with CLI ingestion |
+| 1. Vector layer | ✅ Done | Working vector RAG with CLI ingestion + HTTP endpoint shipped |
 | &nbsp;&nbsp;1.1 Repo init | ✅ Done | NestJS + TS strict scaffold, ConfigModule (Zod-validated env), HealthModule (`GET /health`), AllExceptionsFilter, `cli.ts` via nest-commander, ESLint/Prettier, folder structure per module spec |
 | &nbsp;&nbsp;1.2 Ingestion scaffold + data prep | ✅ Done | `IngestionModule` with four `@Injectable` service skeletons (CsvLoader, Chunker, Embedder, IngestionPipeline) wired into `AppModule`; ADR 0002 documents CSV → Document mapping (pageContent=transcript_text, metadata=rest); `scripts/prepare_dataset.py` (one-time Lex Fridman HF download + schema remap) is the project's sole Python dependency; README has Data preparation + Usage sections |
 | &nbsp;&nbsp;1.3.a + 1.3.b | ✅ Done | `CsvLoaderService` streams via csv-parse + Zod validation with skip+warn behavior (8 tests pass); `ChunkerService` uses `RecursiveCharacterTextSplitter` (800/100) and adds deterministic `chunk_id` + `chunk_index` + `total_chunks`; pipeline gained a `--dry-run` flag through `IngestCommand` and dry-run on full dataset reports 319 docs → 54,172 chunks |
@@ -252,7 +255,7 @@ Current phase: **Phase 1.7 — HTTP endpoint (`POST /api/v1/questions` + Swagger
 | &nbsp;&nbsp;1.3.f | ⚪ Pending | Streaming embed/write overlap — deferred, see Future optimizations |
 | &nbsp;&nbsp;1.5 Retrieval | ✅ Done | `VectorStoreModule` extracted as shared infrastructure; `EmbedderService.embedQuery` added with `RETRIEVAL_QUERY` task type and a dedicated client; new `RetrievalModule` with `VectorRetrieverService implements IRetriever` (top-K + score threshold + metadata filter + LCEL `toRunnable()` factory, 16 unit tests, 100% statement coverage); 4 integration tests against live Chroma+Gemini (skipped by default); cosine score formula fix in `ChromaRepository` (`1 − L2²/2`). See ADR 0003. |
 | &nbsp;&nbsp;1.6 QA chain | ✅ Done | `LlmModule` (shared Gemini chat-model factory) + `QaModule` with `QaChainService` (LCEL `prompt | llm | StringOutputParser`; retrieval invoked outside the chain so empty-context fallback can skip the LLM call; pass-through error mapping for known retrieval/embedding exceptions, `QaChainFailedException` wraps the rest). **LLM_MODEL = `gemini-2.5-flash-lite`** (migrated from `gemini-2.0-flash` on 2026-05-19 after Google deprecated 2.0-flash for new accounts — returns 404; flash-lite chosen for free-tier quota + GA stability; pinned, no `-latest` alias). 9 unit tests (100 % statements) + 3 integration tests (skipped). Manual smoke test CLI `scripts/test_qa.ts` via `npm run qa -- "<question>"`. See ADR 0007. |
-| &nbsp;&nbsp;1.7 HTTP endpoint | ⚪ Pending | `POST /api/v1/questions` + Swagger |
+| &nbsp;&nbsp;1.7 HTTP endpoint | ✅ Done | `QaController` (`POST /api/v1/questions`) + `AskQuestionDto` (class-validator min/max length, topK range, `IsInt`) + `QaResponseDto`/`QaSourceDto` (Swagger-annotated). URI versioning via `app.enableVersioning({ type: URI, prefix: 'api/v' })`. Global `ValidationPipe` with `whitelist + forbidNonWhitelisted + transform`. Swagger UI at `/api/docs`, OpenAPI JSON at `/api/docs-json`. 16 unit tests (6 controller via mocked `QaChainService`, 10 DTO via `plainToInstance + validate`). 6 live smoke probes confirmed: Swagger UI 200, OpenAPI schemas present, 3× validation 400s (too-short, extra-field, topK out-of-range), happy-path 200 in 3 s with 3 grounded sources. See ADR 0008. |
 | 2. Evaluation | ⚪ Pending | Ragas-style metrics + golden dataset (30–50 Q-A pairs) |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) |
 | 4. Hybrid retrieval | ⚪ Pending | Combine vector + graph (sequential + parallel strategies) |

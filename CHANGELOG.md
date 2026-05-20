@@ -5,6 +5,70 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.7] — HTTP endpoint + DTO validation + Swagger UI — 2026-05-20
+
+### Added
+- `src/modules/qa/qa.controller.ts` — `QaController` with `POST /api/v1/questions`,
+  `@HttpCode(200)`, full Swagger annotations (`@ApiTags`, `@ApiOperation`,
+  `@ApiBody`, three `@ApiResponse` cases). Thin pass-through: delegates to
+  `QaChainService.ask()` and returns the result; errors propagate unwrapped
+  for `AllExceptionsFilter` to map.
+- `src/modules/qa/dto/ask-question.dto.ts` — `question` with `@IsString` +
+  `@MinLength(3)` + `@MaxLength(1000)`; optional `topK` with `@IsInt` +
+  `@Min(1)` + `@Max(50)`. Every property carries `@ApiProperty`.
+- `src/modules/qa/dto/qa-response.dto.ts` — `QaResponseDto` + `QaSourceDto`
+  (chunkId, score, excerpt, metadata). Structurally identical to the
+  `QaResult` shape returned by `QaChainService` so the controller can
+  declare the DTO as its return type with no mapping layer.
+- `main.ts` — URI versioning via
+  `app.enableVersioning({ type: URI, prefix: 'api/v' })`; global
+  `ValidationPipe` with `whitelist + forbidNonWhitelisted + transform +
+  enableImplicitConversion`; Swagger UI at `/api/docs` (HTML) and
+  `/api/docs-json` (OpenAPI 3.0 JSON), generated from controller +
+  DTO decorators.
+- `@nestjs/swagger@^11.4.3` (installed with `--legacy-peer-deps`,
+  same pattern as Phase 1.3.e's `@google/generative-ai` install).
+- ADR-0008 — HTTP endpoint design (URI versioning rationale, ValidationPipe
+  config justifications, thin-controller pattern, error mapping).
+
+### Tests
+- `src/modules/qa/qa.controller.spec.ts` — 6 unit tests with
+  `QaChainService` mocked via `Test.createTestingModule + useValue`:
+  delegation with topK passed through, undefined-topK passthrough, no-info
+  shape (sources: []), and unchanged propagation of `QaChainFailedException`,
+  `RetrievalFailedException`, and `ChromaUnreachableException`.
+- `src/modules/qa/dto/ask-question.dto.spec.ts` — 10 unit tests using
+  `plainToInstance + validate()` with the same ValidationPipe config as
+  `main.ts`. Asserts on class-validator constraint keys so decorator
+  removal surfaces as a failing test. Covers valid (alone, with topK,
+  boundary 1/50), invalid question (missing/short/long), invalid topK
+  (below min/above max/non-integer), and `whitelistValidation` rejecting
+  unknown fields.
+- Suite: 83 → 99 passing (+16), 8 skipped integration unchanged.
+  ESLint clean (42 baseline warnings, 0 errors). `nest build` clean.
+
+### Manual smoke (live server against populated Chroma + Gemini)
+- `GET /api/docs/` → 200 HTML (3 096 B Swagger UI bundle).
+- `GET /api/docs-json` → 200, `/api/v1/questions` path present plus
+  `AskQuestionDto`, `QaResponseDto`, `QaSourceDto` schemas.
+- `POST /api/v1/questions` validation cases all return 400 with the
+  expected class-validator message: too-short question, extra field
+  rejected by `forbidNonWhitelisted`, `topK` out of range.
+- Happy path (`question: "What is consciousness?", topK: 3`) → 200 in
+  3 s with 817-char grounded answer and 3 sources (scores 0.83-0.85,
+  excerpts truncated to 200+"..."). Faster than the Phase 1.6 warm
+  baseline (~6 s) — both Chroma and Gemini cache hits.
+
+### Operational notes
+- Docker Desktop on this machine remains unstable (handoff predicted it);
+  WSL2 backend died once during Step 5, was reset with
+  `wsl --shutdown` + Docker Desktop relaunch. Separately, an `ajp-api`
+  container from another project auto-starts on Docker boot and squats
+  port 3000 — stop it (`docker stop ajp-api ajp-worker`) before each
+  `npm run start:dev`. Local MongoDB + Postgres Windows services were
+  stopped during this step to reduce resource pressure on Docker Desktop;
+  they are unrelated to this project and can be safely left stopped.
+
 ## [Phase 1.6] — QaChainService + LlmModule (LCEL composition) — 2026-05-20
 
 ### Added
