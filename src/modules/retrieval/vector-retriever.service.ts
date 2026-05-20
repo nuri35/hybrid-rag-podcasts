@@ -107,7 +107,24 @@ export class VectorRetrieverService implements IRetriever {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`retrieve_failed duration_ms=${totalDuration} error=${message}`);
 
-      // Known exceptions pass through unwrapped — controller maps them.
+      // Pass-through known exceptions so the controller boundary keeps their
+      // HTTP status codes (`AllExceptionsFilter` maps `BadRequestException`
+      // subclasses → 400 and `InternalServerErrorException` subclasses → 500).
+      // Anything unknown is wrapped in `RetrievalFailedException` (500) so
+      // callers see a consistent shape — see the wrap path below.
+      //
+      // NOTE on dead-code-but-intentional listings: the four query/option
+      // validation exceptions (`EmptyQueryException`, `QueryTooShortException`,
+      // `QueryTooLongException`, `InvalidRetrievalOptionsException`) cannot
+      // actually reach this catch today — they are thrown by `validateQuery()`
+      // and `validateAndResolveTopK()` BEFORE the `try` block opens, so they
+      // bubble out directly. `ChromaUnreachableException` is similarly thrown
+      // only at module-init time (`ChromaRepository.onModuleInit`), not during
+      // a `similaritySearch` call. They are listed here defensively so that
+      // (a) future refactoring that moves validation inside the `try`, or
+      // (b) new code paths inside the `try` that legitimately throw them,
+      // do not silently get re-wrapped into 500s. The cost is one cheap
+      // `instanceof` check per call; the benefit is forward-defensive clarity.
       if (
         error instanceof EmptyQueryException ||
         error instanceof QueryTooShortException ||
