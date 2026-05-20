@@ -5,6 +5,85 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.5 hardening] — Defensive improvements (post-ship) — 2026-05-20
+
+Four focused commits applied after Phase 1.7 closed, addressing two
+production-risk items (error message leak, untrusted filter pass-through)
+and two code-hygiene items (silent metadata fallback, dead-code confusion)
+identified in the Phase 1.5 retrospective. Scope strictly inside the
+existing Phase 1.5 surface — no new dependencies, no new env vars, no
+ingestion changes, no Phase 1.6/1.7/Phase 2/4 work.
+
+Commit range: `efce868..e1cddb4` (4 commits).
+
+### Changed
+- `RetrievalFailedException` constructor signature is now
+  `(correlationId: string, publicMessage?: string)`. The public message
+  contains ONLY the generic phrase + UUID v4 reference; the original
+  underlying error message is logged server-side alongside the
+  correlation ID (`retrieve_failed_wrapped correlation_id=… error_class=…
+  error_message=…`) but never reaches the exception surface. Prevents
+  SDK URLs, partial credentials, payload fragments, or stack details
+  from leaking through `AllExceptionsFilter` into the HTTP response body.
+  UUIDs come from Node's built-in `node:crypto` — no new dependency.
+- `VectorRetrieverService.retrieve()` catch block restructured: one log
+  line per branch (was: shared log + branch). Both branches now include
+  `error_class=` for easier grep-based slicing.
+- `mapToRetrievedChunks` reads `chunk_index` via
+  `METADATA_KEYS.CHUNK_INDEX` instead of a bare string literal. Missing
+  or non-numeric values still fall back to the array index (behaviour
+  preserved) but now emit a structured warn:
+  `metadata_chunk_index_fallback id=… expected_key=chunk_index
+  received_type=… using_array_idx=…`. A future ingestion-side rename
+  of the key is now observable in logs instead of silently corrupting
+  `chunkIndex` values.
+- `VectorRetrieverService.retrieve()` runs a new `sanitizeFilter()`
+  pass on `options.filter` BEFORE calling the embedder. Top-level keys
+  must be in `ALLOWED_FILTER_KEYS` (derived from `METADATA_KEYS`).
+  Per-field operators must be in `ALLOWED_FILTER_OPERATORS` (`$eq`,
+  `$in`). Anything else (`$or`, `$and`, `$ne`, arbitrary fields,
+  non-object filters, null values) throws
+  `InvalidRetrievalOptionsException` → 400 via the existing
+  pass-through ladder. Closes the seam before any current or future
+  caller (internal agent, evaluation harness, Phase 1.7+ DTO) can
+  pass an unconstrained where-clause to Chroma.
+- Catch-block comment in `retrieve()` clarifies that four of the seven
+  listed exceptions in the `instanceof` ladder are dead-code today
+  (validation throws happen before `try` opens) but kept defensively
+  for future refactors that legitimately throw them inside the try.
+
+### Added
+- `src/modules/retrieval/retrieval.constants.ts` —
+  `METADATA_KEYS` (CHUNK_INDEX, EPISODE_ID, SOURCE) +
+  `ALLOWED_FILTER_KEYS` + `ALLOWED_FILTER_OPERATORS`.
+- 11 new unit tests in `vector-retriever.service.spec.ts`:
+  2 for chunk_index warn-on-fallback (missing key, string value);
+  1 rewritten + 1 new for the correlation-ID wrap (UUID regex + leak
+  assertions + log spy);
+  8 for filter sanitization (3 accept, 4 reject, 1 undefined-default,
+  + assertion that embedder is NOT called when filter is rejected).
+- One in-place update to `qa.controller.spec.ts:92` — the existing
+  `new RetrievalFailedException('chroma query failed')` test fixture
+  now uses a UUID-shaped string for the new constructor signature.
+  Test semantics unchanged (controller still propagates whatever the
+  service throws).
+
+### Out of scope (deferred, per original plan)
+- Caching layer for repeat queries — Phase 1.7.5 audit will design
+  Redis caches holistically.
+- Global request-scoped correlation ID middleware — Phase 1.7.5.
+- Correlation ID in HTTP response headers — Phase 1.7.5.
+- Default `scoreThreshold` — Phase 2 evaluation will measure first.
+- Over-fetch + reranking — Phase 2.
+- DTO exposure of filter — Phase 1.7 follow-up.
+- `QaChainFailedException` (Phase 1.6) keeps its current shape; a
+  separate audit pass will look at it on its own merits.
+
+### Tests
+- 99 (Phase 1.7 close) → 110 (+11). 8 integration tests still skipped.
+- Lint baseline (42 warnings, 0 errors) unchanged.
+- Build clean.
+
 ## [Phase 1.7] — HTTP endpoint + DTO validation + Swagger UI — 2026-05-20
 
 ### Added
