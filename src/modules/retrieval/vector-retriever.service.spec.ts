@@ -208,6 +208,113 @@ describe('VectorRetrieverService', () => {
     expect(chroma.similaritySearch).toHaveBeenCalledWith([0.1], 5, { episode_id: 'ep_007' });
   });
 
+  describe('filter sanitization', () => {
+    it('accepts filter with allowed key and $eq operator object', async () => {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockResolvedValue([]);
+      const { service } = await buildService({}, embedder, chroma);
+
+      await service.retrieve('valid query', {
+        topK: 3,
+        filter: { episode_id: { $eq: '14' } },
+      });
+
+      expect(chroma.similaritySearch).toHaveBeenCalledWith([0.1], 3, {
+        episode_id: { $eq: '14' },
+      });
+    });
+
+    it('accepts filter with allowed key and $in operator object', async () => {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockResolvedValue([]);
+      const { service } = await buildService({}, embedder, chroma);
+
+      await service.retrieve('valid query', {
+        topK: 3,
+        filter: { episode_id: { $in: ['14', '15', '16'] } },
+      });
+
+      expect(chroma.similaritySearch).toHaveBeenCalledWith([0.1], 3, {
+        episode_id: { $in: ['14', '15', '16'] },
+      });
+    });
+
+    it('rejects filter with disallowed top-level key', async () => {
+      const { service, embedder } = await buildService();
+      const caught = await service
+        .retrieve('valid query', { filter: { hacker_field: 'x' } })
+        .catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(InvalidRetrievalOptionsException);
+      expect((caught as Error).message).toContain('disallowed key');
+      expect((caught as Error).message).toContain('hacker_field');
+      // Sanitizer runs BEFORE embedder — no Gemini call should fire on a bad filter.
+      expect(embedder.embedQuery).not.toHaveBeenCalled();
+    });
+
+    it('rejects filter with disallowed $ne operator', async () => {
+      const { service } = await buildService();
+      const caught = await service
+        .retrieve('valid query', { filter: { episode_id: { $ne: '14' } } })
+        .catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(InvalidRetrievalOptionsException);
+      expect((caught as Error).message).toContain('disallowed operator');
+      expect((caught as Error).message).toContain('$ne');
+    });
+
+    it('rejects filter with top-level $or (caught by key whitelist)', async () => {
+      const { service } = await buildService();
+      const caught = await service
+        .retrieve('valid query', {
+          filter: { $or: [{ episode_id: '14' }, { episode_id: '15' }] },
+        })
+        .catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(InvalidRetrievalOptionsException);
+      expect((caught as Error).message).toContain('disallowed key');
+      expect((caught as Error).message).toContain('$or');
+    });
+
+    it('rejects non-object filter (string)', async () => {
+      const { service } = await buildService();
+      // Cast through unknown to bypass TS — simulates a caller that ignored the type.
+      const badFilter = 'malicious' as unknown as Record<string, unknown>;
+      const caught = await service
+        .retrieve('valid query', { filter: badFilter })
+        .catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(InvalidRetrievalOptionsException);
+      expect((caught as Error).message).toContain('must be a plain object');
+    });
+
+    it('rejects null filter value', async () => {
+      const { service } = await buildService();
+      const caught = await service
+        .retrieve('valid query', { filter: { episode_id: null as unknown as string } })
+        .catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(InvalidRetrievalOptionsException);
+      expect((caught as Error).message).toContain('must not be null/undefined');
+    });
+
+    it('allows undefined filter (default behaviour unchanged)', async () => {
+      const embedder = makeMockEmbedder();
+      const chroma = makeMockChroma();
+      embedder.embedQuery.mockResolvedValue([0.1]);
+      chroma.similaritySearch.mockResolvedValue([]);
+      const { service } = await buildService({}, embedder, chroma);
+
+      await service.retrieve('valid query');
+
+      expect(chroma.similaritySearch).toHaveBeenCalledWith([0.1], 5, undefined);
+    });
+  });
+
   it('wraps unknown errors in RetrievalFailedException with a correlation ID, hiding the original message', async () => {
     const embedder = makeMockEmbedder();
     const chroma = makeMockChroma();

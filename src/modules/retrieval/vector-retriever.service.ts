@@ -19,7 +19,11 @@ import {
   QueryTooShortException,
   RetrievalFailedException,
 } from './exceptions';
-import { METADATA_KEYS } from './retrieval.constants';
+import {
+  ALLOWED_FILTER_KEYS,
+  ALLOWED_FILTER_OPERATORS,
+  METADATA_KEYS,
+} from './retrieval.constants';
 import type { IRetriever, RetrievalOptions, RetrievedChunk } from './retrieval.types';
 import type { Env } from '../../common/config/env.schema';
 
@@ -71,6 +75,10 @@ export class VectorRetrieverService implements IRetriever {
 
     this.validateQuery(query);
     const topK = this.validateAndResolveTopK(options.topK);
+    // Run filter sanitization BEFORE embedding so a malformed / disallowed
+    // filter rejects in O(1) without spending a Gemini embed call on a doomed
+    // request.
+    const sanitizedFilter = this.sanitizeFilter(options.filter);
 
     this.logger.log(`retrieve_start topK=${topK}`);
 
@@ -83,7 +91,7 @@ export class VectorRetrieverService implements IRetriever {
       const results = await this.chromaRepository.similaritySearch(
         queryVector,
         topK,
-        options.filter,
+        sanitizedFilter,
       );
       const searchDuration = Date.now() - searchStartTime;
 
@@ -203,6 +211,74 @@ export class VectorRetrieverService implements IRetriever {
       );
     }
     return topK;
+  }
+
+  /**
+   * Whitelist-based sanitizer for `RetrievalOptions.filter`. Today no HTTP
+   * surface exposes filter, but internal callers (future hybrid retriever,
+   * evaluation harness, agent) can pass arbitrary shapes and Phase 1.7+ may
+   * expose filter via DTO. Guarding the seam here means a permissive caller
+   * cannot use Chroma's `where` clause to enumerate metadata values, compose
+   * unbounded boolean queries, or filter on fields the dataset does not
+   * carry (which would silently produce empty results).
+   *
+   * Rules:
+   *   - `undefined` passes through (caller didn't ask for a filter).
+   *   - Top-level value must be a plain object (not null, not array, not
+   *     primitive). Arrays and primitives at the top level are malformed.
+   *   - Every top-level key must be in `ALLOWED_FILTER_KEYS`. Catches
+   *     `hacker_field`, `$or`, `$and`, etc. — top-level operators are
+   *     deliberately rejected because they would let callers express
+   *     unbounded disjunctions.
+   *   - Each value is either a primitive (string / number / boolean —
+   *     Chroma treats as implicit `$eq`) or a single-level operator object
+   *     whose keys are all in `ALLOWED_FILTER_OPERATORS`. Operator values
+   *     are NOT recursively validated — once the operator is trusted, its
+   *     payload is whatever Chroma expects.
+   *   - `null` / `undefined` values are rejected explicitly so callers
+   *     cannot accidentally match nothing.
+   *
+   * Throws `InvalidRetrievalOptionsException` (→ HTTP 400) on any
+   * violation; this travels the standard pass-through ladder out to the
+   * controller. Sanitization runs before embedding so a doomed filter does
+   * not burn a Gemini call.
+   */
+  private sanitizeFilter(
+    filter: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    if (filter === undefined) {
+      return undefined;
+    }
+    if (typeof filter !== 'object' || filter === null || Array.isArray(filter)) {
+      throw new InvalidRetrievalOptionsException('filter must be a plain object');
+    }
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (!ALLOWED_FILTER_KEYS.has(key)) {
+        throw new InvalidRetrievalOptionsException(
+          `filter contains disallowed key "${key}". ` +
+            `Allowed keys: ${Array.from(ALLOWED_FILTER_KEYS).join(', ')}`,
+        );
+      }
+      if (value === null || value === undefined) {
+        throw new InvalidRetrievalOptionsException(
+          `filter value for "${key}" must not be null/undefined`,
+        );
+      }
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        for (const operator of Object.keys(value)) {
+          if (!ALLOWED_FILTER_OPERATORS.has(operator)) {
+            throw new InvalidRetrievalOptionsException(
+              `filter contains disallowed operator "${operator}" for key "${key}". ` +
+                `Allowed operators: ${Array.from(ALLOWED_FILTER_OPERATORS).join(', ')}`,
+            );
+          }
+        }
+      }
+      // else: primitive (string/number/boolean) → implicit equality, allowed.
+    }
+
+    return filter;
   }
 
   private mapToRetrievedChunks(results: SimilarityResult[]): RetrievedChunk[] {
