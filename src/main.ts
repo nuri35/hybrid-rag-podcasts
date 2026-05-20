@@ -1,7 +1,8 @@
 import 'reflect-metadata';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -32,7 +33,13 @@ function attachShutdownHandlers(app: INestApplication): void {
 }
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule);
+
+  // URI versioning — controllers tagged with `version: '1'` mount under /api/v1/...
+  app.enableVersioning({
+    type: VersioningType.URI,
+    prefix: 'api/v',
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -47,11 +54,26 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
   attachShutdownHandlers(app);
 
+  // OpenAPI / Swagger UI at /api/docs — generated from `@ApiTags`, `@ApiProperty`,
+  // `@ApiOperation`, `@ApiResponse` decorators on controllers + DTOs.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Hybrid RAG Podcasts API')
+    .setDescription(
+      'RAG-based Q&A over Lex Fridman podcast transcripts. ' +
+        'Retrieval-augmented generation pipeline using Chroma vector store and Gemini LLM.',
+    )
+    .setVersion('1.0')
+    .addTag('questions', 'Q&A endpoints')
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument);
+
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const port = config.get('PORT', { infer: true });
 
   await app.listen(port);
   Logger.log(`HTTP server listening on http://localhost:${port}`, 'Bootstrap');
+  Logger.log(`Swagger UI available at http://localhost:${port}/api/docs`, 'Bootstrap');
 }
 
 bootstrap().catch((error: unknown) => {
