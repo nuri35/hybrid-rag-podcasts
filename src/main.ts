@@ -59,11 +59,16 @@ async function bootstrap(): Promise<void> {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Hybrid RAG Podcasts API')
     .setDescription(
-      'RAG-based Q&A over Lex Fridman podcast transcripts. ' +
-        'Retrieval-augmented generation pipeline using Chroma vector store and Gemini LLM.',
+      'RAG-based Q&A over Lex Fridman Podcast transcripts. ' +
+        'Retrieval-augmented generation pipeline: Gemini embeddings + Chroma vector store ' +
+        '+ Gemini chat LLM composed via LangChain Expression Language (LCEL). ' +
+        'Built with NestJS. Source: https://github.com/nuri35/hybrid-rag-podcasts',
     )
     .setVersion('1.0')
-    .addTag('questions', 'Q&A endpoints')
+    .setContact('Nurettin', 'https://github.com/nuri35/hybrid-rag-podcasts', '')
+    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+    .addServer('http://localhost:3000', 'Local development')
+    .addTag('questions', 'Q&A endpoints powered by retrieval-augmented generation')
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, swaggerDocument);
