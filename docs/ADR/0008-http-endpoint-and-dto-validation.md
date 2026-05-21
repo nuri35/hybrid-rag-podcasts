@@ -153,3 +153,64 @@ Live HTTP smoke probes (curl) confirm wire-level behaviour (Swagger UI HTML, Ope
 - Breaking-change story: any change that drops a field from `QaResponseDto` or tightens a DTO constraint requires a new version, not a path edit.
 - Future Phase 6 (queue-based ingestion) will likely add a `POST /api/v1/ingest` admin endpoint; the same module pattern (`IngestionModule` already exists, gain a controller) applies, with admin-only auth bolted on top (not in scope here).
 - Tests for new endpoints follow the same two-layer pattern: controller unit test with the service mocked, DTO unit test with `plainToInstance + validate`. No e2e harness needed until Phase 2 establishes one.
+
+---
+
+## Phase 1.7 hardening notes (post-ship) — 2026-05-21
+
+Three commits applied after Phase 1.7 closed (`2068adc..8d60430`). The DX character of this pass contrasts intentionally with the Phase 1.5 and 1.6 hardening passes, which were production-safety-first (correlation IDs, timeout enforcement, prompt strengthening). Phase 1.7's hardening surface lives entirely above the service: OpenAPI metadata richness, an explicit error-response schema, two production-grade defaults at the HTTP server boundary (body-size limit, dev CORS), and the project's first HTTP-level integration tests.
+
+### DTO-level OpenAPI enrichment
+
+`AskQuestionDto`, `QaResponseDto`, `QaSourceDto` all carry richer `@ApiProperty` descriptions covering embedding model + retrieval scope, score formula (`1 − L²/2`), excerpt truncation rule, and the metadata-as-opaque-dict caveat. A new `ValidationErrorResponseDto` documents the 400 response envelope. The 400 `@ApiResponse` on `QaController.ask()` now references it via `type:`, so the OpenAPI document includes the validation-error schema explicitly.
+
+`ValidationErrorResponseDto` is intentionally a mirror of the NestJS-default `{ statusCode, message[], error }` envelope — *not* RFC 7807 — because RFC 7807 migration would be a wire-format breaking change. That migration is Phase 1.7.5 work; the DTO will be replaced wholesale at that point, not amended.
+
+### Three named Swagger examples on `@ApiBody`
+
+`philosophy` (default topK), `techQuestion` (topK=3), `multiPerspective` (default topK) cover the three common request shapes a frontend developer would prototype. Examples are pure metadata; runtime behaviour is unchanged.
+
+### HTTP body-size limit — 10 KB
+
+The plan's literal pattern was:
+
+```ts
+app.use(json({ limit: '10kb' }));
+app.use(urlencoded({ extended: true, limit: '10kb' }));
+```
+
+after `NestFactory.create()`. Empirical Express test (`json({ limit: '10kb' })` registered before vs after a router): **only the BEFORE form enforces the limit**. NestJS's `registerParserMiddleware` (called inside `init()` during `NestFactory.create()`) registers the default 100 KB parser ahead of the router; any subsequent `app.use(json())` lands behind the route stack and never parses bodies before route handlers. Even with `{ bodyParser: false }` the user's parser lands behind the router because `init()` also runs `registerRouter()` before returning.
+
+The only reliable pattern: build a custom `express()` instance, pre-register the parsers on it, pass it via `new ExpressAdapter(...)` to `NestFactory.create(..., { bodyParser: false })`. NestJS then mounts its router on the already-parser-configured Express app, parsers run first, body-size limit is enforced. This is the pattern shipped in `main.ts`.
+
+10 KB rationale: a 1000-char `question` plus a 50-or-so-char `topK` field produces a ~1–2 KB JSON envelope; 10 KB is generous headroom for malformed / escape-heavy inputs (e.g. heavily-escaped Unicode sequences) without being permissive. Configurable env var (`HTTP_BODY_LIMIT`) is Phase 1.7.5 work.
+
+### Dev-only CORS
+
+`NODE_ENV !== 'production'` gates the entire CORS block. Origins limited to the three common frontend dev-server ports (Vite 5173, Next.js / CRA 3000, Angular 4200). Methods `GET` + `POST`, allowed headers `Content-Type` only. Production CORS — real frontend origin allow-list, credentials, preflight max-age — stays deferred to Phase 1.7.5 alongside the rest of the security pack.
+
+This is dev DX, not a security boundary. Without it, a Vite-served local frontend cannot fetch this API; with it, the developer is unblocked without reading CORS docs. In production (`NODE_ENV=production`) the controller is unreachable from browsers unless / until Phase 1.7.5 lands the production allow-list — matching the planned 1.7.5 surface.
+
+### First HTTP integration test
+
+`qa.controller.integration.spec.ts` exercises the wire layer above `QaChainService` via supertest. Six tests: happy-path 200, three validation 400s, Swagger HTML, OpenAPI JSON schema presence. The bootstrap mirrors `main.ts` faithfully (custom ExpressAdapter + 10 KB body limit + ValidationPipe + URI versioning + AllExceptionsFilter + Swagger setup) so toggling `describe.skip` → `describe` tests the same wire production uses.
+
+Skip-by-default discipline mirrors the Phase 1.5 / 1.6 integration specs: tests require live Chroma + Gemini, are too heavy for CI without environment provisioning, and the unit tests (`qa.controller.spec.ts` + `ask-question.dto.spec.ts`) cover the controller-mocked path and DTO validation at the granularity CI needs.
+
+The Phase 1.6 integration spec validates the service pipeline; this new one validates only the HTTP boundary above it.
+
+### Confirmed out of scope (remains deferred)
+
+The following remain Phase 1.7.5 or later, not addressed in this pass:
+
+- Request logging interceptor (correlation ID, request ID echo, structured request/response logs)
+- Health check enrichment (Chroma readiness, Gemini liveness)
+- Production CORS allow-list + credentials handling
+- helmet, ThrottlerGuard, rate limiting
+- RFC 7807 problem-details error envelope
+- Streaming response support (`chain.stream()` over SSE)
+- Observability hooks (OpenTelemetry, Prometheus)
+- Response caching, retry policy, token-usage accounting
+- Response post-processing / citation enrichment (Phase 1.7.5 / Phase 2)
+- Question preprocessing — HyDE, query expansion (Phase 4)
+- Env-configurable body-size limit

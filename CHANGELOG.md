@@ -5,6 +5,113 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.7 hardening] — Swagger DX, body limit, dev CORS, HTTP integration tests — 2026-05-21
+
+Three commits applied after Phase 1.7 closed, broadly DX-focused (rich
+OpenAPI metadata, multiple Swagger examples, explicit error schema,
+project metadata) plus two production-grade defaults at the HTTP
+boundary (10 KB body-size limit, dev-only CORS) and the project's
+first HTTP-level integration tests. In contrast to the Phase 1.5 and
+1.6 hardening passes (production safety: correlation IDs, timeout
+enforcement, prompt strengthening), this pass is DX-first — most diff
+lines are decorator descriptions and Swagger example values. Phase
+1.7.5 (observability pack, production CORS, helmet, ThrottlerGuard,
+RFC 7807, streaming, retry policy, request logging, X-Request-ID
+echo, env-configurable body size) remains untouched.
+
+Commit range: `2068adc..8d60430` (3 commits).
+
+### Changed
+- `AskQuestionDto` `@ApiProperty` descriptions expanded with concrete
+  facts: embedding model + `RETRIEVAL_QUERY` task type, ~53,000
+  transcript chunks, server-side trim behaviour, topK trade-off
+  (recall vs prompt size vs latency). Numeric bounds unchanged
+  (3/1000 chars, 1/50).
+- `QaResponseDto` / `QaSourceDto` `@ApiProperty` descriptions
+  expanded: chunkId format (`<episode_id>_chunk_<chunk_index>`),
+  cosine-equivalent score range with the `1 − L²/2` formula, 200-char
+  excerpt truncation rule, metadata-as-opaque-dict caveat plus a
+  concrete metadata example (`{ episode_id, chunk_index, source }`).
+- `@ApiBody` on `POST /api/v1/questions` carries three named examples
+  surfaced in Swagger UI 'Try it out': `philosophy` (default topK),
+  `techQuestion` (topK=3), `multiPerspective` (default topK,
+  open-ended synthesis).
+- `DocumentBuilder` in `main.ts`: added `.setContact()`,
+  `.setLicense('MIT', ...)`, `.addServer('http://localhost:3000',
+  'Local development')`; description enriched with LCEL/Gemini/Chroma
+  stack call-out + GitHub source link. Production server URL
+  intentionally omitted (no production deployment yet — Phase
+  1.7.5 / Phase 6).
+
+### Added
+- `src/modules/qa/dto/validation-error.dto.ts` —
+  `ValidationErrorResponseDto` documenting the NestJS-default
+  `{ statusCode, message[], error }` envelope returned by
+  `ValidationPipe + AllExceptionsFilter`. Wired into the controller's
+  `@ApiResponse({ status: 400, type: ValidationErrorResponseDto })`
+  so the 400 schema is explicit in the OpenAPI document. The DTO
+  intentionally mirrors the current NestJS envelope shape; RFC 7807
+  problem-details migration stays deferred to Phase 1.7.5 — at that
+  point this DTO will be replaced wholesale, not amended.
+- `main.ts` — 10 KB body-size limit enforced via a custom
+  `ExpressAdapter` pre-loaded with `json({ limit: '10kb' })` +
+  `urlencoded({ extended: true, limit: '10kb' })`, combined with
+  `{ bodyParser: false }` on `NestFactory.create()`. The plan's
+  literal `app.use(json({ limit: '10kb' }))` after `create()` is a
+  no-op under NestJS Express (default 100 KB parser registers ahead
+  of the router during `init()`; user-added parsers land behind the
+  route stack and never run) — verified empirically against the
+  underlying `express 5.x` router. 10 KB is generous headroom over
+  the ~1–2 KB JSON envelope a 1000-char `question` produces;
+  configurable env var deferred to Phase 1.7.5.
+- `main.ts` — dev-only CORS, `NODE_ENV !== 'production'`-gated,
+  allowing the three common frontend dev-server origins (Vite 5173,
+  Next.js / CRA 3000, Angular 4200). Methods restricted to
+  `GET` + `POST`, allowed headers `Content-Type`. Production CORS
+  (origin allow-list, credentials, preflight max-age) stays deferred
+  to Phase 1.7.5.
+- `src/modules/qa/qa.controller.integration.spec.ts` — 6 supertest
+  tests exercising the real HTTP stack (router, ValidationPipe,
+  AllExceptionsFilter, URI versioning, Swagger). Skip-by-default per
+  Phase 1.5 + 1.6 integration-test discipline; bootstrap mirrors
+  `src/main.ts` faithfully (custom ExpressAdapter + 10 KB body limit
+  + ValidationPipe + URI versioning + AllExceptionsFilter + Swagger
+  setup) so toggling `describe.skip` → `describe` tests the same
+  wire production uses. Covers: happy-path 200 + body shape; three
+  validation 400s (too-short, unknown property, topK out-of-range);
+  Swagger UI HTML; OpenAPI JSON contains the `/api/v1/questions`
+  path.
+- `supertest ^7.2.2` + `@types/supertest ^7.2.0` as devDependencies
+  (`--legacy-peer-deps` mirrors the Phase 1.3.e / Phase 1.7 install
+  pattern).
+
+### Tests
+- Suite count: 12 → 13 (+1, integration spec).
+- Test count: 128 → 134 (+6, all skipped per the integration-test
+  discipline).
+- Active passing tests: 120 unchanged. No regressions.
+- ESLint clean on touched files; 6 pre-existing warnings in
+  unrelated files unchanged.
+- `nest build` clean.
+
+### Out of scope (deferred, per Phase 1.7.5 / Phase 2 / Phase 4 plan)
+- Request logging interceptor — Phase 1.7.5.
+- Correlation ID propagation across HTTP layer / X-Request-ID echo —
+  Phase 1.7.5.
+- Health-check enrichment (Chroma readiness, Gemini liveness) —
+  Phase 1.7.5.
+- Production CORS allow-list + credentials handling — Phase 1.7.5.
+- helmet, ThrottlerGuard, rate limiting — Phase 1.7.5.
+- RFC 7807 problem-details error envelope — Phase 1.7.5.
+- Streaming response (`chain.stream()` via SSE) — Phase 1.7.5.
+- Observability hooks (OpenTelemetry, Prometheus) — Phase 1.7.5.
+- Response caching, retry policy, token-usage accounting — Phase
+  1.7.5.
+- Response post-processing / citation enrichment — Phase 1.7.5 /
+  Phase 2.
+- Question preprocessing (HyDE, query expansion) — Phase 4.
+- Env-configurable body-size limit — Phase 1.7.5.
+
 ## [Phase 1.6 hardening] — Quality and safety improvements (post-ship) — 2026-05-21
 
 Four commits applied after Phase 1.7 closed, addressing one production-risk
