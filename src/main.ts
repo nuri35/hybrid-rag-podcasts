@@ -2,8 +2,10 @@ import 'reflect-metadata';
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { INestApplication } from '@nestjs/common';
+import express, { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import type { Env } from './common/config/env.schema';
@@ -33,7 +35,21 @@ function attachShutdownHandlers(app: INestApplication): void {
 }
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // Pre-register Express body parsers (10 KB JSON / 10 KB urlencoded) on a
+  // custom adapter BEFORE NestJS resolves the router. NestJS's own default
+  // parser is disabled with `{ bodyParser: false }`, otherwise its 100 KB
+  // ceiling would intercept first (default parser is registered ahead of the
+  // router during `init()`, so a later `app.use(json())` lands behind the
+  // route stack and never runs). 10 KB is generous headroom over the
+  // 1 KB-ish JSON envelope a 1000-char `question` produces. Configurable env
+  // var is deferred to Phase 1.7.5.
+  const expressInstance = express();
+  expressInstance.use(json({ limit: '10kb' }));
+  expressInstance.use(urlencoded({ extended: true, limit: '10kb' }));
+
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressInstance), {
+    bodyParser: false,
+  });
 
   // URI versioning — controllers tagged with `version: '1'` mount under /api/v1/...
   app.enableVersioning({
@@ -53,6 +69,17 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableShutdownHooks();
   attachShutdownHandlers(app);
+
+  // Dev-only CORS for common local frontend dev servers (Vite 5173,
+  // Next.js / CRA 3000, Angular 4200). Production CORS configuration —
+  // origin allow-list, credentials, preflight max-age — is Phase 1.7.5.
+  if (process.env.NODE_ENV !== 'production') {
+    app.enableCors({
+      origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4200'],
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['Content-Type'],
+    });
+  }
 
   // OpenAPI / Swagger UI at /api/docs — generated from `@ApiTags`, `@ApiProperty`,
   // `@ApiOperation`, `@ApiResponse` decorators on controllers + DTOs.
