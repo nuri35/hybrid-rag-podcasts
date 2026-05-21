@@ -363,8 +363,7 @@ describe('QaChainService', () => {
       // elsewhere in the suite for white-box assertions. The chain itself
       // will always produce a string (StringOutputParser guarantees it),
       // but the guard is defensive and worth covering directly.
-      const clean = (service as unknown as { cleanAnswer: (input: unknown) => string })
-        .cleanAnswer;
+      const clean = (service as unknown as { cleanAnswer: (input: unknown) => string }).cleanAnswer;
       expect(clean.call(service, null)).toBe('');
       expect(clean.call(service, undefined)).toBe('');
       expect(clean.call(service, 42)).toBe('');
