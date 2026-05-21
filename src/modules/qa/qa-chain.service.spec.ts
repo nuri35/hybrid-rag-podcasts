@@ -19,6 +19,7 @@ import { QaChainService } from './qa-chain.service';
 interface ConfigOverrides {
   QA_DEFAULT_TOP_K?: number;
   QA_SOURCE_EXCERPT_LENGTH?: number;
+  LLM_TIMEOUT_MS?: number;
 }
 
 function makeConfig(overrides: ConfigOverrides = {}): ConfigService {
@@ -195,16 +196,54 @@ describe('QaChainService', () => {
     expect(result.sources[1].excerpt).toBe(shortDoc); // under threshold → no truncation
   });
 
-  it('wraps unknown LLM errors in QaChainFailedException', async () => {
+  it('wraps unknown LLM errors in QaChainFailedException with correlation ID, hiding internal detail', async () => {
     const retriever = makeMockRetriever();
     retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
 
     const { service, llmModel } = await buildService(['ignored'], {}, retriever);
-    jest.spyOn(llmModel, 'invoke').mockRejectedValueOnce(new Error('upstream LLM outage'));
+    jest
+      .spyOn(llmModel, 'invoke')
+      .mockRejectedValueOnce(new Error('secret SDK detail: api.example.com/v1/x?key=AIza_TEST'));
 
-    const caught = await service.ask('a valid question').catch((e: unknown) => e);
+    const caught = (await service.ask('a valid question').catch((e: unknown) => e)) as
+      | QaChainFailedException
+      | undefined;
+
     expect(caught).toBeInstanceOf(QaChainFailedException);
-    expect((caught as QaChainFailedException).message).toContain('upstream LLM outage');
+    expect(caught?.correlationId).toBeTruthy();
+    expect(typeof caught?.correlationId).toBe('string');
+    expect(caught?.correlationId.length).toBeGreaterThan(0);
+    // Public message MUST NOT contain the raw underlying detail.
+    expect(caught?.message).not.toContain('secret SDK detail');
+    expect(caught?.message).not.toContain('AIza_TEST');
+    // Public message MUST contain the correlation ID for on-call lookup.
+    expect(caught?.message).toContain(caught!.correlationId);
+  });
+
+  it('wrapped error logs correlation_id and the original error_message for on-call diagnosis', async () => {
+    const retriever = makeMockRetriever();
+    retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    const { service, llmModel } = await buildService(['ignored'], {}, retriever);
+    jest
+      .spyOn(llmModel, 'invoke')
+      .mockRejectedValueOnce(new Error('API key starts with AIza_TEST'));
+
+    const caught = (await service.ask('a valid question').catch((e: unknown) => e)) as
+      | QaChainFailedException
+      | undefined;
+    expect(caught).toBeInstanceOf(QaChainFailedException);
+
+    const wrappedLog = errorSpy.mock.calls
+      .map((args) => String(args[0]))
+      .find((msg) => msg.startsWith('qa_failed_wrapped'));
+    expect(wrappedLog).toBeDefined();
+    expect(wrappedLog).toContain(`correlation_id=${caught!.correlationId}`);
+    expect(wrappedLog).toContain('API key starts with AIza_TEST');
+
+    errorSpy.mockRestore();
   });
 
   it('re-throws retrieval validation exceptions unwrapped', async () => {
@@ -235,6 +274,38 @@ describe('QaChainService', () => {
     const caught = await service.ask('valid question').catch((e: unknown) => e);
     expect(caught).toBe(embedFail);
     expect(caught).not.toBeInstanceOf(QaChainFailedException);
+  });
+
+  it('aborts a hung LLM call after LLM_TIMEOUT_MS and surfaces a wrapped exception', async () => {
+    const retriever = makeMockRetriever();
+    retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    // 50 ms timeout, LLM mocked to never resolve — race must reject with the
+    // timeout error, which falls into the wrap path (no instanceof match).
+    const { service, llmModel } = await buildService(
+      ['ignored'],
+      { LLM_TIMEOUT_MS: 50 },
+      retriever,
+    );
+    jest.spyOn(llmModel, 'invoke').mockImplementationOnce(() => new Promise(() => undefined));
+
+    const caught = (await service.ask('a valid question').catch((e: unknown) => e)) as
+      | QaChainFailedException
+      | undefined;
+
+    expect(caught).toBeInstanceOf(QaChainFailedException);
+    expect(caught?.correlationId).toBeTruthy();
+
+    const wrappedLog = errorSpy.mock.calls
+      .map((args) => String(args[0]))
+      .find((msg) => msg.startsWith('qa_failed_wrapped'));
+    expect(wrappedLog).toBeDefined();
+    expect(wrappedLog).toContain('LLM chain invocation timed out after 50ms');
+    expect(wrappedLog).toContain(`correlation_id=${caught!.correlationId}`);
+
+    errorSpy.mockRestore();
   });
 
   it('formats context as "[Source N]\\n<doc>" blocks separated by "\\n\\n"', async () => {

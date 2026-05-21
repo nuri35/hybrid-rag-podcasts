@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PromptTemplate } from '@langchain/core/prompts';
@@ -48,6 +49,7 @@ export class QaChainService {
   private readonly logger = new Logger(QaChainService.name);
   private readonly defaultTopK: number;
   private readonly sourceExcerptLength: number;
+  private readonly llmTimeoutMs: number;
   private readonly promptTemplate: PromptTemplate;
   private readonly llm: BaseChatModel;
   private readonly chain: Runnable<{ context: string; question: string }, string>;
@@ -59,6 +61,7 @@ export class QaChainService {
   ) {
     this.defaultTopK = config.get('QA_DEFAULT_TOP_K', { infer: true });
     this.sourceExcerptLength = config.get('QA_SOURCE_EXCERPT_LENGTH', { infer: true });
+    this.llmTimeoutMs = config.get('LLM_TIMEOUT_MS', { infer: true });
     this.llm = llmService.createChatModel();
     this.promptTemplate = PromptTemplate.fromTemplate(
       `You are a helpful assistant answering questions based on podcast transcripts.
@@ -73,6 +76,10 @@ Question: {question}
 Answer:`,
     );
     // Chain has no per-call state — build once at startup.
+    // `.pipe()` returns `Runnable<any, string>` because BaseChatModel's input
+    // type is loose; the field's declared type pins the input shape at the
+    // call site, which is what we want.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     this.chain = this.promptTemplate.pipe(this.llm).pipe(new StringOutputParser());
   }
 
@@ -96,8 +103,15 @@ Answer:`,
       // 3. Format chunks as a single context string for the prompt.
       const context = this.formatContext(chunks);
 
-      // 4. Invoke the LCEL chain built once in the constructor.
-      const answer = await this.chain.invoke({ context, question });
+      // 4. Invoke the LCEL chain built once in the constructor, guarded by
+      //    an LLM_TIMEOUT_MS race so a hung Gemini call cannot block the
+      //    request indefinitely. Timeout failures fall to the wrap path in
+      //    the catch (no instanceof match) and get correlation-ID treatment.
+      const answer = await this.invokeWithTimeout(
+        this.chain.invoke({ context, question }),
+        this.llmTimeoutMs,
+        'LLM chain invocation',
+      );
 
       // 5. Map chunks to caller-facing source citations.
       const sources = this.mapChunksToSources(chunks);
@@ -122,10 +136,13 @@ Answer:`,
       return { answer, sources };
     } catch (error) {
       const duration = Date.now() - startTime;
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`qa_failed duration_ms=${duration} error=${message}`);
+      const errorClass = error instanceof Error ? error.constructor.name : 'Unknown';
+      const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // Known exceptions pass through unwrapped — controller maps them.
+      // Pass-through path: known exceptions carry safe, intentional messages
+      // (user-facing validation copy, known Chroma states). Log full detail —
+      // no risk of SDK internals leaking — and re-throw to preserve the
+      // exception's HTTP status code when AllExceptionsFilter handles it.
       if (
         error instanceof EmptyQueryException ||
         error instanceof QueryTooShortException ||
@@ -136,9 +153,26 @@ Answer:`,
         error instanceof ChromaUnreachableException ||
         error instanceof ChromaWriteFailedException
       ) {
+        this.logger.error(
+          `qa_failed duration_ms=${duration} ` +
+            `error_class=${errorClass} ` +
+            `error_message=${errorMessage}`,
+        );
         throw error;
       }
-      throw new QaChainFailedException(`QA chain failed: ${message}`);
+
+      // Wrap path: Gemini SDK / LCEL / chain errors may contain URLs,
+      // partial credentials, or stack traces. Generate a correlation ID,
+      // log full detail server-side, and throw a sanitized exception that
+      // exposes only the correlation ID to the HTTP response.
+      const correlationId = randomUUID();
+      this.logger.error(
+        `qa_failed_wrapped correlation_id=${correlationId} ` +
+          `duration_ms=${duration} ` +
+          `error_class=${errorClass} ` +
+          `error_message=${errorMessage}`,
+      );
+      throw new QaChainFailedException(correlationId);
     }
   }
 
@@ -162,5 +196,32 @@ Answer:`,
       return text;
     }
     return text.substring(0, this.sourceExcerptLength) + '...';
+  }
+
+  /**
+   * Races the underlying promise against an `LLM_TIMEOUT_MS` setTimeout.
+   * The timer is always cleared (`finally`) so a fast-resolving promise
+   * does not leave a dangling handle that would keep the Node event loop
+   * alive past the response. The rejection on timeout is a generic `Error`
+   * — the catch in `ask()` does not match it via `instanceof`, so it falls
+   * to the wrap path and surfaces with a correlation ID.
+   */
+  private async invokeWithTimeout<T>(
+    invokePromise: Promise<T>,
+    timeoutMs: number,
+    contextLabel: string,
+  ): Promise<T> {
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`${contextLabel} timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([invokePromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
   }
 }

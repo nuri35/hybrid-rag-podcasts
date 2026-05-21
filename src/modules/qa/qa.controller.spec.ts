@@ -88,7 +88,7 @@ describe('QaController', () => {
   });
 
   it.each([
-    ['QaChainFailedException', new QaChainFailedException('upstream LLM outage')],
+    ['QaChainFailedException', new QaChainFailedException('00000000-0000-4000-8000-000000000002')],
     [
       'RetrievalFailedException',
       new RetrievalFailedException('00000000-0000-4000-8000-000000000001'),

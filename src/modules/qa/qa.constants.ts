@@ -8,5 +8,4 @@
  * response regardless of which branch fired. Edit both prompt template
  * and any consumer logic when changing this.
  */
-export const NO_INFO_ANSWER =
-  "I don't have enough information to answer this question." as const;
+export const NO_INFO_ANSWER = "I don't have enough information to answer this question." as const;
