@@ -107,6 +107,12 @@ describe('QaChainService', () => {
       makeFakeChunk('ep_002_chunk_3', 'Information integration theory says...', 0.78, 'ep_002'),
     ]);
 
+    // Spy on Logger.prototype.log so we can assert the qa_complete payload
+    // carries the score telemetry fields (top/avg/min). Overridden by
+    // Logger.overrideLogger(false) above so real stdout stays quiet — the
+    // spy still intercepts the call.
+    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
     const { service } = await buildService(['Mocked answer about consciousness.'], {}, retriever);
     const result = await service.ask('What is consciousness?');
 
@@ -118,6 +124,20 @@ describe('QaChainService', () => {
       excerpt: 'Consciousness is the subject of much debate.',
       metadata: { episode_id: 'ep_001', chunk_index: 0 },
     });
+
+    const qaCompleteLog = logSpy.mock.calls
+      .map((args) => String(args[0]))
+      .find((msg) => msg.startsWith('qa_complete'));
+    expect(qaCompleteLog).toBeDefined();
+    expect(qaCompleteLog).toContain('top_score=');
+    expect(qaCompleteLog).toContain('avg_score=');
+    expect(qaCompleteLog).toContain('min_score=');
+    // Spot-check the values: top=0.92, min=0.78, avg=(0.92+0.85+0.78)/3=0.85
+    expect(qaCompleteLog).toContain('top_score=0.9200');
+    expect(qaCompleteLog).toContain('min_score=0.7800');
+    expect(qaCompleteLog).toContain('avg_score=0.8500');
+
+    logSpy.mockRestore();
   });
 
   it('returns canned no-info answer when retriever returns no chunks (LLM not called)', async () => {

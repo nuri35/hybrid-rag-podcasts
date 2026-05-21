@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { Runnable } from '@langchain/core/runnables';
 import { EmbeddingFailedException } from '../../common/exceptions';
 import { LlmService } from '../llm/llm.service';
 import {
@@ -19,10 +20,9 @@ import {
   ChromaWriteFailedException,
 } from '../vector-store/exceptions';
 import { QaChainFailedException } from './exceptions';
+import { NO_INFO_ANSWER } from './qa.constants';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
 import type { Env } from '../../common/config/env.schema';
-
-const NO_INFO_ANSWER = "I don't have enough information to answer this question.";
 
 /**
  * Phase 1.6 — LLM bridge that turns retrieved chunks into a grounded answer
@@ -50,6 +50,7 @@ export class QaChainService {
   private readonly sourceExcerptLength: number;
   private readonly promptTemplate: PromptTemplate;
   private readonly llm: BaseChatModel;
+  private readonly chain: Runnable<{ context: string; question: string }, string>;
 
   constructor(
     private readonly retriever: VectorRetrieverService,
@@ -62,7 +63,7 @@ export class QaChainService {
     this.promptTemplate = PromptTemplate.fromTemplate(
       `You are a helpful assistant answering questions based on podcast transcripts.
 
-Use ONLY the following context to answer. If the answer is not in the context, say "I don't have enough information to answer this question."
+Use ONLY the following context to answer. If the answer is not in the context, say "${NO_INFO_ANSWER}"
 
 Context:
 {context}
@@ -71,6 +72,8 @@ Question: {question}
 
 Answer:`,
     );
+    // Chain has no per-call state — build once at startup.
+    this.chain = this.promptTemplate.pipe(this.llm).pipe(new StringOutputParser());
   }
 
   async ask(question: string, options: QaOptions = {}): Promise<QaResult> {
@@ -93,16 +96,27 @@ Answer:`,
       // 3. Format chunks as a single context string for the prompt.
       const context = this.formatContext(chunks);
 
-      // 4. LCEL chain — prompt → llm → string parser.
-      const chain = this.promptTemplate.pipe(this.llm).pipe(new StringOutputParser());
-      const answer = await chain.invoke({ context, question });
+      // 4. Invoke the LCEL chain built once in the constructor.
+      const answer = await this.chain.invoke({ context, question });
 
       // 5. Map chunks to caller-facing source citations.
       const sources = this.mapChunksToSources(chunks);
 
+      // Phase 2 evaluation baseline: capture score distribution per request
+      // so we can later tune score thresholds and reranker comparisons.
+      const topScore = chunks[0]?.score ?? 0;
+      const minScore = chunks[chunks.length - 1]?.score ?? 0;
+      const avgScore = chunks.length
+        ? chunks.reduce((sum, c) => sum + c.score, 0) / chunks.length
+        : 0;
+
       const duration = Date.now() - startTime;
       this.logger.log(
-        `qa_complete duration_ms=${duration} sources=${sources.length} answer_length=${answer.length}`,
+        `qa_complete duration_ms=${duration} sources=${sources.length} ` +
+          `answer_length=${answer.length} ` +
+          `top_score=${topScore.toFixed(4)} ` +
+          `avg_score=${avgScore.toFixed(4)} ` +
+          `min_score=${minScore.toFixed(4)}`,
       );
 
       return { answer, sources };
