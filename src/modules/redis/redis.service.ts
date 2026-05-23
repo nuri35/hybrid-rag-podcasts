@@ -15,8 +15,14 @@ import type { Env } from '../../common/config/env.schema';
  *     thinks succeeded.
  *   - `maxRetriesPerRequest: 1` — one in-flight retry; broader retry/
  *     backoff is the caller's concern (lock refresh, cache fill).
- *   - `lazyConnect: false` — connect during construction so module init
- *     can ping immediately.
+ *   - `lazyConnect: true` — defer the socket connect until
+ *     `onModuleInit` calls `connect()` explicitly. The combination of
+ *     `lazyConnect: false` + `enableOfflineQueue: false` raced the
+ *     handshake: `ping()` fired before the socket reached `ready`,
+ *     and the disabled offline queue rejected it with
+ *     `redis_initial_ping_failed`. Explicit connect awaits the
+ *     handshake first, then `ping()` is guaranteed to find a writable
+ *     stream.
  *
  * Error policy: all wrapped methods translate ioredis errors into
  * `RedisUnavailableException`. The exception carries an `operation` label
@@ -39,7 +45,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       connectTimeout: configService.get('REDIS_CONNECTION_TIMEOUT_MS', { infer: true }),
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
-      lazyConnect: false,
+      lazyConnect: true,
     });
 
     this.client.on('error', (err: Error) => {
@@ -49,6 +55,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     try {
+      // Explicit connect+ping in sequence — see class comment on
+      // `lazyConnect: true`. `connect()` resolves when the socket reaches
+      // `ready`; subsequent `ping()` is guaranteed to find a writable
+      // stream and won't be rejected by `enableOfflineQueue: false`.
+      await this.client.connect();
       await this.client.ping();
       this.logger.log('redis_connected');
     } catch (error) {

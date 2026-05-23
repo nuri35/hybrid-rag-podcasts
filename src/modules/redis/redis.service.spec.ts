@@ -14,6 +14,7 @@ import type { Env } from '../../common/config/env.schema';
  */
 jest.mock('ioredis', () => {
   const mockRedis = {
+    connect: jest.fn().mockResolvedValue(undefined),
     ping: jest.fn(),
     get: jest.fn(),
     set: jest.fn(),
@@ -27,6 +28,7 @@ jest.mock('ioredis', () => {
 });
 
 interface MockRedis {
+  connect: jest.Mock;
   ping: jest.Mock;
   get: jest.Mock;
   set: jest.Mock;
