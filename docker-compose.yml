@@ -29,6 +29,27 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------
+  # Redis — Phase 1.7.5 Sprint A. Backs the distributed ingestion lock,
+  # the post-ingestion integrity marker, and (future Sprint B) caches.
+  # Persistent volume + appendonly so a docker-compose restart does not
+  # lose the integrity marker. Same Windows-perf rationale as Chroma.
+  # ---------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: hybrid-rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------
   # Neo4j entity graph — Phase 3+ (kept here so the topology is visible).
   # Enable by removing the comment markers below and `docker compose up -d neo4j`.
   # ---------------------------------------------------------------
@@ -53,4 +74,5 @@ services:
 
 volumes:
   chroma-data:
+  redis-data:
   # neo4j-data:  # uncomment with the neo4j service above

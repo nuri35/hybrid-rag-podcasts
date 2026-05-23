@@ -49,6 +49,25 @@ export const envSchema = z.object({
   // QA chain (Phase 1.6)
   QA_DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
   QA_SOURCE_EXCERPT_LENGTH: z.coerce.number().int().min(20).max(2000).default(200),
+
+  // Redis (Phase 1.7.5 Sprint A) — coordination layer for the distributed
+  // ingestion lock, the integrity marker, and (future Sprint B) caches.
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+  REDIS_PASSWORD: z.string().default(''),
+  REDIS_DB: z.coerce.number().int().min(0).max(15).default(0),
+  REDIS_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(5000),
+
+  // Ingestion lock (Phase 1.7.5 Sprint A) — 2 h TTL is the safety net for
+  // a crashed-mid-ingest process; the in-flight worker refreshes every
+  // 5 min so the lock never naturally expires while work is ongoing.
+  INGESTION_LOCK_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(7200),
+  INGESTION_LOCK_REFRESH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(10000)
+    .max(1800000)
+    .default(300000),
 });
 
 export type Env = z.infer<typeof envSchema>;
