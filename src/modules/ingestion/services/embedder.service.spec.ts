@@ -154,9 +154,7 @@ describe('EmbedderService', () => {
   it('returns a full vector array when every batch fulfills', async () => {
     // Use an already-unit vector so the post-normalization output is identical
     // to the mock return; lets the test focus on length and call count.
-    mockEmbedDocuments.mockImplementation((texts) =>
-      Promise.resolve(texts.map(() => [1, 0, 0])),
-    );
+    mockEmbedDocuments.mockImplementation((texts) => Promise.resolve(texts.map(() => [1, 0, 0])));
 
     const service = await buildService({ EMBEDDING_BATCH_SIZE: 10, EMBEDDING_CONCURRENCY: 5 });
     const docs = Array.from({ length: 15 }, (_, i) => makeDoc(i, `content ${i}`));
@@ -405,11 +403,7 @@ describe('EmbedderService', () => {
     mockEmbedDocuments.mockResolvedValue([[], [], []]);
 
     const service = await buildService();
-    const docs = [
-      makeDoc(0, 'first prose'),
-      makeDoc(1, 'second prose'),
-      makeDoc(2, 'third prose'),
-    ];
+    const docs = [makeDoc(0, 'first prose'), makeDoc(1, 'second prose'), makeDoc(2, 'third prose')];
 
     const caught = await service.embedBatch(docs).catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(EmbeddingFailedException);
@@ -455,9 +449,7 @@ describe('EmbedderService', () => {
       status?: number;
     };
     rateLimitError.status = 429;
-    mockEmbedDocuments
-      .mockRejectedValueOnce(rateLimitError)
-      .mockResolvedValueOnce([[0.7, 0.7]]);
+    mockEmbedDocuments.mockRejectedValueOnce(rateLimitError).mockResolvedValueOnce([[0.7, 0.7]]);
     const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 
     const service = await buildService({
@@ -488,9 +480,9 @@ describe('EmbedderService', () => {
       EMBEDDING_RETRY_MAX_DELAY_MS: 50,
     });
 
-    const caught = await service.embedBatch([makeDoc(0, 'persistent 429 prose')]).catch(
-      (e: unknown) => e,
-    );
+    const caught = await service
+      .embedBatch([makeDoc(0, 'persistent 429 prose')])
+      .catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(EmbeddingFailedException);
     expect(mockEmbedDocuments).toHaveBeenCalledTimes(3);
   });
@@ -501,9 +493,9 @@ describe('EmbedderService', () => {
     mockEmbedDocuments.mockRejectedValueOnce(serverError);
 
     const service = await buildService({ EMBEDDING_RETRY_MAX_ATTEMPTS: 5 });
-    const caught = await service.embedBatch([makeDoc(0, 'unreachable prose')]).catch(
-      (e: unknown) => e,
-    );
+    const caught = await service
+      .embedBatch([makeDoc(0, 'unreachable prose')])
+      .catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(EmbeddingFailedException);
     // Exactly one call: no retry happened because 500 is not transient at this layer.
     expect(mockEmbedDocuments).toHaveBeenCalledTimes(1);
@@ -568,9 +560,7 @@ describe('EmbedderService', () => {
 
   it('embedQuery throws EmbeddingFailedException for whitespace-only query', async () => {
     const service = await buildService();
-    await expect(service.embedQuery('   \n\t  ')).rejects.toBeInstanceOf(
-      EmbeddingFailedException,
-    );
+    await expect(service.embedQuery('   \n\t  ')).rejects.toBeInstanceOf(EmbeddingFailedException);
     expect(mockEmbedQuery).not.toHaveBeenCalled();
   });
 
@@ -625,9 +615,7 @@ describe('EmbedderService', () => {
       status?: number;
     };
     rateLimitError.status = 429;
-    mockEmbedQuery
-      .mockRejectedValueOnce(rateLimitError)
-      .mockResolvedValueOnce([1, 0]);
+    mockEmbedQuery.mockRejectedValueOnce(rateLimitError).mockResolvedValueOnce([1, 0]);
     jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 
     const service = await buildService({

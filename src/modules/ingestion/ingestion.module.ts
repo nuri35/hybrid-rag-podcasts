@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RedisModule } from '../redis/redis.module';
 import { VectorStoreModule } from '../vector-store/vector-store.module';
 import { CsvLoaderService } from './services/csv-loader.service';
 import { TextCleanerService } from './services/text-cleaner.service';
@@ -8,7 +9,7 @@ import { IngestionPipelineService } from './services/ingestion-pipeline.service'
 import { IngestCommand } from './commands/ingest.command';
 
 @Module({
-  imports: [VectorStoreModule],
+  imports: [VectorStoreModule, RedisModule],
   providers: [
     CsvLoaderService,
     TextCleanerService,

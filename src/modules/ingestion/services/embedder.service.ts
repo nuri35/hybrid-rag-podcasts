@@ -200,9 +200,7 @@ export class EmbedderService {
             `magnitude=${Math.sqrt(rawSumSq).toFixed(6)}`,
         );
       } else {
-        this.logger.warn(
-          `Pre-normalization sample is not an array-like: typeof=${typeof sample}`,
-        );
+        this.logger.warn(`Pre-normalization sample is not an array-like: typeof=${typeof sample}`);
       }
     }
 
@@ -225,11 +223,7 @@ export class EmbedderService {
       // store with zero vectors. We fail loud and stop the pipeline instead.
       // Counts are at vector granularity here (not batch), which is the
       // strongest signal a downstream operator needs.
-      throw new EmbeddingFailedException(
-        vectors.length - zeroCount,
-        zeroCount,
-        vectors.length,
-      );
+      throw new EmbeddingFailedException(vectors.length - zeroCount, zeroCount, vectors.length);
     }
 
     // Post-normalization sanity check on the first non-zero vector: its
@@ -305,9 +299,7 @@ export class EmbedderService {
       await this.waitForToken();
       try {
         const result = await this.embeddings.embedDocuments(texts);
-        const hasEmpty = result.some(
-          (v) => !Array.isArray(v) || v.length === 0,
-        );
+        const hasEmpty = result.some((v) => !Array.isArray(v) || v.length === 0);
         if (!hasEmpty) {
           return result;
         }

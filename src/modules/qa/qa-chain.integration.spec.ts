@@ -55,7 +55,7 @@ describe.skip('QaChainService (integration — requires Chroma + GOOGLE_API_KEY)
       expect(source.excerpt.length).toBeGreaterThan(0);
       expect(source.metadata).toHaveProperty('episode_id');
     });
-    // eslint-disable-next-line no-console
+
     console.log(
       `[consciousness] answer_length=${result.answer.length} sources=${result.sources.length}\n` +
         `  preview: ${result.answer.substring(0, 200)}${result.answer.length > 200 ? '…' : ''}`,
@@ -68,7 +68,7 @@ describe.skip('QaChainService (integration — requires Chroma + GOOGLE_API_KEY)
     expect(result.sources).toHaveLength(3);
     expect(typeof result.answer).toBe('string');
     expect(result.answer.length).toBeGreaterThan(0);
-    // eslint-disable-next-line no-console
+
     console.log(
       `[ai-ethics topK=3] sources=${result.sources.length} ` +
         `score_range=[${result.sources[result.sources.length - 1]?.score.toFixed(4)}, ` +
@@ -93,7 +93,6 @@ describe.skip('QaChainService (integration — requires Chroma + GOOGLE_API_KEY)
     ];
     const matched = noInfoMarkers.some((marker) => lowered.includes(marker));
 
-    // eslint-disable-next-line no-console
     console.log(
       `[gibberish] sources=${result.sources.length} matched_no_info=${matched}\n` +
         `  preview: ${result.answer.substring(0, 200)}${result.answer.length > 200 ? '…' : ''}`,
@@ -103,7 +102,6 @@ describe.skip('QaChainService (integration — requires Chroma + GOOGLE_API_KEY)
     // surface SOMETHING, so the LLM, guided by the prompt's refusal clause,
     // must do the rejection. We don't fail the test on a single miss.
     if (!matched) {
-      // eslint-disable-next-line no-console
       console.warn(
         `⚠️ off-topic answer did not contain a no-info marker; ` +
           `review prompt template or model behavior`,

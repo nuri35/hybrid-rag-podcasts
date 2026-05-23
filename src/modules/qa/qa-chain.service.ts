@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -7,6 +7,9 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { Runnable } from '@langchain/core/runnables';
 import { EmbeddingFailedException } from '../../common/exceptions';
 import { LlmService } from '../llm/llm.service';
+import { DistributedLockService } from '../redis/distributed-lock.service';
+import { RedisService } from '../redis/redis.service';
+import { REDIS_KEYS } from '../redis/redis.constants';
 import {
   EmptyQueryException,
   InvalidRetrievalOptionsException,
@@ -16,20 +19,42 @@ import {
 } from '../retrieval/exceptions';
 import { VectorRetrieverService } from '../retrieval/vector-retriever.service';
 import type { RetrievedChunk } from '../retrieval/retrieval.types';
+import { ChromaUnreachableException, ChromaWriteFailedException } from '../vector-store/exceptions';
+import { ChromaRepository } from '../vector-store/chroma.repository';
 import {
-  ChromaUnreachableException,
-  ChromaWriteFailedException,
-} from '../vector-store/exceptions';
-import { QaChainFailedException } from './exceptions';
+  DataIntegrityMismatchException,
+  IngestionInProgressException,
+  QaChainFailedException,
+} from './exceptions';
 import { NO_INFO_ANSWER } from './qa.constants';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
+import type { IngestionMarker } from '../ingestion/types/ingestion-marker.types';
 import type { Env } from '../../common/config/env.schema';
+
+interface IntegrityState {
+  healthy: boolean;
+  reason: string | null;
+}
 
 /**
  * Phase 1.6 — LLM bridge that turns retrieved chunks into a grounded answer
  * with source citations.
  *
+ * Phase 1.7.5 Sprint A adds two entry guards:
+ *   - Per-request lock check (`ingestion:in_progress`). If held → 503
+ *     IngestionInProgressException. If Redis unreachable → fail-open with
+ *     warning log (service stays up).
+ *   - Per-boot integrity check via `verifyIntegrityOnStartup` (called from
+ *     onModuleInit). Compares the marker stored at
+ *     `ingestion:last_successful_run` against Chroma's current chunk count.
+ *     Mismatch / missing marker → latch into degraded mode; every
+ *     subsequent ask() throws DataIntegrityMismatchException until the
+ *     operator re-runs ingestion and the next boot's check passes. Redis
+ *     unreachable at boot → fail-open with warning log.
+ *
  * Flow per `ask(question, options)`:
+ *   0a. Lock check (throw 503 if held, fail-open if Redis down).
+ *   0b. Integrity gate (throw 503 if latched into degraded mode).
  *   1. Retrieve top-K chunks via `VectorRetrieverService` (Phase 1.5).
  *   2. If retrieval is empty → return the canned no-info answer WITHOUT
  *      calling the LLM. Saves cost + makes the fallback deterministic.
@@ -40,12 +65,13 @@ import type { Env } from '../../common/config/env.schema';
  *
  * Error policy: validation + downstream retrieval / infra exceptions pass
  * through unwrapped so the controller (Phase 1.7) maps them to clean
- * 4xx/5xx. Anything else becomes `QaChainFailedException` (500). All
- * routing is via `instanceof` — not constructor-name string match —
- * so minification cannot break it.
+ * 4xx/5xx. The new Sprint A exceptions (IngestionInProgressException,
+ * DataIntegrityMismatchException) are also pass-through. Anything else
+ * becomes `QaChainFailedException` (500). All routing is via `instanceof`
+ * — not constructor-name string match — so minification cannot break it.
  */
 @Injectable()
-export class QaChainService {
+export class QaChainService implements OnModuleInit {
   private readonly logger = new Logger(QaChainService.name);
   private readonly defaultTopK: number;
   private readonly sourceExcerptLength: number;
@@ -53,9 +79,13 @@ export class QaChainService {
   private readonly promptTemplate: PromptTemplate;
   private readonly llm: BaseChatModel;
   private readonly chain: Runnable<{ context: string; question: string }, string>;
+  private integrityState: IntegrityState = { healthy: true, reason: null };
 
   constructor(
     private readonly retriever: VectorRetrieverService,
+    private readonly lockService: DistributedLockService,
+    private readonly redisService: RedisService,
+    private readonly chromaRepository: ChromaRepository,
     llmService: LlmService,
     config: ConfigService<Env, true>,
   ) {
@@ -88,7 +118,84 @@ Answer:`,
     this.chain = this.promptTemplate.pipe(this.llm).pipe(new StringOutputParser());
   }
 
+  async onModuleInit(): Promise<void> {
+    await this.verifyIntegrityOnStartup();
+  }
+
+  /**
+   * Compares the Redis-stored integrity marker against Chroma's current
+   * chunk count. Latches into degraded mode on mismatch / missing marker.
+   * Fail-open if Redis itself is unreachable — the service stays up.
+   */
+  private async verifyIntegrityOnStartup(): Promise<void> {
+    try {
+      const markerRaw = await this.redisService.get(REDIS_KEYS.INGESTION_LAST_SUCCESSFUL_RUN);
+
+      if (markerRaw === null) {
+        this.logger.error(
+          'integrity_check_failed reason=no_marker_found ' +
+            'action=service_degraded queries_will_be_refused',
+        );
+        this.integrityState = { healthy: false, reason: 'no_marker_found' };
+        return;
+      }
+
+      const marker = JSON.parse(markerRaw) as IngestionMarker;
+      const actualChunks = await this.chromaRepository.count();
+
+      if (marker.actualChunks !== actualChunks) {
+        this.logger.error(
+          `integrity_check_failed reason=count_mismatch ` +
+            `marker_count=${marker.actualChunks} chroma_count=${actualChunks} ` +
+            `action=service_degraded queries_will_be_refused`,
+        );
+        this.integrityState = {
+          healthy: false,
+          reason: `count_mismatch: marker=${marker.actualChunks}, chroma=${actualChunks}`,
+        };
+        return;
+      }
+
+      this.logger.log(
+        `integrity_check_passed marker_chunks=${marker.actualChunks} ` +
+          `chroma_chunks=${actualChunks} last_ingestion=${marker.timestamp}`,
+      );
+      this.integrityState = { healthy: true, reason: null };
+    } catch (error) {
+      // Redis unreachable / Chroma unreachable at startup — fail-open with
+      // warning. The service stays up; the operator can correct after boot.
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `integrity_check_skipped reason=infrastructure_unavailable ` +
+          `error=${message} action=fail_open`,
+      );
+      this.integrityState = { healthy: true, reason: 'integrity_check_skipped_at_startup' };
+    }
+  }
+
   async ask(question: string, options: QaOptions = {}): Promise<QaResult> {
+    // 0a. Ingestion lock check — refuse queries while an ingestion run
+    //     holds the lock. Fail-open if Redis is unreachable so a transient
+    //     Redis blip doesn't take the API down with it.
+    try {
+      const locked = await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK);
+      if (locked) {
+        throw new IngestionInProgressException();
+      }
+    } catch (error) {
+      if (error instanceof IngestionInProgressException) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `qa_lock_check_failed reason=${message} action=proceeding (Redis fail-open)`,
+      );
+    }
+
+    // 0b. Integrity gate — if the startup check latched degraded, every
+    //     request refuses until next boot after corrective ingestion.
+    if (!this.integrityState.healthy) {
+      throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
+    }
+
     const startTime = Date.now();
     const topK = options.topK ?? this.defaultTopK;
 
@@ -146,9 +253,10 @@ Answer:`,
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Pass-through path: known exceptions carry safe, intentional messages
-      // (user-facing validation copy, known Chroma states). Log full detail —
-      // no risk of SDK internals leaking — and re-throw to preserve the
-      // exception's HTTP status code when AllExceptionsFilter handles it.
+      // (user-facing validation copy, known Chroma states, Sprint A
+      // ingestion/integrity states). Log full detail — no risk of SDK
+      // internals leaking — and re-throw to preserve the exception's HTTP
+      // status code when AllExceptionsFilter handles it.
       if (
         error instanceof EmptyQueryException ||
         error instanceof QueryTooShortException ||
@@ -157,7 +265,9 @@ Answer:`,
         error instanceof RetrievalFailedException ||
         error instanceof EmbeddingFailedException ||
         error instanceof ChromaUnreachableException ||
-        error instanceof ChromaWriteFailedException
+        error instanceof ChromaWriteFailedException ||
+        error instanceof IngestionInProgressException ||
+        error instanceof DataIntegrityMismatchException
       ) {
         this.logger.error(
           `qa_failed duration_ms=${duration} ` +
@@ -183,9 +293,7 @@ Answer:`,
   }
 
   private formatContext(chunks: RetrievedChunk[]): string {
-    return chunks
-      .map((chunk, idx) => `[Source ${idx + 1}]\n${chunk.document}`)
-      .join('\n\n');
+    return chunks.map((chunk, idx) => `[Source ${idx + 1}]\n${chunk.document}`).join('\n\n');
   }
 
   private mapChunksToSources(chunks: RetrievedChunk[]): QaSource[] {
