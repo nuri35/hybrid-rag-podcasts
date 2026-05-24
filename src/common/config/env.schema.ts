@@ -50,6 +50,18 @@ export const envSchema = z.object({
   QA_DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
   QA_SOURCE_EXCERPT_LENGTH: z.coerce.number().int().min(20).max(2000).default(200),
 
+  // LLM retry policy (Phase 1.6 Sprint Retry — Phase 1).
+  // Exponential backoff with jitter. Defaults: 3 attempts, 500ms→10s with
+  // 2× growth and ±30% jitter, so a worst-case total wait is ~21 s
+  // (500 + 1000 + 2000 ms plus jitter, plus the operation latency itself).
+  // Used only by ResilientLlmService (Phase 3 of the retry sprint) — chat
+  // LLM calls only; embedder has its own retry path (Phase 1.3).
+  LLM_RETRY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  LLM_RETRY_INITIAL_DELAY_MS: z.coerce.number().int().min(100).max(10_000).default(500),
+  LLM_RETRY_MAX_DELAY_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
+  LLM_RETRY_BACKOFF_FACTOR: z.coerce.number().min(1).max(10).default(2),
+  LLM_RETRY_JITTER_FACTOR: z.coerce.number().min(0).max(1).default(0.3),
+
   // Redis (Phase 1.7.5 Sprint A) — coordination layer for the distributed
   // ingestion lock, the integrity marker, and (future Sprint B) caches.
   REDIS_HOST: z.string().default('localhost'),
