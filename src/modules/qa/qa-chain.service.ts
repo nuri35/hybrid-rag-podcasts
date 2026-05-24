@@ -21,12 +21,15 @@ import { VectorRetrieverService } from '../retrieval/vector-retriever.service';
 import type { RetrievedChunk } from '../retrieval/retrieval.types';
 import { ChromaUnreachableException, ChromaWriteFailedException } from '../vector-store/exceptions';
 import { ChromaRepository } from '../vector-store/chroma.repository';
+import { CircuitOpenException } from './exceptions/circuit-open.exception';
+import { RetryExhaustedException } from './exceptions/retry-exhausted.exception';
 import {
   DataIntegrityMismatchException,
   IngestionInProgressException,
   QaChainFailedException,
 } from './exceptions';
 import { NO_INFO_ANSWER } from './qa.constants';
+import { ResilientLlmService } from './services/resilient-llm.service';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
 import type { IngestionMarker } from '../ingestion/types/ingestion-marker.types';
 import type { Env } from '../../common/config/env.schema';
@@ -86,6 +89,7 @@ export class QaChainService implements OnModuleInit {
     private readonly lockService: DistributedLockService,
     private readonly redisService: RedisService,
     private readonly chromaRepository: ChromaRepository,
+    private readonly resilientLlmService: ResilientLlmService,
     llmService: LlmService,
     config: ConfigService<Env, true>,
   ) {
@@ -215,12 +219,16 @@ Answer:`,
       // 3. Format chunks as a single context string for the prompt.
       const context = this.formatContext(chunks);
 
-      // 4. Invoke the LCEL chain built once in the constructor, guarded by
-      //    an LLM_TIMEOUT_MS race so a hung Gemini call cannot block the
-      //    request indefinitely. Timeout failures fall to the wrap path in
-      //    the catch (no instanceof match) and get correlation-ID treatment.
+      // 4. Invoke the LCEL chain built once in the constructor through the
+      //    ResilientLlmService (Phase 1.6 Sprint Retry) so circuit breaker
+      //    (outer) + retry policy (inner) wrap every Gemini call.
+      //    Composition order: timeout (outermost) → circuit → retry →
+      //    chain.invoke. Timeout failures still fall to the wrap path in
+      //    the catch (no instanceof match) and get correlation-ID
+      //    treatment; CircuitOpenException + RetryExhaustedException are
+      //    pass-through (preserve 503 / surface to client unchanged).
       const rawAnswer = await this.invokeWithTimeout(
-        this.chain.invoke({ context, question }),
+        this.resilientLlmService.invokeChain(this.chain, { context, question }),
         this.llmTimeoutMs,
         'LLM chain invocation',
       );
@@ -267,7 +275,9 @@ Answer:`,
         error instanceof ChromaUnreachableException ||
         error instanceof ChromaWriteFailedException ||
         error instanceof IngestionInProgressException ||
-        error instanceof DataIntegrityMismatchException
+        error instanceof DataIntegrityMismatchException ||
+        error instanceof CircuitOpenException ||
+        error instanceof RetryExhaustedException
       ) {
         this.logger.error(
           `qa_failed duration_ms=${duration} ` +

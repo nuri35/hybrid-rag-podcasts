@@ -16,6 +16,8 @@ import {
 import { VectorRetrieverService } from '../retrieval/vector-retriever.service';
 import type { RetrievedChunk } from '../retrieval/retrieval.types';
 import { ChromaRepository } from '../vector-store/chroma.repository';
+import { CircuitOpenException } from './exceptions/circuit-open.exception';
+import { RetryExhaustedException } from './exceptions/retry-exhausted.exception';
 import {
   DataIntegrityMismatchException,
   IngestionInProgressException,
@@ -23,6 +25,7 @@ import {
 } from './exceptions';
 import { QaChainService } from './qa-chain.service';
 import { NO_INFO_ANSWER } from './qa.constants';
+import { ResilientLlmService } from './services/resilient-llm.service';
 
 interface ConfigOverrides {
   QA_DEFAULT_TOP_K?: number;
@@ -112,11 +115,37 @@ function makeFakeChunk(
   };
 }
 
+interface MockResilientLlmService {
+  invokeChain: jest.Mock;
+}
+
+/**
+ * Default ResilientLlmService mock — pass-through to the underlying
+ * chain so existing tests that mock at the FakeListChatModel level keep
+ * working unchanged. New Sprint Retry tests override `invokeChain` to
+ * throw CircuitOpenException / RetryExhaustedException and assert
+ * QaChainService surfaces them unwrapped.
+ */
+function makeMockResilientLlmService(): MockResilientLlmService {
+  return {
+    invokeChain: jest.fn().mockImplementation(
+      // The runtime arg is a Runnable; we forward to .invoke directly
+      // so the chain (built in QaChainService's constructor against
+      // the FakeListChatModel) still executes. Narrow typing — accept
+      // anything with `.invoke(input): Promise<unknown>` — keeps the
+      // mock generic without falling back to `any`.
+      (chain: { invoke: (input: unknown) => Promise<unknown> }, input: unknown): Promise<unknown> =>
+        chain.invoke(input),
+    ),
+  };
+}
+
 interface BuildOverrides {
   retriever?: MockRetriever;
   lockService?: MockLockService;
   redisService?: MockRedisService;
   chromaRepository?: MockChromaRepository;
+  resilientLlmService?: MockResilientLlmService;
 }
 
 /**
@@ -139,6 +168,7 @@ async function buildService(
   lockService: MockLockService;
   redisService: MockRedisService;
   chromaRepository: MockChromaRepository;
+  resilientLlmService: MockResilientLlmService;
   llmModel: FakeListChatModel;
 }> {
   const llmModel = new FakeListChatModel({ responses: llmResponses });
@@ -149,6 +179,7 @@ async function buildService(
   const lockService = builds.lockService ?? makeMockLockService();
   const redisService = builds.redisService ?? makeMockRedisService();
   const chromaRepository = builds.chromaRepository ?? makeMockChromaRepository();
+  const resilientLlmService = builds.resilientLlmService ?? makeMockResilientLlmService();
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -157,6 +188,7 @@ async function buildService(
       { provide: DistributedLockService, useValue: lockService },
       { provide: RedisService, useValue: redisService },
       { provide: ChromaRepository, useValue: chromaRepository },
+      { provide: ResilientLlmService, useValue: resilientLlmService },
       { provide: LlmService, useValue: llmService },
       { provide: ConfigService, useValue: makeConfig(configOverrides) },
     ],
@@ -168,6 +200,7 @@ async function buildService(
     lockService,
     redisService,
     chromaRepository,
+    resilientLlmService,
     llmModel,
   };
 }
@@ -638,6 +671,85 @@ describe('QaChainService', () => {
       // The pass-through ladder must NOT wrap this in QaChainFailedException.
       expect(caught).toBeInstanceOf(DataIntegrityMismatchException);
       expect(caught).not.toBeInstanceOf(QaChainFailedException);
+    });
+  });
+
+  // ----------------------------------------------------------------------
+  // Phase 1.6 Sprint Retry — ResilientLlmService integration
+  // ----------------------------------------------------------------------
+  describe('resilient LLM integration', () => {
+    it('routes chain invocation through ResilientLlmService (called once with chain + input)', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const { service, resilientLlmService } = await buildService(
+        ['the answer'],
+        {},
+        { retriever },
+      );
+      await service.ask('a valid question');
+
+      expect(resilientLlmService.invokeChain).toHaveBeenCalledTimes(1);
+      const [chainArg, inputArg] = resilientLlmService.invokeChain.mock.calls[0] as [
+        unknown,
+        { context: string; question: string },
+      ];
+      // The chain itself isn't worth deep-checking — it's the
+      // constructor-built Runnable. Input shape is the contract.
+      expect(chainArg).toBeDefined();
+      expect(inputArg.context).toContain('[Source 1]');
+      expect(inputArg.question).toBe('a valid question');
+    });
+
+    it('re-throws CircuitOpenException from ResilientLlmService unwrapped (not QaChainFailed)', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const circuitErr = new CircuitOpenException(30);
+      resilientLlmService.invokeChain.mockRejectedValueOnce(circuitErr);
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const caught = await service.ask('a valid question').catch((e: unknown) => e);
+
+      expect(caught).toBe(circuitErr);
+      expect(caught).toBeInstanceOf(CircuitOpenException);
+      expect(caught).not.toBeInstanceOf(QaChainFailedException);
+    });
+
+    it('re-throws RetryExhaustedException from ResilientLlmService unwrapped', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const retryErr = new RetryExhaustedException(3, 5_000, new Error('upstream 503'));
+      resilientLlmService.invokeChain.mockRejectedValueOnce(retryErr);
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const caught = await service.ask('a valid question').catch((e: unknown) => e);
+
+      expect(caught).toBe(retryErr);
+      expect(caught).toBeInstanceOf(RetryExhaustedException);
+      expect(caught).not.toBeInstanceOf(QaChainFailedException);
+    });
+
+    it('still wraps unknown errors from ResilientLlmService in QaChainFailedException with a correlation ID', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.invokeChain.mockRejectedValueOnce(
+        new Error('unexpected resilience-layer failure'),
+      );
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const caught = (await service.ask('a valid question').catch((e: unknown) => e)) as
+        | QaChainFailedException
+        | undefined;
+
+      expect(caught).toBeInstanceOf(QaChainFailedException);
+      expect(caught?.correlationId).toBeTruthy();
+      expect(caught?.message).not.toContain('unexpected resilience-layer failure');
     });
   });
 });

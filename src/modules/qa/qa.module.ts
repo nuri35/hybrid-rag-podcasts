@@ -6,11 +6,12 @@ import { VectorStoreModule } from '../vector-store/vector-store.module';
 import { QaChainService } from './qa-chain.service';
 import { QaController } from './qa.controller';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
+import { ResilientLlmService } from './services/resilient-llm.service';
 import { RetryPolicyService } from './services/retry-policy.service';
 
 /**
  * QA module — Phase 1.6 + 1.7 + 1.7.5 Sprint A + Phase 1.6 Sprint Retry
- * (Phase 1 / 3).
+ * (Phases 1 / 2 / 3).
  *
  * Imports `RetrievalModule` (for `VectorRetrieverService`), `LlmModule`
  * (for chat-model factory), `RedisModule` (for `DistributedLockService` +
@@ -21,17 +22,19 @@ import { RetryPolicyService } from './services/retry-policy.service';
  * `POST /api/v1/questions`). Exports `QaChainService` so other modules
  * (e.g. CLI smoke test, future Phase 2 evaluation) can inject it.
  *
- * `RetryPolicyService` (Phase 1) and `CircuitBreakerService` (Phase 2)
- * are provided and exported here ahead of being wired into anything —
- * Phase 3 of the retry sprint will add a `ResilientLlmService` that
- * composes both around the chat LLM call. Until then they have no
- * runtime callers; the provider registration is what proves the DI
- * container can resolve them end-to-end.
+ * Sprint Retry composition (in DI order, not call order):
+ *   - `RetryPolicyService` — Phase 1 primitive (exponential backoff +
+ *     jitter + retryable classification).
+ *   - `CircuitBreakerService` — Phase 2 primitive (three-state machine
+ *     over a rolling failure window).
+ *   - `ResilientLlmService` — Phase 3 composer that wraps every chat
+ *     LLM `chain.invoke()` with circuit (outer) + retry (inner).
+ *     Consumed by `QaChainService.ask()`.
  */
 @Module({
   imports: [RetrievalModule, LlmModule, RedisModule, VectorStoreModule],
   controllers: [QaController],
-  providers: [QaChainService, RetryPolicyService, CircuitBreakerService],
-  exports: [QaChainService, RetryPolicyService, CircuitBreakerService],
+  providers: [QaChainService, RetryPolicyService, CircuitBreakerService, ResilientLlmService],
+  exports: [QaChainService, RetryPolicyService, CircuitBreakerService, ResilientLlmService],
 })
 export class QaModule {}
