@@ -62,6 +62,16 @@ export const envSchema = z.object({
   LLM_RETRY_BACKOFF_FACTOR: z.coerce.number().min(1).max(10).default(2),
   LLM_RETRY_JITTER_FACTOR: z.coerce.number().min(0).max(1).default(0.3),
 
+  // LLM circuit breaker (Phase 1.6 Sprint Retry — Phase 2 / 3).
+  // Three-state machine (CLOSED → OPEN → HALF_OPEN) sitting in front of
+  // the chat LLM. Trip when 5 failures land within a 60 s rolling window;
+  // cool down 30 s before letting a single probe through. In-memory
+  // (process-local) by design — circuit state does not federate across
+  // replicas; each pod observes upstream health independently.
+  LLM_CIRCUIT_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(100).default(5),
+  LLM_CIRCUIT_WINDOW_MS: z.coerce.number().int().min(1000).max(600_000).default(60_000),
+  LLM_CIRCUIT_OPEN_DURATION_MS: z.coerce.number().int().min(1000).max(600_000).default(30_000),
+
   // Redis (Phase 1.7.5 Sprint A) — coordination layer for the distributed
   // ingestion lock, the integrity marker, and (future Sprint B) caches.
   REDIS_HOST: z.string().default('localhost'),
