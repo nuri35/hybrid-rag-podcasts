@@ -5,6 +5,147 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.6 Sprint Retry] — Production-grade resilience for LLM calls — 2026-05-24
+
+Three-phase sprint adding retry policy + circuit breaker + composer
+service around every chat-LLM `chain.invoke` in the QA pipeline.
+Distinct from the embedder retry path (Phase 1.3 two-layer token-bucket
++ adaptive-retry stays unchanged — chat and embedding have different
+SLAs and the embedder already had its own resilience). Out of scope:
+multi-model fallback, token-usage tracking, streaming response, metrics
+endpoint, Redis-backed cross-replica circuit state — all later sprints.
+
+Commit range: `82339ab..0c2b739` (3 implementation commits).
+
+### Added
+
+- `src/modules/qa/services/retry-policy.service.ts` +
+  `retry-policy.constants.ts` + `types/retry-policy.types.ts` +
+  `exceptions/retry-exhausted.exception.ts` (Phase 1 — `82339ab`).
+  Exponential backoff with jitter, capped at `LLM_RETRY_MAX_DELAY_MS`.
+  Deterministic retryable classification: HTTP 429 + 5xx (except 501),
+  Node network codes (ETIMEDOUT / ECONNRESET / ECONNREFUSED / EAI_AGAIN
+  / ENOTFOUND), and message-pattern fallback (`/rate.?limit/i`,
+  `/timeout/i`, `/temporarily unavailable/i`, `/connection.*reset/i`)
+  for SDKs that wrap errors without preserving structured status.
+  Non-retryable: 4xx (except 429), auth failures, validation errors
+  raised by our own code. `RetryExhaustedException` carries
+  `attempts`, `totalDurationMs`, `lastError` for diagnostics. 21
+  unit tests covering 13 classification cases + 6 execute paths + 2
+  applyJitter white-box checks.
+
+- `src/modules/qa/services/circuit-breaker.service.ts` +
+  `types/circuit-breaker.types.ts` +
+  `exceptions/circuit-open.exception.ts` (Phase 2 — `de451be`).
+  Three-state machine (CLOSED → OPEN → HALF_OPEN) over a rolling
+  failure window. Trip when `LLM_CIRCUIT_FAILURE_THRESHOLD` failures
+  land within `LLM_CIRCUIT_WINDOW_MS`; cool down
+  `LLM_CIRCUIT_OPEN_DURATION_MS` before letting a single probe through.
+  Strict single-flight on the HALF_OPEN probe — concurrent callers get
+  the same 503 as during OPEN, so we never pile probes onto a
+  recovering backend. Successes in CLOSED state are intentionally a
+  no-op for the counter (a 4-fail / 1-pass / 4-fail pattern shouldn't
+  mask a half-broken backend). `CircuitOpenException` is a 503 with
+  `retryAfterSeconds` in the body, mirroring the Sprint A
+  `IngestionInProgressException` envelope so the frontend can handle
+  both transient-unavailability cases uniformly. In-memory per process
+  by design — each replica observes upstream health independently;
+  a Redis-backed variant is deferred to a later sprint when it would
+  actually buy something. 13 unit tests across CLOSED happy paths /
+  trip transition / cool-down / probe success+failure / concurrent
+  rejection / rolling-window prune + spread-failure / lifecycle
+  snapshot trace.
+
+- `src/modules/qa/services/resilient-llm.service.ts` +
+  `resilient-llm.service.spec.ts` (Phase 3 — `0c2b739`). Composer
+  that wraps every `chain.invoke` with circuit (outer) + retry
+  (inner). Order matters: a tripped circuit MUST short-circuit before
+  any retry — an OPEN circuit cannot afford to let retry hammer the
+  upstream `maxAttempts` times per request. A full retry cycle
+  (success-after-N or exhaustion) counts as a single 'attempt' from
+  the circuit's perspective. The Phase 1.6 hardening
+  `LLM_TIMEOUT_MS` race remains the outermost wrap — a hung
+  resilience layer can't block the request indefinitely. Heavy
+  JSDoc documents operator manual smoke tests (force 429 / force
+  circuit-open via temporary bad `GOOGLE_API_KEY`). 7 unit tests
+  with both underlying services MOCKED (their own specs exercise
+  the patterns; this suite verifies the composition).
+
+- Env vars (8 total): `LLM_RETRY_*` (5) + `LLM_CIRCUIT_*` (3) added
+  to `env.schema.ts` with Zod bounds and matching `.env.example`
+  sections documenting the worst-case wait math.
+
+- `docs/ADR/0010-llm-resilience-retry-circuit-breaker.md` —
+  decisions, alternatives, deferred items.
+
+### Changed
+
+- `src/modules/qa/qa-chain.service.ts` — constructor now injects
+  `ResilientLlmService`. `ask()` body replaces direct
+  `this.chain.invoke(input)` with
+  `this.resilientLlmService.invokeChain(this.chain, input)`. Both
+  new exceptions (`CircuitOpenException` + `RetryExhaustedException`)
+  added to the catch ladder's pass-through branch so they keep their
+  503 / diagnostic detail (never wrapped as
+  `QaChainFailedException`).
+
+- `src/modules/qa/qa.module.ts` — three new providers + exports
+  alongside the Sprint A wiring.
+
+- `src/modules/qa/qa-chain.service.spec.ts` — default
+  `ResilientLlmService` mock pass-throughs to `chain.invoke` so
+  existing tests that mock at the `FakeListChatModel` level keep
+  working unchanged. New 'resilient LLM integration' describe (4
+  tests): invocation routing + `CircuitOpen` pass-through +
+  `RetryExhausted` pass-through + unknown errors still wrapped in
+  `QaChainFailed`.
+
+### Tests
+
+- Suite count: 17 → 19 (+2: retry-policy, circuit-breaker,
+  resilient-llm; one suite added per phase).
+- Test count: 188 → 233 (+45).
+- Active passing: 174 → 219 (+45).
+- ESLint clean on all touched files. `nest build` clean.
+
+### Adaptations from the inline plan
+
+- `ConfigService` injection uses the project's typed
+  `config.get('KEY', { infer: true })` pattern with
+  `ConfigService<Env, true>` — defaults live solely in the Zod
+  schema, not duplicated at call sites. Matches every other service
+  in the project.
+- Plan's `(error as any).status` casts in
+  `RetryPolicyService.extractHttpStatus` replaced with a typed
+  `HttpStatusBearingError` intersection — project ESLint sets
+  `no-explicit-any: error` (not warn).
+- Plan's `throw retryResult.finalError ?? new Error(...)` in
+  `ResilientLlmService` narrowed to
+  `finalError instanceof Error ? finalError : new Error('...')` —
+  `only-throw-error` rejects throwing `unknown`.
+- `ResilientLlmService` has no Logger field — the underlying retry
+  and circuit services already log their state changes.
+
+### Out of scope (deferred to later sprints)
+
+- Multi-model fallback (try gpt-4o on Gemini exhaustion) — design
+  question, not a wiring question, deferred until Phase 2 evaluation
+  shows whether cross-provider answer quality is even comparable.
+- Token-usage tracking in logs — separate observability sprint.
+- Streaming response (`chain.stream()` over SSE) — Phase 1.7.5
+  Sprint B.
+- Metrics endpoint surfacing circuit state — Phase 1.7.5 Sprint C
+  (observability).
+- Redis-backed circuit state for cross-replica federation — only
+  useful at >1 replica; single-process portfolio deployment doesn't
+  need it.
+- Per-error-type counters (separate buckets for 429 vs 503 vs
+  network) — single global counter is sufficient for the failure
+  modes we actually see.
+- Embedder resilience changes — Phase 1.3 already has token bucket
+  + adaptive retry; intentionally not unified with the chat path
+  (different SLAs, different upstream behaviour).
+
 ## [Phase 1.7 hardening] — Swagger DX, body limit, dev CORS, HTTP integration tests — 2026-05-21
 
 Three commits applied after Phase 1.7 closed, broadly DX-focused (rich
