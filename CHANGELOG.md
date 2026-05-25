@@ -5,6 +5,143 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.6 Sprint Token] — LLM token usage telemetry — 2026-05-25
+
+Three-step sprint capturing Gemini's `usage_metadata` (input_tokens,
+output_tokens, total_tokens) for every chat LLM call — both
+non-streaming (`invokeChain`) and streaming (`streamChain`) — and
+surfacing the counts in the existing `qa_complete` and
+`qa_stream_complete` log lines. Implementation uses a LangChain
+callback handler (non-invasive, idiomatic), keyed by correlation ID
+with 60 s TTL eviction. Rolling process-lifetime totals live in
+memory for the future metrics endpoint.
+
+Commit range: `22c0ae6..2904629` (4 implementation commits, plus this
+docs commit).
+
+### Added
+
+- `src/modules/qa/types/token-usage.types.ts` — `TokenUsage` (canonical
+  Gemini/OpenAI/Anthropic field shape: input/output/total in camelCase)
+  + `RollingTokenTotals` (process-lifetime sums + sinceTimestamp).
+
+- `src/modules/qa/services/token-usage.service.ts` — `TokenUsageService`
+  with three methods:
+    * `createCallback(correlationId)` — returns a LangChain
+      `BaseCallbackHandler` (inline anonymous class) that captures
+      `usage_metadata` on `handleLLMEnd`. Dual extraction path: try
+      `llmOutput.tokenUsage` (older OpenAI-style normalised form —
+      promptTokens / completionTokens) first, then
+      `generations[0][0].message.usage_metadata` (Gemini /
+      Anthropic raw form — input_tokens / output_tokens). Returns
+      null and logs a warn line if neither carries data.
+    * `consumeUsage(correlationId)` — retrieves AND removes the
+      captured entry. Returns null if the callback never fired or
+      the entry expired.
+    * `getRollingTotals()` — exposes process-lifetime sums for a
+      future `/metrics` endpoint. `sinceTimestamp` set once at
+      service construction.
+  Storage: `Map<string, { usage, expiresAt }>` with 60 s TTL. Prune
+  runs on every `consumeUsage` access (lazy eviction; no background
+  timer).
+
+- `src/modules/qa/services/token-usage.service.spec.ts` — 12 unit
+  tests covering both extraction paths, derived-total-when-omitted,
+  missing-metadata warn log, consume single-use semantics, 60 s TTL
+  pruning with fake timers, rolling totals increment + no-increment-
+  on-null-extraction, sinceTimestamp set at construction.
+
+- `ResilientLlmService.streamChain` + `invokeChain` gain a third
+  required parameter `correlationId: string`. The service obtains a
+  callback via `tokenUsage.createCallback(correlationId)` and passes
+  it through to `chain.invoke` / `chain.stream` via LangChain's
+  `{ callbacks: [...] }` option. Composition order unchanged:
+  circuit (outer) → retry (inner) → chain invoke/stream with
+  callback attached.
+
+- 4 new unit tests in `resilient-llm.service.spec.ts` for the
+  token-usage wiring: `createCallback` called with correlationId on
+  both invoke/stream paths; callback flows through to the chain's
+  `callbacks` option on both paths.
+
+- `QaChainService` gains `TokenUsageService` as a constructor dep
+  and a private `formatTokenFields(usage)` helper. The helper
+  produces either ` input_tokens=N output_tokens=N total_tokens=N`
+  (populated) or ` input_tokens=unknown output_tokens=unknown
+  total_tokens=unknown` (fallback). Called from inside `ask()` and
+  `askStream()` right before the existing log emits. Same
+  correlationId used by ResilientLlmService is reused — capture
+  and log line are guaranteed to match.
+
+- 4 new unit tests in `qa-chain.service.spec.ts` for the log-line
+  additions: populated fields in both qa_complete + qa_stream_complete,
+  unknown fallback in both when `consumeUsage` returns null.
+
+- `docs/ADR/0012-llm-token-usage-tracking.md` — the seven design
+  decisions + alternatives.
+
+### Changed
+
+- `QaChainService.ask()` — `correlationId` generation lifted from
+  the wrap-path catch to the top of the method so the same ID ties
+  the per-call token capture to the eventual `qa_complete` log
+  line. Wrap path now reuses the top-of-method ID rather than
+  generating its own. `askStream()` was already generating up-front;
+  just passes it through to `streamChain` now.
+
+- `QaModule` — `TokenUsageService` added to providers + exports
+  alongside the Sprint Retry / Sprint Streaming services.
+
+### Tests
+
+- Suite count: 19 → 20 (+1, new token-usage spec).
+- Test count: 256 → 276 (+20).
+- Active passing: 242 → 262 (+20).
+- ESLint clean on touched files; build clean.
+
+### Adaptations from the inline plan
+
+- `handleLLMEnd` declared sync (returning `void`) rather than
+  `Promise<void>` — `BaseCallbackHandlerMethodsClass.handleLLMEnd`
+  is `Promise<any> | any`, so `void` is structurally compatible
+  and matches the actual handler body (no `await`).
+- Inline-class handler uses outer-scoped helpers (`recordUsage` /
+  `extractUsage` / `logger` captured before the class body)
+  instead of the plan's service-pointer-on-self pattern. Same
+  runtime semantics; cleaner closure shape.
+- Extraction-path shapes declared as named interfaces
+  (`LlmOutputTokenUsageShape`, `GenerationMessageWithUsage`)
+  rather than inline cast literals. Improves readability of the
+  extraction logic.
+- `formatTokenFields` extracted as a private helper (one source of
+  truth for the wire format) rather than the plan's inline
+  ternaries at both call sites.
+- `correlationId` lifted to top of `ask()` instead of plan's
+  "already exists in scope" assumption — it previously only
+  existed in the catch wrap path. The lift ties capture +
+  success-log line to the same ID.
+
+### Out of scope (deferred to later sprints)
+
+- `/metrics` endpoint exposing the rolling totals — Phase 1.7.5
+  observability sprint. Infrastructure ready (`getRollingTotals`),
+  just no HTTP surface yet.
+- Per-user / per-session token tracking — requires auth layer
+  (Phase 1.7.5).
+- Cost calculation (multiply tokens × per-million rate per model)
+  — model pricing is volatile; tracking the raw counts is the
+  durable signal.
+- Multi-model comparison telemetry (Gemini vs gpt-4o-mini token
+  efficiency for the same prompt) — Phase 2 evaluation work.
+- Response-body exposure of token counts — intentional non-goal:
+  recruiters / curl users care about answer quality, not token
+  diagnostics; logs are sufficient.
+- Per-callback-instance request lifecycle tracking (start time,
+  finish time, latency per token) — Phase 1.7.5 observability
+  pack will surface via OpenTelemetry instead.
+- Prompt-token reduction or trimming — Phase 2 retrieval-quality
+  work, not a telemetry concern.
+
 ## [Phase 1.6 Sprint Streaming] — SSE token-by-token responses — 2026-05-25
 
 Three-step sprint adding a new SSE streaming endpoint
