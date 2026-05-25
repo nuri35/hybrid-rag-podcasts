@@ -4,6 +4,7 @@ import type { Observable } from 'rxjs';
 import { ChromaUnreachableException } from '../vector-store/exceptions';
 import { RetrievalFailedException } from '../retrieval/exceptions';
 import { AskQuestionDto } from './dto/ask-question.dto';
+import { AskQuestionStreamQuery } from './dto/ask-question-stream.query';
 import { CircuitOpenException } from './exceptions/circuit-open.exception';
 import { QaChainFailedException } from './exceptions';
 import { QaChainService } from './qa-chain.service';
@@ -67,6 +68,20 @@ function makeDto(question: string, topK?: number): AskQuestionDto {
   dto.question = question;
   if (topK !== undefined) dto.topK = topK;
   return dto;
+}
+
+/**
+ * Streaming endpoint takes its input from query-string parameters
+ * (`?question=...&topK=...`) — `@Sse()` forces the route to GET, so a
+ * body is impossible. Tests for `askStream` use this factory to
+ * construct the AskQuestionStreamQuery the controller would receive
+ * after ValidationPipe materialisation.
+ */
+function makeStreamQuery(question: string, topK?: number): AskQuestionStreamQuery {
+  const query = new AskQuestionStreamQuery();
+  query.question = question;
+  if (topK !== undefined) query.topK = topK;
+  return query;
 }
 
 describe('QaController', () => {
@@ -152,7 +167,7 @@ describe('QaController', () => {
       );
 
       const { controller } = await buildController(qaChainService);
-      await collectObservable(controller.askStream(makeDto('a valid question', 7)));
+      await collectObservable(controller.askStream(makeStreamQuery('a valid question', 7)));
 
       expect(qaChainService.askStream).toHaveBeenCalledTimes(1);
       expect(qaChainService.askStream).toHaveBeenCalledWith('a valid question', { topK: 7 });
@@ -168,7 +183,7 @@ describe('QaController', () => {
       );
 
       const { controller } = await buildController(qaChainService);
-      await collectObservable(controller.askStream(makeDto('a valid question')));
+      await collectObservable(controller.askStream(makeStreamQuery('a valid question')));
 
       expect(qaChainService.askStream).toHaveBeenCalledWith('a valid question', {
         topK: undefined,
@@ -187,7 +202,7 @@ describe('QaController', () => {
 
       const { controller } = await buildController(qaChainService);
       const { events, error } = await collectObservable(
-        controller.askStream(makeDto('a valid question')),
+        controller.askStream(makeStreamQuery('a valid question')),
       );
 
       expect(error).toBeUndefined();
@@ -209,7 +224,7 @@ describe('QaController', () => {
 
       const { controller } = await buildController(qaChainService);
       const { events, error } = await collectObservable(
-        controller.askStream(makeDto('a valid question')),
+        controller.askStream(makeStreamQuery('a valid question')),
       );
 
       // `error: undefined` means the Promise resolved via `complete`, not via `error`.
@@ -230,7 +245,7 @@ describe('QaController', () => {
 
       const { controller } = await buildController(qaChainService);
       const { events, error } = await collectObservable(
-        controller.askStream(makeDto('a valid question')),
+        controller.askStream(makeStreamQuery('a valid question')),
       );
 
       expect(events).toEqual([]);
@@ -254,7 +269,7 @@ describe('QaController', () => {
 
       const { controller } = await buildController(qaChainService);
       const { events, error } = await collectObservable(
-        controller.askStream(makeDto('a valid question')),
+        controller.askStream(makeStreamQuery('a valid question')),
       );
 
       expect(error).toBeUndefined();

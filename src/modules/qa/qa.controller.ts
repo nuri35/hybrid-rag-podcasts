@@ -4,12 +4,14 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Sse,
   type MessageEvent,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Observable } from 'rxjs';
 import { AskQuestionDto } from './dto/ask-question.dto';
+import { AskQuestionStreamQuery } from './dto/ask-question-stream.query';
 import { QaResponseDto } from './dto/qa-response.dto';
 import { ValidationErrorResponseDto } from './dto/validation-error.dto';
 import { QaChainService } from './qa-chain.service';
@@ -77,6 +79,14 @@ export class QaController {
   /**
    * Phase 1.6 Sprint Streaming — SSE endpoint.
    *
+   * GET (not POST) — the `@Sse()` decorator forces GET regardless of
+   * method-level HTTP decorators because the browser `EventSource`
+   * API only supports GET. Inputs travel as query parameters
+   * (`?question=...&topK=...`) rather than a JSON body. The Phase 1.6
+   * Sprint Streaming initial implementation used `@Body()` against the
+   * forced-GET route — the body was always undefined and the DTO
+   * always failed validation. Fixed here.
+   *
    * Streams answer tokens as Server-Sent Events. Wire format follows
    * standard SSE: each event is `data: <JSON>\n\n`. JSON shapes are
    * documented in `dto/stream-event.types.ts`. Event ordering:
@@ -91,18 +101,36 @@ export class QaController {
    * without using SSE comment lines (`:heartbeat`) which some clients
    * and intermediaries mishandle. Clients should treat the `heartbeat`
    * type as a no-op.
+   *
+   * Example (curl):
+   *   curl -N "http://localhost:3000/api/v1/questions/stream?question=What%20is%20consciousness"
    */
   @Sse('stream')
   @ApiOperation({
-    summary: 'Ask a question (streaming)',
+    summary: 'Ask a question (streaming, GET)',
     description:
-      'Same input as POST /questions, but streams the answer back token-by-token as ' +
-      'Server-Sent Events. Events arrive in order: sources (cited chunks) → tokens → ' +
-      'done. Mid-stream unrecoverable failures arrive as an error event with a server-' +
-      'side correlation ID. Heartbeat events (`{type:"heartbeat"}`) interleave every ' +
-      '15 s to keep idle proxies happy; clients should ignore them.',
+      'GET endpoint that streams the answer back token-by-token as Server-Sent ' +
+      'Events. Inputs are query parameters (the SSE/EventSource standard requires ' +
+      'GET; a body cannot be carried). Events arrive in order: sources (cited ' +
+      'chunks) → tokens → done. Mid-stream unrecoverable failures arrive as an ' +
+      'error event with a server-side correlation ID. Heartbeat events ' +
+      '(`{type:"heartbeat"}`) interleave every 15 s to keep idle proxies happy; ' +
+      'clients should ignore them.',
   })
-  @ApiBody({ type: AskQuestionDto })
+  @ApiQuery({
+    name: 'question',
+    required: true,
+    type: String,
+    description: 'Same validation rules as POST /questions (3–1000 chars).',
+    example: 'What is consciousness?',
+  })
+  @ApiQuery({
+    name: 'topK',
+    required: false,
+    type: Number,
+    description: 'Number of top-K chunks to retrieve (1–50, default 5).',
+    example: 5,
+  })
   @ApiResponse({
     status: 200,
     description: 'SSE stream of answer events (sources / token / done / error / heartbeat)',
@@ -126,7 +154,7 @@ export class QaController {
     description:
       'Service unavailable — ingestion in progress, integrity mismatch, or LLM circuit open',
   })
-  askStream(@Body() dto: AskQuestionDto): Observable<MessageEvent> {
+  askStream(@Query() query: AskQuestionStreamQuery): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       // Heartbeat keeps the connection alive through proxies even when
       // the LLM is silent for >15 s (e.g., long context build, slow
@@ -142,7 +170,7 @@ export class QaController {
         }
       }, SSE_HEARTBEAT_INTERVAL_MS);
 
-      const generator = this.qaChainService.askStream(dto.question, { topK: dto.topK });
+      const generator = this.qaChainService.askStream(query.question, { topK: query.topK });
 
       void (async () => {
         try {
