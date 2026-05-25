@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Runnable } from '@langchain/core/runnables';
 import { CircuitBreakerService } from './circuit-breaker.service';
 import { RetryPolicyService } from './retry-policy.service';
+import { TokenUsageService } from './token-usage.service';
 
 /**
  * Phase 1.6 Sprint Retry — Phase 3 / 3.
@@ -51,14 +52,19 @@ export class ResilientLlmService {
   constructor(
     private readonly retryPolicy: RetryPolicyService,
     private readonly circuitBreaker: CircuitBreakerService,
+    private readonly tokenUsage: TokenUsageService,
   ) {}
 
   async invokeChain<TInput, TOutput>(
     chain: Runnable<TInput, TOutput>,
     input: TInput,
+    correlationId: string,
   ): Promise<TOutput> {
+    const callback = this.tokenUsage.createCallback(correlationId);
     return this.circuitBreaker.execute(async () => {
-      const retryResult = await this.retryPolicy.execute(() => chain.invoke(input));
+      const retryResult = await this.retryPolicy.execute(() =>
+        chain.invoke(input, { callbacks: [callback] }),
+      );
       // Defensive guard — retryPolicy.execute either resolves with
       // `success: true` or throws (RetryExhaustedException on
       // exhaustion, original error on non-retryable). The check here
@@ -106,12 +112,16 @@ export class ResilientLlmService {
   async *streamChain<TInput>(
     chain: Runnable<TInput, string>,
     input: TInput,
+    correlationId: string,
   ): AsyncGenerator<string, void, void> {
+    const callback = this.tokenUsage.createCallback(correlationId);
     // Phase 1 — protected initiation. Returns the iterable on success;
     // throws CircuitOpenException / RetryExhaustedException / the
     // non-retryable error on failure.
     const stream = await this.circuitBreaker.execute(async () => {
-      const retryResult = await this.retryPolicy.execute(() => chain.stream(input));
+      const retryResult = await this.retryPolicy.execute(() =>
+        chain.stream(input, { callbacks: [callback] }),
+      );
       if (!retryResult.success || retryResult.result === undefined) {
         throw retryResult.finalError instanceof Error
           ? retryResult.finalError

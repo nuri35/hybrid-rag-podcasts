@@ -1,11 +1,15 @@
 import { Test } from '@nestjs/testing';
+import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { Runnable } from '@langchain/core/runnables';
 import { CircuitOpenException } from '../exceptions/circuit-open.exception';
 import { RetryExhaustedException } from '../exceptions/retry-exhausted.exception';
 import { CircuitBreakerService } from './circuit-breaker.service';
 import { ResilientLlmService } from './resilient-llm.service';
 import { RetryPolicyService } from './retry-policy.service';
+import { TokenUsageService } from './token-usage.service';
 import type { RetryResult } from '../types/retry-policy.types';
+
+const FAKE_CORR_ID = 'test-correlation-id';
 
 /**
  * Integration tests for the composer service. Both underlying services
@@ -21,6 +25,21 @@ interface MockRetryPolicyService {
 
 interface MockCircuitBreakerService {
   execute: jest.Mock<Promise<unknown>, [() => Promise<unknown>]>;
+}
+
+interface MockTokenUsageService {
+  createCallback: jest.Mock<BaseCallbackHandler, [string]>;
+}
+
+/** Stand-in for a real handler — only `name` is touched by these tests. */
+const FAKE_HANDLER = { name: 'TokenUsageCallback' } as unknown as BaseCallbackHandler;
+
+function makeMockTokenUsageService(): MockTokenUsageService {
+  const mock = {
+    createCallback: jest.fn<BaseCallbackHandler, [string]>(),
+  };
+  mock.createCallback.mockReturnValue(FAKE_HANDLER);
+  return mock;
 }
 
 function makeMockRetryPolicyService(): MockRetryPolicyService {
@@ -39,14 +58,21 @@ function makeMockCircuitBreakerService(): MockCircuitBreakerService {
   return mock;
 }
 
-/** Minimal Runnable shim — only `.invoke(input)` is used by the service. */
+/**
+ * Minimal Runnable shim — `.invoke(input, options?)` second arg carries
+ * `{ callbacks: [...] }` after Sprint Token Step 2. The spy is typed
+ * loosely (`unknown` options) so existing tests that ignore options
+ * still type-check while new tests can assert on the callbacks key.
+ */
 function makeChain<TInput, TOutput>(
   invokeImpl: (input: TInput) => Promise<TOutput>,
 ): {
   chain: Runnable<TInput, TOutput>;
-  invokeSpy: jest.Mock<Promise<TOutput>, [TInput]>;
+  invokeSpy: jest.Mock<Promise<TOutput>, [TInput, unknown?]>;
 } {
-  const invokeSpy = jest.fn<Promise<TOutput>, [TInput]>().mockImplementation(invokeImpl);
+  const invokeSpy = jest
+    .fn<Promise<TOutput>, [TInput, unknown?]>()
+    .mockImplementation((input) => invokeImpl(input));
   const chain = { invoke: invokeSpy } as unknown as Runnable<TInput, TOutput>;
   return { chain, invokeSpy };
 }
@@ -55,17 +81,20 @@ async function build(): Promise<{
   service: ResilientLlmService;
   retry: MockRetryPolicyService;
   circuit: MockCircuitBreakerService;
+  tokenUsage: MockTokenUsageService;
 }> {
   const retry = makeMockRetryPolicyService();
   const circuit = makeMockCircuitBreakerService();
+  const tokenUsage = makeMockTokenUsageService();
   const moduleRef = await Test.createTestingModule({
     providers: [
       ResilientLlmService,
       { provide: RetryPolicyService, useValue: retry },
       { provide: CircuitBreakerService, useValue: circuit },
+      { provide: TokenUsageService, useValue: tokenUsage },
     ],
   }).compile();
-  return { service: moduleRef.get(ResilientLlmService), retry, circuit };
+  return { service: moduleRef.get(ResilientLlmService), retry, circuit, tokenUsage };
 }
 
 describe('ResilientLlmService', () => {
@@ -84,12 +113,15 @@ describe('ResilientLlmService', () => {
         return { success: true, result, attempts: 1, totalDurationMs: 1 };
       });
 
-      const out = await service.invokeChain(chain, 'in');
+      const out = await service.invokeChain(chain, 'in', FAKE_CORR_ID);
 
       expect(out).toBe('result');
       expect(circuit.execute).toHaveBeenCalledTimes(1);
       expect(retry.execute).toHaveBeenCalledTimes(1);
-      expect(invokeSpy).toHaveBeenCalledWith('in');
+      expect(invokeSpy).toHaveBeenCalledWith(
+        'in',
+        expect.objectContaining({ callbacks: [FAKE_HANDLER] }),
+      );
     });
   });
 
@@ -108,7 +140,7 @@ describe('ResilientLlmService', () => {
         totalDurationMs: 250,
       });
 
-      await expect(service.invokeChain(chain, 'in')).resolves.toBe('ok');
+      await expect(service.invokeChain(chain, 'in', FAKE_CORR_ID)).resolves.toBe('ok');
     });
 
     it('propagates RetryExhaustedException from retry policy untouched', async () => {
@@ -117,7 +149,7 @@ describe('ResilientLlmService', () => {
       const exhausted = new RetryExhaustedException(3, 3_500, new Error('503'));
       retry.execute.mockRejectedValueOnce(exhausted);
 
-      const caught = await service.invokeChain(chain, 'in').catch((e: unknown) => e);
+      const caught = await service.invokeChain(chain, 'in', FAKE_CORR_ID).catch((e: unknown) => e);
       expect(caught).toBe(exhausted);
       expect(caught).toBeInstanceOf(RetryExhaustedException);
     });
@@ -128,7 +160,7 @@ describe('ResilientLlmService', () => {
       const badInput = new Error('400 Bad Request');
       retry.execute.mockRejectedValueOnce(badInput);
 
-      const caught = await service.invokeChain(chain, 'in').catch((e: unknown) => e);
+      const caught = await service.invokeChain(chain, 'in', FAKE_CORR_ID).catch((e: unknown) => e);
       expect(caught).toBe(badInput);
     });
 
@@ -143,7 +175,7 @@ describe('ResilientLlmService', () => {
         finalError: undefined,
       });
 
-      const caught = await service.invokeChain(chain, 'in').catch((e: unknown) => e);
+      const caught = await service.invokeChain(chain, 'in', FAKE_CORR_ID).catch((e: unknown) => e);
       // Generic Error from the defensive guard (success:false + no result
       // + no finalError → fallback message).
       expect(caught).toBeInstanceOf(Error);
@@ -159,7 +191,7 @@ describe('ResilientLlmService', () => {
       const circuitErr = new CircuitOpenException(30);
       circuit.execute.mockRejectedValueOnce(circuitErr);
 
-      const caught = await service.invokeChain(chain, 'in').catch((e: unknown) => e);
+      const caught = await service.invokeChain(chain, 'in', FAKE_CORR_ID).catch((e: unknown) => e);
       expect(caught).toBe(circuitErr);
       // Critical: when circuit is OPEN, the retry policy is never given
       // a chance — and certainly the chain never runs.
@@ -177,7 +209,7 @@ describe('ResilientLlmService', () => {
       const exhausted = new RetryExhaustedException(3, 3_500, new Error('503'));
       retry.execute.mockRejectedValueOnce(exhausted);
 
-      const caught = await service.invokeChain(chain, 'in').catch((e: unknown) => e);
+      const caught = await service.invokeChain(chain, 'in', FAKE_CORR_ID).catch((e: unknown) => e);
       expect(caught).toBe(exhausted);
 
       // circuit.execute was called once, the function it was given
@@ -199,10 +231,10 @@ describe('ResilientLlmService', () => {
     /** Builds a fresh async iterator each call so retry-style re-invocations work. */
     function makeStreamingChain(makeIterator: () => AsyncGenerator<string, void, void>): {
       chain: Runnable<string, string>;
-      streamSpy: jest.Mock<Promise<AsyncGenerator<string, void, void>>, [string]>;
+      streamSpy: jest.Mock<Promise<AsyncGenerator<string, void, void>>, [string, unknown?]>;
     } {
       const streamSpy = jest
-        .fn<Promise<AsyncGenerator<string, void, void>>, [string]>()
+        .fn<Promise<AsyncGenerator<string, void, void>>, [string, unknown?]>()
         .mockImplementation(() => Promise.resolve(makeIterator()));
       const chain = { stream: streamSpy } as unknown as Runnable<string, string>;
       return { chain, streamSpy };
@@ -238,12 +270,15 @@ describe('ResilientLlmService', () => {
         return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
       });
 
-      const out = await collect(service.streamChain(chain, 'in'));
+      const out = await collect(service.streamChain(chain, 'in', FAKE_CORR_ID));
 
       expect(out).toEqual(['hello']);
       expect(circuit.execute).toHaveBeenCalledTimes(1);
       expect(retry.execute).toHaveBeenCalledTimes(1);
-      expect(streamSpy).toHaveBeenCalledWith('in');
+      expect(streamSpy).toHaveBeenCalledWith(
+        'in',
+        expect.objectContaining({ callbacks: [FAKE_HANDLER] }),
+      );
     });
 
     it('yields every token from the underlying iterator in order', async () => {
@@ -259,7 +294,7 @@ describe('ResilientLlmService', () => {
         return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
       });
 
-      const out = await collect(service.streamChain(chain, 'q'));
+      const out = await collect(service.streamChain(chain, 'q', FAKE_CORR_ID));
       expect(out).toEqual(tokens);
     });
 
@@ -273,7 +308,9 @@ describe('ResilientLlmService', () => {
       const badInput = new Error('400 Bad Request');
       retry.execute.mockRejectedValueOnce(badInput);
 
-      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      const { collected, error } = await collectUntilError(
+        service.streamChain(chain, 'in', FAKE_CORR_ID),
+      );
       expect(collected).toEqual([]);
       expect(error).toBe(badInput);
     });
@@ -288,7 +325,9 @@ describe('ResilientLlmService', () => {
       const circuitErr = new CircuitOpenException(30);
       circuit.execute.mockRejectedValueOnce(circuitErr);
 
-      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      const { collected, error } = await collectUntilError(
+        service.streamChain(chain, 'in', FAKE_CORR_ID),
+      );
       expect(collected).toEqual([]);
       expect(error).toBe(circuitErr);
       expect(retry.execute).not.toHaveBeenCalled();
@@ -305,7 +344,9 @@ describe('ResilientLlmService', () => {
       const exhausted = new RetryExhaustedException(3, 3_500, new Error('503'));
       retry.execute.mockRejectedValueOnce(exhausted);
 
-      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      const { collected, error } = await collectUntilError(
+        service.streamChain(chain, 'in', FAKE_CORR_ID),
+      );
       expect(collected).toEqual([]);
       expect(error).toBe(exhausted);
     });
@@ -325,7 +366,9 @@ describe('ResilientLlmService', () => {
         return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
       });
 
-      const { collected, error } = await collectUntilError(service.streamChain(chain, 'q'));
+      const { collected, error } = await collectUntilError(
+        service.streamChain(chain, 'q', FAKE_CORR_ID),
+      );
 
       // First two tokens made it through before the iterator threw.
       expect(collected).toEqual(['token1', 'token2']);
@@ -352,10 +395,103 @@ describe('ResilientLlmService', () => {
         finalError: undefined,
       });
 
-      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      const { collected, error } = await collectUntilError(
+        service.streamChain(chain, 'in', FAKE_CORR_ID),
+      );
       expect(collected).toEqual([]);
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toContain('Retry policy returned no stream');
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // Phase 1.6 Sprint Token — token-usage callback wiring
+  // -----------------------------------------------------------------
+  describe('token-usage callback wiring', () => {
+    it('invokeChain calls TokenUsageService.createCallback with the provided correlationId', async () => {
+      const { service, retry, tokenUsage } = await build();
+      const { chain } = makeChain<string, string>(() => Promise.resolve('ok'));
+      retry.execute.mockImplementation(async (op) => {
+        const result = await op();
+        return { success: true, result, attempts: 1, totalDurationMs: 1 };
+      });
+
+      await service.invokeChain(chain, 'in', 'corr-invoke-42');
+
+      expect(tokenUsage.createCallback).toHaveBeenCalledTimes(1);
+      expect(tokenUsage.createCallback).toHaveBeenCalledWith('corr-invoke-42');
+    });
+
+    it('invokeChain passes the created callback to chain.invoke via the callbacks option', async () => {
+      const { service, retry, tokenUsage } = await build();
+      const { chain, invokeSpy } = makeChain<string, string>(() => Promise.resolve('ok'));
+      retry.execute.mockImplementation(async (op) => {
+        const result = await op();
+        return { success: true, result, attempts: 1, totalDurationMs: 1 };
+      });
+
+      await service.invokeChain(chain, 'in', FAKE_CORR_ID);
+
+      // The chain.invoke spy was called with (input, { callbacks: [FAKE_HANDLER] }).
+      const [inputArg, optionsArg] = invokeSpy.mock.calls[0];
+      expect(inputArg).toBe('in');
+      expect(optionsArg).toEqual(expect.objectContaining({ callbacks: [FAKE_HANDLER] }));
+      // Sanity — the createCallback was the one whose return value flowed in.
+      expect(tokenUsage.createCallback).toHaveBeenCalledWith(FAKE_CORR_ID);
+    });
+
+    it('streamChain calls TokenUsageService.createCallback with the provided correlationId', async () => {
+      const { service, retry, tokenUsage } = await build();
+      const streamSpy = jest
+        .fn<Promise<AsyncGenerator<string, void, void>>, [string, unknown?]>()
+        .mockImplementation(() =>
+          Promise.resolve(
+            (async function* () {
+              await Promise.resolve();
+              yield 'hello';
+            })(),
+          ),
+        );
+      const chain = { stream: streamSpy } as unknown as Runnable<string, string>;
+      retry.execute.mockImplementation(async (op) => {
+        const iter = await op();
+        return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
+      });
+
+      // Drain the generator so streamChain actually awaits the initiation.
+      for await (const _ of service.streamChain(chain, 'in', 'corr-stream-99')) {
+        // consume
+      }
+
+      expect(tokenUsage.createCallback).toHaveBeenCalledTimes(1);
+      expect(tokenUsage.createCallback).toHaveBeenCalledWith('corr-stream-99');
+    });
+
+    it('streamChain passes the created callback to chain.stream via the callbacks option', async () => {
+      const { service, retry } = await build();
+      const streamSpy = jest
+        .fn<Promise<AsyncGenerator<string, void, void>>, [string, unknown?]>()
+        .mockImplementation(() =>
+          Promise.resolve(
+            (async function* () {
+              await Promise.resolve();
+              yield 'hello';
+            })(),
+          ),
+        );
+      const chain = { stream: streamSpy } as unknown as Runnable<string, string>;
+      retry.execute.mockImplementation(async (op) => {
+        const iter = await op();
+        return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
+      });
+
+      for await (const _ of service.streamChain(chain, 'in', FAKE_CORR_ID)) {
+        // consume
+      }
+
+      const [inputArg, optionsArg] = streamSpy.mock.calls[0];
+      expect(inputArg).toBe('in');
+      expect(optionsArg).toEqual(expect.objectContaining({ callbacks: [FAKE_HANDLER] }));
     });
   });
 });

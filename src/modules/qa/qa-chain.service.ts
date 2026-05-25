@@ -203,6 +203,12 @@ Answer:`,
 
     const startTime = Date.now();
     const topK = options.topK ?? this.defaultTopK;
+    // Generated up-front (Phase 1.6 Sprint Token Step 2) so it can be
+    // passed to ResilientLlmService for callback-keyed token capture.
+    // Was previously generated only inside the wrap-path catch — that
+    // worked for error correlation but couldn't tie the per-call
+    // token-usage entry to the success log line.
+    const correlationId = randomUUID();
 
     this.logger.log(`qa_start question_length=${question.length} topK=${topK}`);
 
@@ -229,7 +235,7 @@ Answer:`,
       //    treatment; CircuitOpenException + RetryExhaustedException are
       //    pass-through (preserve 503 / surface to client unchanged).
       const rawAnswer = await this.invokeWithTimeout(
-        this.resilientLlmService.invokeChain(this.chain, { context, question }),
+        this.resilientLlmService.invokeChain(this.chain, { context, question }, correlationId),
         this.llmTimeoutMs,
         'LLM chain invocation',
       );
@@ -289,10 +295,12 @@ Answer:`,
       }
 
       // Wrap path: Gemini SDK / LCEL / chain errors may contain URLs,
-      // partial credentials, or stack traces. Generate a correlation ID,
-      // log full detail server-side, and throw a sanitized exception that
-      // exposes only the correlation ID to the HTTP response.
-      const correlationId = randomUUID();
+      // partial credentials, or stack traces. The top-of-method
+      // `correlationId` (Phase 1.6 Sprint Token Step 2) is reused so
+      // the wrap log line ties to the same per-call ID the
+      // ResilientLlmService callback used; log full detail server-side
+      // and throw a sanitized exception that exposes only the
+      // correlation ID to the HTTP response.
       this.logger.error(
         `qa_failed_wrapped correlation_id=${correlationId} ` +
           `duration_ms=${duration} ` +
@@ -466,7 +474,7 @@ Answer:`,
 
     try {
       const tokenStream = this.invokeStreamWithTimeout(
-        this.resilientLlmService.streamChain(this.chain, { context, question }),
+        this.resilientLlmService.streamChain(this.chain, { context, question }, correlationId),
         this.llmTimeoutMs,
         'LLM stream initiation',
       );
