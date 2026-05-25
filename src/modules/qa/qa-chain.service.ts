@@ -29,8 +29,14 @@ import {
   QaChainFailedException,
 } from './exceptions';
 import { NO_INFO_ANSWER } from './qa.constants';
+import { OutputValidationService } from './services/output-validation.service';
+import { PromptSanitizationService } from './services/prompt-sanitization.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { TokenUsageService } from './services/token-usage.service';
+import { OutputRejectedException } from './exceptions/output-rejected.exception';
+import { QuestionRejectedException } from './exceptions/question-rejected.exception';
+import { OutputVerdict } from './types/output-validation.types';
+import { SanitizationVerdict } from './types/sanitization.types';
 import type { TokenUsage } from './types/token-usage.types';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
 import type { StreamEvent } from './dto/stream-event.types';
@@ -94,6 +100,8 @@ export class QaChainService implements OnModuleInit {
     private readonly chromaRepository: ChromaRepository,
     private readonly resilientLlmService: ResilientLlmService,
     private readonly tokenUsageService: TokenUsageService,
+    private readonly promptSanitization: PromptSanitizationService,
+    private readonly outputValidation: OutputValidationService,
     llmService: LlmService,
     config: ConfigService<Env, true>,
   ) {
@@ -242,16 +250,28 @@ Answer:`,
     // token-usage entry to the success log line.
     const correlationId = randomUUID();
 
-    this.logger.log(`qa_start question_length=${question.length} topK=${topK}`);
+    // 0c. Phase 1.6 Sprint Prompt-Security Layer 1 — input sanitization.
+    //     Throws OUTSIDE the try block so QuestionRejectedException
+    //     propagates as a clean 400 without going through the
+    //     wrap-error catch ladder. FLAGGED verdict is non-fatal: the
+    //     service already emitted a warn log; we just use the cleaned
+    //     question downstream.
+    const sanitization = this.promptSanitization.inspect(question, correlationId);
+    if (sanitization.verdict === SanitizationVerdict.REJECTED) {
+      throw new QuestionRejectedException();
+    }
+    const cleanedQuestion = sanitization.sanitizedQuestion;
+
+    this.logger.log(`qa_start question_length=${cleanedQuestion.length} topK=${topK}`);
 
     try {
       // 1. Retrieve relevant chunks. Query-level validation lives in the
       //    retriever — it throws Empty/TooShort/TooLong before we get here.
-      const chunks = await this.retriever.retrieve(question, { topK });
+      const chunks = await this.retriever.retrieve(cleanedQuestion, { topK });
 
       // 2. Empty retrieval → canned fallback, NO LLM call.
       if (chunks.length === 0) {
-        this.logger.warn(`qa_no_chunks question_length=${question.length}`);
+        this.logger.warn(`qa_no_chunks question_length=${cleanedQuestion.length}`);
         return { answer: NO_INFO_ANSWER, sources: [] };
       }
 
@@ -267,11 +287,26 @@ Answer:`,
       //    treatment; CircuitOpenException + RetryExhaustedException are
       //    pass-through (preserve 503 / surface to client unchanged).
       const rawAnswer = await this.invokeWithTimeout(
-        this.resilientLlmService.invokeChain(this.chain, { context, question }, correlationId),
+        this.resilientLlmService.invokeChain(
+          this.chain,
+          { context, question: cleanedQuestion },
+          correlationId,
+        ),
         this.llmTimeoutMs,
         'LLM chain invocation',
       );
       const answer = this.cleanAnswer(rawAnswer);
+
+      // 4b. Phase 1.6 Sprint Prompt-Security Layer 3 — output
+      //     validation. Runs AFTER cleanAnswer so a leading "Answer:"
+      //     preamble doesn't accidentally fail the citation gate.
+      //     OutputRejectedException sits in the pass-through ladder
+      //     below; the public 500 message stays generic, the
+      //     categorised reason lives in the warn log.
+      const outputValidation = this.outputValidation.validate(answer, correlationId);
+      if (outputValidation.verdict === OutputVerdict.REJECTED) {
+        throw new OutputRejectedException();
+      }
 
       // 5. Map chunks to caller-facing source citations.
       const sources = this.mapChunksToSources(chunks);
@@ -318,7 +353,8 @@ Answer:`,
         error instanceof IngestionInProgressException ||
         error instanceof DataIntegrityMismatchException ||
         error instanceof CircuitOpenException ||
-        error instanceof RetryExhaustedException
+        error instanceof RetryExhaustedException ||
+        error instanceof OutputRejectedException
       ) {
         this.logger.error(
           `qa_failed duration_ms=${duration} ` +
@@ -471,15 +507,24 @@ Answer:`,
       throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
     }
 
+    // 0c. Phase 1.6 Sprint Prompt-Security Layer 1 — input sanitization.
+    //     Throws BEFORE the first yield so QuestionRejectedException
+    //     becomes a clean HTTP 400 (no SSE response started yet).
+    const sanitization = this.promptSanitization.inspect(question, correlationId);
+    if (sanitization.verdict === SanitizationVerdict.REJECTED) {
+      throw new QuestionRejectedException();
+    }
+    const cleanedQuestion = sanitization.sanitizedQuestion;
+
     this.logger.log(
       `qa_stream_start correlation_id=${correlationId} ` +
-        `question_length=${question.length} topK=${topK}`,
+        `question_length=${cleanedQuestion.length} topK=${topK}`,
     );
 
     // 1. Retrieve. Query-level validation (Empty/TooShort/TooLong) lives
     //    in the retriever and throws before yielding anything — same
     //    pre-yield exception path as ask().
-    const chunks = await this.retriever.retrieve(question, { topK });
+    const chunks = await this.retriever.retrieve(cleanedQuestion, { topK });
 
     // 2. Empty retrieval — emit sources (empty) + done immediately.
     //    No LLM call; symmetric with ask()'s NO_INFO_ANSWER fast path
@@ -488,7 +533,7 @@ Answer:`,
     if (chunks.length === 0) {
       this.logger.warn(
         `qa_stream_no_chunks correlation_id=${correlationId} ` +
-          `question_length=${question.length}`,
+          `question_length=${cleanedQuestion.length}`,
       );
       yield { type: 'sources', data: [] };
       yield { type: 'done', data: { totalChunks: 0 } };
@@ -508,13 +553,42 @@ Answer:`,
 
     try {
       const tokenStream = this.invokeStreamWithTimeout(
-        this.resilientLlmService.streamChain(this.chain, { context, question }, correlationId),
+        this.resilientLlmService.streamChain(
+          this.chain,
+          { context, question: cleanedQuestion },
+          correlationId,
+        ),
         this.llmTimeoutMs,
         'LLM stream initiation',
       );
 
+      // Phase 1.6 Sprint Prompt-Security Layer 3 — accumulate so we
+      // can validate the full answer after the stream completes.
+      // Tokens have already shipped to the client by then; a
+      // rejection becomes an SSE `error` event (not an exception)
+      // so the client can discard the partial answer.
+      let accumulatedAnswer = '';
+
       for await (const token of tokenStream) {
+        accumulatedAnswer += token;
         yield { type: 'token', data: token };
+      }
+
+      const outputValidation = this.outputValidation.validate(accumulatedAnswer, correlationId);
+      if (outputValidation.verdict === OutputVerdict.REJECTED) {
+        this.logger.warn(
+          `qa_stream_output_rejected correlation_id=${correlationId} ` +
+            `reason=${outputValidation.rejectionReason ?? 'unknown'} ` +
+            `accumulated_length=${accumulatedAnswer.length}`,
+        );
+        yield {
+          type: 'error',
+          data: {
+            code: 'OUTPUT_REJECTED',
+            message: `The generated response failed validation. Please discard and rephrase. Reference: ${correlationId}`,
+          },
+        };
+        return;
       }
 
       const duration = Date.now() - startTime;
