@@ -30,6 +30,8 @@ import {
 } from './exceptions';
 import { NO_INFO_ANSWER } from './qa.constants';
 import { ResilientLlmService } from './services/resilient-llm.service';
+import { TokenUsageService } from './services/token-usage.service';
+import type { TokenUsage } from './types/token-usage.types';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
 import type { StreamEvent } from './dto/stream-event.types';
 import type { IngestionMarker } from '../ingestion/types/ingestion-marker.types';
@@ -91,6 +93,7 @@ export class QaChainService implements OnModuleInit {
     private readonly redisService: RedisService,
     private readonly chromaRepository: ChromaRepository,
     private readonly resilientLlmService: ResilientLlmService,
+    private readonly tokenUsageService: TokenUsageService,
     llmService: LlmService,
     config: ConfigService<Env, true>,
   ) {
@@ -253,12 +256,14 @@ Answer:`,
         : 0;
 
       const duration = Date.now() - startTime;
+      const tokenUsage = this.tokenUsageService.consumeUsage(correlationId);
       this.logger.log(
         `qa_complete duration_ms=${duration} sources=${sources.length} ` +
           `answer_length=${answer.length} ` +
           `top_score=${topScore.toFixed(4)} ` +
           `avg_score=${avgScore.toFixed(4)} ` +
-          `min_score=${minScore.toFixed(4)}`,
+          `min_score=${minScore.toFixed(4)}` +
+          this.formatTokenFields(tokenUsage),
       );
 
       return { answer, sources };
@@ -484,9 +489,11 @@ Answer:`,
       }
 
       const duration = Date.now() - startTime;
+      const tokenUsage = this.tokenUsageService.consumeUsage(correlationId);
       this.logger.log(
         `qa_stream_complete correlation_id=${correlationId} ` +
-          `duration_ms=${duration} chunks=${chunks.length}`,
+          `duration_ms=${duration} chunks=${chunks.length}` +
+          this.formatTokenFields(tokenUsage),
       );
       yield { type: 'done', data: { totalChunks: chunks.length } };
     } catch (error) {
@@ -571,5 +578,24 @@ Answer:`,
     for await (const chunk of source) {
       yield chunk;
     }
+  }
+
+  /**
+   * Phase 1.6 Sprint Token — formats token-usage telemetry as a
+   * leading-space `input_tokens=… output_tokens=… total_tokens=…`
+   * fragment for concatenation into `qa_complete` / `qa_stream_complete`
+   * log lines. `unknown` markers fire when the LangChain callback
+   * never produced metadata (provider didn't emit it, or call failed
+   * mid-flight) — telemetry must never break the user flow.
+   */
+  private formatTokenFields(usage: TokenUsage | null): string {
+    if (!usage) {
+      return ` input_tokens=unknown output_tokens=unknown total_tokens=unknown`;
+    }
+    return (
+      ` input_tokens=${usage.inputTokens}` +
+      ` output_tokens=${usage.outputTokens}` +
+      ` total_tokens=${usage.totalTokens}`
+    );
   }
 }

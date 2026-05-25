@@ -26,7 +26,9 @@ import {
 import { QaChainService } from './qa-chain.service';
 import { NO_INFO_ANSWER } from './qa.constants';
 import { ResilientLlmService } from './services/resilient-llm.service';
+import { TokenUsageService } from './services/token-usage.service';
 import type { StreamEvent } from './dto/stream-event.types';
+import type { TokenUsage } from './types/token-usage.types';
 
 interface ConfigOverrides {
   QA_DEFAULT_TOP_K?: number;
@@ -151,12 +153,35 @@ function makeMockResilientLlmService(): MockResilientLlmService {
   };
 }
 
+interface MockTokenUsageService {
+  consumeUsage: jest.Mock<TokenUsage | null, [string]>;
+}
+
+/**
+ * Default TokenUsageService mock returns `null` — same as the production
+ * fail-open behaviour when the LangChain callback never produced
+ * metadata. Tests that want to assert on populated token fields
+ * override with `mockReturnValueOnce({ inputTokens, outputTokens,
+ * totalTokens })`. The default makes existing tests (which don't care
+ * about token fields) green without per-test configuration; they just
+ * see `input_tokens=unknown ...` in the log line, which their
+ * `toContain` assertions ignore.
+ */
+function makeMockTokenUsageService(): MockTokenUsageService {
+  const mock = {
+    consumeUsage: jest.fn<TokenUsage | null, [string]>(),
+  };
+  mock.consumeUsage.mockReturnValue(null);
+  return mock;
+}
+
 interface BuildOverrides {
   retriever?: MockRetriever;
   lockService?: MockLockService;
   redisService?: MockRedisService;
   chromaRepository?: MockChromaRepository;
   resilientLlmService?: MockResilientLlmService;
+  tokenUsageService?: MockTokenUsageService;
 }
 
 /**
@@ -180,6 +205,7 @@ async function buildService(
   redisService: MockRedisService;
   chromaRepository: MockChromaRepository;
   resilientLlmService: MockResilientLlmService;
+  tokenUsageService: MockTokenUsageService;
   llmModel: FakeListChatModel;
 }> {
   const llmModel = new FakeListChatModel({ responses: llmResponses });
@@ -191,6 +217,7 @@ async function buildService(
   const redisService = builds.redisService ?? makeMockRedisService();
   const chromaRepository = builds.chromaRepository ?? makeMockChromaRepository();
   const resilientLlmService = builds.resilientLlmService ?? makeMockResilientLlmService();
+  const tokenUsageService = builds.tokenUsageService ?? makeMockTokenUsageService();
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -200,6 +227,7 @@ async function buildService(
       { provide: RedisService, useValue: redisService },
       { provide: ChromaRepository, useValue: chromaRepository },
       { provide: ResilientLlmService, useValue: resilientLlmService },
+      { provide: TokenUsageService, useValue: tokenUsageService },
       { provide: LlmService, useValue: llmService },
       { provide: ConfigService, useValue: makeConfig(configOverrides) },
     ],
@@ -212,6 +240,7 @@ async function buildService(
     redisService,
     chromaRepository,
     resilientLlmService,
+    tokenUsageService,
     llmModel,
   };
 }
