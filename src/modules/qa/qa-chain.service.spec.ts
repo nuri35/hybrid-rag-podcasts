@@ -26,6 +26,7 @@ import {
 import { QaChainService } from './qa-chain.service';
 import { NO_INFO_ANSWER } from './qa.constants';
 import { ResilientLlmService } from './services/resilient-llm.service';
+import type { StreamEvent } from './dto/stream-event.types';
 
 interface ConfigOverrides {
   QA_DEFAULT_TOP_K?: number;
@@ -117,14 +118,16 @@ function makeFakeChunk(
 
 interface MockResilientLlmService {
   invokeChain: jest.Mock;
+  streamChain: jest.Mock;
 }
 
 /**
- * Default ResilientLlmService mock — pass-through to the underlying
- * chain so existing tests that mock at the FakeListChatModel level keep
- * working unchanged. New Sprint Retry tests override `invokeChain` to
- * throw CircuitOpenException / RetryExhaustedException and assert
- * QaChainService surfaces them unwrapped.
+ * Default ResilientLlmService mock — invokeChain pass-throughs to the
+ * underlying chain so existing tests that mock at the FakeListChatModel
+ * level keep working unchanged. Sprint Retry tests override invokeChain
+ * to throw CircuitOpen / RetryExhausted. Sprint Streaming tests
+ * override streamChain to drive token-by-token sequences and mid-
+ * stream failures.
  */
 function makeMockResilientLlmService(): MockResilientLlmService {
   return {
@@ -137,6 +140,14 @@ function makeMockResilientLlmService(): MockResilientLlmService {
       (chain: { invoke: (input: unknown) => Promise<unknown> }, input: unknown): Promise<unknown> =>
         chain.invoke(input),
     ),
+    // Default streamChain yields nothing — Sprint Streaming tests
+    // override per-test to drive specific token sequences. (The
+    // FakeListChatModel's .stream() shape is awkward to mock
+    // uniformly, and per-test overrides are clearer anyway.)
+    // eslint-disable-next-line require-yield
+    streamChain: jest.fn(async function* () {
+      await Promise.resolve();
+    }),
   };
 }
 
@@ -750,6 +761,241 @@ describe('QaChainService', () => {
       expect(caught).toBeInstanceOf(QaChainFailedException);
       expect(caught?.correlationId).toBeTruthy();
       expect(caught?.message).not.toContain('unexpected resilience-layer failure');
+    });
+  });
+
+  // ----------------------------------------------------------------------
+  // Phase 1.6 Sprint Streaming — askStream
+  // ----------------------------------------------------------------------
+  describe('askStream (Sprint Streaming)', () => {
+    async function collectStream(
+      gen: AsyncGenerator<StreamEvent, void, void>,
+    ): Promise<StreamEvent[]> {
+      const out: StreamEvent[] = [];
+      for await (const e of gen) out.push(e);
+      return out;
+    }
+
+    async function collectStreamUntilError(
+      gen: AsyncGenerator<StreamEvent, void, void>,
+    ): Promise<{ events: StreamEvent[]; error: unknown }> {
+      const events: StreamEvent[] = [];
+      try {
+        for await (const e of gen) events.push(e);
+        return { events, error: undefined };
+      } catch (error) {
+        return { events, error };
+      }
+    }
+
+    // -----------------------------------------------------------
+    // Pre-yield guards (lock + integrity) — exception path
+    // -----------------------------------------------------------
+    it('throws IngestionInProgressException when the lock is held (before any yield)', async () => {
+      const lockService = makeMockLockService();
+      lockService.isLocked.mockResolvedValueOnce(true);
+      const retriever = makeMockRetriever();
+      // Should not be called — guard fires first.
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const { service } = await buildService(['ignored'], {}, { retriever, lockService });
+      const { events, error } = await collectStreamUntilError(service.askStream('q'));
+
+      expect(events).toEqual([]);
+      expect(error).toBeInstanceOf(IngestionInProgressException);
+      expect(retriever.retrieve).not.toHaveBeenCalled();
+    });
+
+    it('throws DataIntegrityMismatchException when integrityState is unhealthy', async () => {
+      const redisService = makeMockRedisService();
+      redisService.get.mockResolvedValueOnce(null);
+
+      const { service } = await buildService(['ignored'], {}, { redisService });
+      await service.onModuleInit(); // latches unhealthy
+
+      const { events, error } = await collectStreamUntilError(service.askStream('q'));
+      expect(events).toEqual([]);
+      expect(error).toBeInstanceOf(DataIntegrityMismatchException);
+    });
+
+    it('lets retrieval validation errors propagate before any yield', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockRejectedValueOnce(new QueryTooShortException('too short'));
+
+      const { service } = await buildService(['ignored'], {}, { retriever });
+      const { events, error } = await collectStreamUntilError(service.askStream('hi'));
+
+      expect(events).toEqual([]);
+      expect(error).toBeInstanceOf(QueryTooShortException);
+    });
+
+    // -----------------------------------------------------------
+    // Happy path — sources / token / done ordering
+    // -----------------------------------------------------------
+    it('yields a sources event BEFORE any token event', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([
+        makeFakeChunk('ep_001_chunk_0', 'first chunk text', 0.91),
+        makeFakeChunk('ep_002_chunk_0', 'second chunk text', 0.85),
+      ]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield 'Hello ';
+        yield 'world';
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const events = await collectStream(service.askStream('q'));
+
+      expect(events.length).toBeGreaterThan(0);
+      expect(events[0].type).toBe('sources');
+      // sources event is the FIRST — no token event precedes it.
+      const sourcesIdx = events.findIndex((e) => e.type === 'sources');
+      const firstTokenIdx = events.findIndex((e) => e.type === 'token');
+      expect(sourcesIdx).toBe(0);
+      expect(firstTokenIdx).toBeGreaterThan(sourcesIdx);
+
+      // sources event payload mirrors the QaSourceDto shape.
+      const sourcesEvent = events[0];
+      if (sourcesEvent.type !== 'sources') throw new Error('unexpected'); // narrow
+      expect(sourcesEvent.data).toHaveLength(2);
+      expect(sourcesEvent.data[0]).toEqual(
+        expect.objectContaining({
+          chunkId: 'ep_001_chunk_0',
+          score: 0.91,
+        }),
+      );
+    });
+
+    it('yields one token event per streamed chunk in order', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const expected = ['Consciousness', ' is', ' fundamentally', ' subjective.'];
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        for (const t of expected) yield t;
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const events = await collectStream(service.askStream('q'));
+
+      const tokens = events
+        .filter((e): e is { type: 'token'; data: string } => e.type === 'token')
+        .map((e) => e.data);
+      expect(tokens).toEqual(expected);
+    });
+
+    it('emits a done event AFTER the last token (terminator)', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield 'one ';
+        yield 'token';
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const events = await collectStream(service.askStream('q'));
+
+      const last = events[events.length - 1];
+      expect(last.type).toBe('done');
+      if (last.type !== 'done') throw new Error('unexpected');
+      expect(last.data.totalChunks).toBe(1);
+    });
+
+    // -----------------------------------------------------------
+    // Empty retrieval — sources(empty) + done(0) fast path
+    // -----------------------------------------------------------
+    it('yields empty sources + done(0) when retrieval returns no chunks', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const events = await collectStream(service.askStream('q'));
+
+      expect(events).toEqual([
+        { type: 'sources', data: [] },
+        { type: 'done', data: { totalChunks: 0 } },
+      ]);
+      // No LLM call should fire on empty retrieval.
+      expect(resilientLlmService.streamChain).not.toHaveBeenCalled();
+    });
+
+    // -----------------------------------------------------------
+    // Mid-stream error paths
+    // -----------------------------------------------------------
+    it('yields an SSE error event on unknown mid-stream failure (after sources have shipped)', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield 'partial';
+        throw new Error('something went wrong mid-stream');
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const events = await collectStream(service.askStream('q'));
+
+      // sources + partial token + error event (no done)
+      expect(events.map((e) => e.type)).toEqual(['sources', 'token', 'error']);
+      const errorEvent = events[2];
+      if (errorEvent.type !== 'error') throw new Error('unexpected');
+      expect(errorEvent.data.code).toBe('STREAM_FAILED');
+      // Message includes a correlation ID reference for on-call.
+      expect(errorEvent.data.message).toMatch(/Reference: [0-9a-f-]{36}/);
+    });
+
+    it('re-throws CircuitOpenException mid-stream WITHOUT wrapping (pass-through ladder)', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const circuitErr = new CircuitOpenException(30);
+      // streamChain fails at initiation (before yielding any token)
+      // eslint-disable-next-line require-yield
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        throw circuitErr;
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const { events, error } = await collectStreamUntilError(service.askStream('q'));
+
+      // Sources shipped before initiation; the throw is mid-stream
+      // in wire terms but the ladder rule says known exceptions
+      // throw rather than yield an SSE error event.
+      expect(events.map((e) => e.type)).toEqual(['sources']);
+      expect(error).toBe(circuitErr);
+      expect(error).toBeInstanceOf(CircuitOpenException);
+      expect(error).not.toBeInstanceOf(QaChainFailedException);
+    });
+
+    it('re-throws RetryExhaustedException mid-stream WITHOUT wrapping', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      const exhausted = new RetryExhaustedException(3, 5000, new Error('upstream 503'));
+      // eslint-disable-next-line require-yield
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        throw exhausted;
+      });
+
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+      const { events, error } = await collectStreamUntilError(service.askStream('q'));
+
+      expect(events.map((e) => e.type)).toEqual(['sources']);
+      expect(error).toBe(exhausted);
     });
   });
 });

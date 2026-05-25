@@ -31,6 +31,7 @@ import {
 import { NO_INFO_ANSWER } from './qa.constants';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import type { QaOptions, QaResult, QaSource } from './qa.types';
+import type { StreamEvent } from './dto/stream-event.types';
 import type { IngestionMarker } from '../ingestion/types/ingestion-marker.types';
 import type { Env } from '../../common/config/env.schema';
 
@@ -373,6 +374,194 @@ Answer:`,
       return await Promise.race([invokePromise, timeoutPromise]);
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+  }
+
+  /**
+   * Phase 1.6 Sprint Streaming — SSE-style token-by-token responder.
+   *
+   * Same guards as `ask()` (lock check + integrity gate) and same
+   * retrieval semantics, but emits a sequence of `StreamEvent`s
+   * instead of returning a single result. Event ordering contract:
+   *   1. exactly one `sources` event (possibly empty)
+   *   2. zero or more `token` events
+   *   3. exactly one terminator (`done` happy path / `error` for
+   *      unrecoverable mid-stream unknown failures)
+   *
+   * Error handling rules:
+   *   - Pre-yield exceptions (lock / integrity / retrieval validation /
+   *     infra) propagate out of the generator. NestJS turns them into
+   *     proper HTTP error responses BEFORE any SSE headers ship.
+   *   - Mid-stream KNOWN exceptions (CircuitOpen, RetryExhausted,
+   *     etc.) propagate — the response stream may close abruptly, but
+   *     the exception's HTTP status is preserved in the response if
+   *     it can still be set. Clients must handle abrupt close.
+   *   - Mid-stream UNKNOWN exceptions become an SSE `error` event so
+   *     the client receives a clean wire-format signal alongside the
+   *     sources event it already got. Correlation ID is logged
+   *     server-side and surfaced in the event payload so on-call can
+   *     grep for it.
+   */
+  async *askStream(
+    question: string,
+    options: QaOptions = {},
+  ): AsyncGenerator<StreamEvent, void, void> {
+    const correlationId = randomUUID();
+    const startTime = Date.now();
+    const topK = options.topK ?? this.defaultTopK;
+
+    // 0a. Lock check — same fail-open Redis policy as ask().
+    try {
+      const locked = await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK);
+      if (locked) {
+        throw new IngestionInProgressException();
+      }
+    } catch (error) {
+      if (error instanceof IngestionInProgressException) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `qa_stream_lock_check_failed reason=${message} action=proceeding (Redis fail-open)`,
+      );
+    }
+
+    // 0b. Integrity gate.
+    if (!this.integrityState.healthy) {
+      throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
+    }
+
+    this.logger.log(
+      `qa_stream_start correlation_id=${correlationId} ` +
+        `question_length=${question.length} topK=${topK}`,
+    );
+
+    // 1. Retrieve. Query-level validation (Empty/TooShort/TooLong) lives
+    //    in the retriever and throws before yielding anything — same
+    //    pre-yield exception path as ask().
+    const chunks = await this.retriever.retrieve(question, { topK });
+
+    // 2. Empty retrieval — emit sources (empty) + done immediately.
+    //    No LLM call; symmetric with ask()'s NO_INFO_ANSWER fast path
+    //    but expressed via the event stream so the client sees the
+    //    same contract whether the answer is empty or substantive.
+    if (chunks.length === 0) {
+      this.logger.warn(
+        `qa_stream_no_chunks correlation_id=${correlationId} ` +
+          `question_length=${question.length}`,
+      );
+      yield { type: 'sources', data: [] };
+      yield { type: 'done', data: { totalChunks: 0 } };
+      return;
+    }
+
+    // 3. Yield sources FIRST so the client can render citations while
+    //    tokens stream in.
+    const sources = this.mapChunksToSources(chunks);
+    yield { type: 'sources', data: sources };
+
+    // 4. Format context + start streaming LLM response. The timeout
+    //    only wraps phase-1 initiation (until first token arrives) —
+    //    once tokens are flowing, the stream can take as long as it
+    //    needs (essay-style answers should not be artificially capped).
+    const context = this.formatContext(chunks);
+
+    try {
+      const tokenStream = this.invokeStreamWithTimeout(
+        this.resilientLlmService.streamChain(this.chain, { context, question }),
+        this.llmTimeoutMs,
+        'LLM stream initiation',
+      );
+
+      for await (const token of tokenStream) {
+        yield { type: 'token', data: token };
+      }
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `qa_stream_complete correlation_id=${correlationId} ` +
+          `duration_ms=${duration} chunks=${chunks.length}`,
+      );
+      yield { type: 'done', data: { totalChunks: chunks.length } };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      const errorClass = error instanceof Error ? error.constructor.name : 'Unknown';
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Pass-through ladder — same exception families as ask(). These
+      // throws happen AFTER the `sources` event has shipped (mid-
+      // stream); the wire-level outcome depends on whether NestJS can
+      // still set headers. Clients should handle abrupt SSE close.
+      if (
+        error instanceof EmptyQueryException ||
+        error instanceof QueryTooShortException ||
+        error instanceof QueryTooLongException ||
+        error instanceof InvalidRetrievalOptionsException ||
+        error instanceof RetrievalFailedException ||
+        error instanceof EmbeddingFailedException ||
+        error instanceof ChromaUnreachableException ||
+        error instanceof ChromaWriteFailedException ||
+        error instanceof IngestionInProgressException ||
+        error instanceof DataIntegrityMismatchException ||
+        error instanceof CircuitOpenException ||
+        error instanceof RetryExhaustedException
+      ) {
+        this.logger.error(
+          `qa_stream_failed correlation_id=${correlationId} ` +
+            `duration_ms=${duration} error_class=${errorClass} error_message=${errorMessage}`,
+        );
+        throw error;
+      }
+
+      // Unknown error mid-stream — sources have already shipped, so we
+      // can't cleanly turn this into an HTTP error. Yield as SSE `error`
+      // event with the correlation ID; on-call can grep server logs.
+      this.logger.error(
+        `qa_stream_failed_wrapped correlation_id=${correlationId} ` +
+          `duration_ms=${duration} error_class=${errorClass} error_message=${errorMessage}`,
+      );
+      yield {
+        type: 'error',
+        data: {
+          code: 'STREAM_FAILED',
+          message: `Stream failed. Reference: ${correlationId}`,
+        },
+      };
+    }
+  }
+
+  /**
+   * Stream-aware timeout — applies `LLM_TIMEOUT_MS` ONLY to phase-1
+   * initiation (the first chunk arrival). After the first chunk, the
+   * timeout is released and the rest of the stream can take as long
+   * as it needs. A 5-minute multi-paragraph answer is legitimate; we
+   * must not bound total stream duration the way `invokeWithTimeout`
+   * does for the non-streaming chain.
+   */
+  private async *invokeStreamWithTimeout<T>(
+    source: AsyncGenerator<T, void, void>,
+    timeoutMs: number,
+    contextLabel: string,
+  ): AsyncGenerator<T, void, void> {
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`${contextLabel} timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+
+    let firstResult: IteratorResult<T, void>;
+    try {
+      firstResult = await Promise.race([source.next(), timeoutPromise]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+
+    if (firstResult.done) return;
+    yield firstResult.value;
+
+    // Phase 2 — consumption, no timeout.
+    for await (const chunk of source) {
+      yield chunk;
     }
   }
 }
