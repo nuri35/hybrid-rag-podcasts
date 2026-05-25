@@ -1027,4 +1027,138 @@ describe('QaChainService', () => {
       expect(error).toBe(exhausted);
     });
   });
+
+  // ----------------------------------------------------------------------
+  // Phase 1.6 Sprint Token — token-usage fields in qa_complete /
+  // qa_stream_complete log lines
+  // ----------------------------------------------------------------------
+  describe('token usage in logs', () => {
+    it('qa_complete line contains input/output/total token fields from TokenUsageService', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const tokenUsageService = makeMockTokenUsageService();
+      tokenUsageService.consumeUsage.mockReturnValueOnce({
+        inputTokens: 1234,
+        outputTokens: 56,
+        totalTokens: 1290,
+      });
+
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const { service, tokenUsageService: ts } = await buildService(
+        ['answer'],
+        {},
+        { retriever, tokenUsageService },
+      );
+
+      await service.ask('a valid question');
+
+      // consumeUsage was invoked exactly once with the same correlation
+      // ID that ResilientLlmService received.
+      expect(ts.consumeUsage).toHaveBeenCalledTimes(1);
+
+      const qaCompleteLog = logSpy.mock.calls
+        .map((args) => String(args[0]))
+        .find((msg) => msg.startsWith('qa_complete'));
+      expect(qaCompleteLog).toBeDefined();
+      expect(qaCompleteLog).toContain('input_tokens=1234');
+      expect(qaCompleteLog).toContain('output_tokens=56');
+      expect(qaCompleteLog).toContain('total_tokens=1290');
+
+      logSpy.mockRestore();
+    });
+
+    it('qa_complete line uses "unknown" markers when consumeUsage returns null', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      // Default tokenUsageService mock returns null — verify the
+      // "unknown" fallback fires without breaking the request.
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const { service } = await buildService(['answer'], {}, { retriever });
+
+      const result = await service.ask('a valid question');
+      // Request still succeeds — telemetry must not break the user flow.
+      expect(result.answer).toBe('answer');
+
+      const qaCompleteLog = logSpy.mock.calls
+        .map((args) => String(args[0]))
+        .find((msg) => msg.startsWith('qa_complete'));
+      expect(qaCompleteLog).toContain('input_tokens=unknown');
+      expect(qaCompleteLog).toContain('output_tokens=unknown');
+      expect(qaCompleteLog).toContain('total_tokens=unknown');
+
+      logSpy.mockRestore();
+    });
+
+    it('qa_stream_complete line contains token fields populated from TokenUsageService', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield 'Hello';
+        yield ' world';
+      });
+
+      const tokenUsageService = makeMockTokenUsageService();
+      tokenUsageService.consumeUsage.mockReturnValueOnce({
+        inputTokens: 800,
+        outputTokens: 42,
+        totalTokens: 842,
+      });
+
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const { service, tokenUsageService: ts } = await buildService(
+        ['ignored'],
+        {},
+        { retriever, resilientLlmService, tokenUsageService },
+      );
+
+      // Drain the stream so qa_stream_complete fires.
+      for await (const _event of service.askStream('q')) {
+        // consume
+      }
+
+      expect(ts.consumeUsage).toHaveBeenCalledTimes(1);
+
+      const streamCompleteLog = logSpy.mock.calls
+        .map((args) => String(args[0]))
+        .find((msg) => msg.startsWith('qa_stream_complete'));
+      expect(streamCompleteLog).toBeDefined();
+      expect(streamCompleteLog).toContain('input_tokens=800');
+      expect(streamCompleteLog).toContain('output_tokens=42');
+      expect(streamCompleteLog).toContain('total_tokens=842');
+
+      logSpy.mockRestore();
+    });
+
+    it('qa_stream_complete uses "unknown" markers when consumeUsage returns null', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+
+      const resilientLlmService = makeMockResilientLlmService();
+      resilientLlmService.streamChain.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield 'one';
+      });
+
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const { service } = await buildService(['ignored'], {}, { retriever, resilientLlmService });
+
+      for await (const _event of service.askStream('q')) {
+        // consume
+      }
+
+      const streamCompleteLog = logSpy.mock.calls
+        .map((args) => String(args[0]))
+        .find((msg) => msg.startsWith('qa_stream_complete'));
+      expect(streamCompleteLog).toContain('input_tokens=unknown');
+      expect(streamCompleteLog).toContain('output_tokens=unknown');
+      expect(streamCompleteLog).toContain('total_tokens=unknown');
+
+      logSpy.mockRestore();
+    });
+  });
 });
