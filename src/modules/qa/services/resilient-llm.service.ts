@@ -75,4 +75,56 @@ export class ResilientLlmService {
       return retryResult.result;
     });
   }
+
+  /**
+   * Phase 1.6 Sprint Streaming — initiation-only resilience for
+   * `chain.stream(input)`.
+   *
+   * Two distinct phases:
+   *
+   *   1. INITIATION — `chain.stream(input)` is a Promise that resolves
+   *      to the iterable. The promise can reject synchronously for
+   *      auth / model-not-found / immediate 4xx-5xx failures (those
+   *      DON'T require the upstream to start emitting tokens to
+   *      surface). Wrapped with circuit (outer) + retry (inner) so
+   *      transient initiation failures retry and sustained failures
+   *      trip the circuit.
+   *
+   *   2. CONSUMPTION — `for await` over the iterable yields tokens.
+   *      Failures here (e.g. an upstream stream that errors mid-flight
+   *      after 30 tokens) propagate to the caller UNPROTECTED. No
+   *      retry — we cannot replay a partial stream cleanly. No
+   *      circuit signal — once tokens have started flowing the
+   *      upstream is by definition healthy enough for the request to
+   *      have begun. The controller turns these failures into SSE
+   *      `error` events.
+   *
+   * The `LLM_TIMEOUT_MS` race owned by `QaChainService` should wrap
+   * ONLY phase 1 — it must not bound how long the full stream takes
+   * to complete (a 5-minute essay-style answer is legitimate).
+   */
+  async *streamChain<TInput>(
+    chain: Runnable<TInput, string>,
+    input: TInput,
+  ): AsyncGenerator<string, void, void> {
+    // Phase 1 — protected initiation. Returns the iterable on success;
+    // throws CircuitOpenException / RetryExhaustedException / the
+    // non-retryable error on failure.
+    const stream = await this.circuitBreaker.execute(async () => {
+      const retryResult = await this.retryPolicy.execute(() => chain.stream(input));
+      if (!retryResult.success || retryResult.result === undefined) {
+        throw retryResult.finalError instanceof Error
+          ? retryResult.finalError
+          : new Error('Retry policy returned no stream');
+      }
+      return retryResult.result;
+    });
+
+    // Phase 2 — unprotected consumption. Any throw here surfaces
+    // verbatim to the caller; the caller (QaChainService.askStream →
+    // controller) decides whether to emit it as an SSE error event.
+    for await (const chunk of stream) {
+      yield chunk;
+    }
+  }
 }

@@ -191,4 +191,171 @@ describe('ResilientLlmService', () => {
       expect(invokeSpy).not.toHaveBeenCalled();
     });
   });
+
+  // -----------------------------------------------------------------
+  // streamChain — initiation-only protection (Sprint Streaming)
+  // -----------------------------------------------------------------
+  describe('streamChain (Phase 1.6 Sprint Streaming)', () => {
+    /** Builds a fresh async iterator each call so retry-style re-invocations work. */
+    function makeStreamingChain(makeIterator: () => AsyncGenerator<string, void, void>): {
+      chain: Runnable<string, string>;
+      streamSpy: jest.Mock<Promise<AsyncGenerator<string, void, void>>, [string]>;
+    } {
+      const streamSpy = jest
+        .fn<Promise<AsyncGenerator<string, void, void>>, [string]>()
+        .mockImplementation(() => Promise.resolve(makeIterator()));
+      const chain = { stream: streamSpy } as unknown as Runnable<string, string>;
+      return { chain, streamSpy };
+    }
+
+    async function collect(gen: AsyncGenerator<string, void, void>): Promise<string[]> {
+      const out: string[] = [];
+      for await (const t of gen) out.push(t);
+      return out;
+    }
+
+    async function collectUntilError(
+      gen: AsyncGenerator<string, void, void>,
+    ): Promise<{ collected: string[]; error: unknown }> {
+      const collected: string[] = [];
+      try {
+        for await (const t of gen) collected.push(t);
+        return { collected, error: undefined };
+      } catch (error) {
+        return { collected, error };
+      }
+    }
+
+    it('routes initiation through circuit → retry → chain.stream (composition order)', async () => {
+      const { service, retry, circuit } = await build();
+      const { chain, streamSpy } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'hello';
+      });
+      retry.execute.mockImplementation(async (op) => {
+        const iter = await op();
+        return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
+      });
+
+      const out = await collect(service.streamChain(chain, 'in'));
+
+      expect(out).toEqual(['hello']);
+      expect(circuit.execute).toHaveBeenCalledTimes(1);
+      expect(retry.execute).toHaveBeenCalledTimes(1);
+      expect(streamSpy).toHaveBeenCalledWith('in');
+    });
+
+    it('yields every token from the underlying iterator in order', async () => {
+      const { service, retry } = await build();
+      const tokens = ['Consciousness', ' is', ' fundamentally', ' subjective.'];
+      const { chain } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        for (const t of tokens) yield t;
+      });
+      retry.execute.mockImplementation(async (op) => {
+        const iter = await op();
+        return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
+      });
+
+      const out = await collect(service.streamChain(chain, 'q'));
+      expect(out).toEqual(tokens);
+    });
+
+    it('propagates non-retryable initiation error untouched (4xx-style)', async () => {
+      const { service, retry } = await build();
+      const { chain } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'never-reached';
+      });
+      const badInput = new Error('400 Bad Request');
+      retry.execute.mockRejectedValueOnce(badInput);
+
+      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      expect(collected).toEqual([]);
+      expect(error).toBe(badInput);
+    });
+
+    it('propagates CircuitOpenException — chain.stream never invoked', async () => {
+      const { service, retry, circuit } = await build();
+      const { chain, streamSpy } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'never-reached';
+      });
+      const circuitErr = new CircuitOpenException(30);
+      circuit.execute.mockRejectedValueOnce(circuitErr);
+
+      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      expect(collected).toEqual([]);
+      expect(error).toBe(circuitErr);
+      expect(retry.execute).not.toHaveBeenCalled();
+      expect(streamSpy).not.toHaveBeenCalled();
+    });
+
+    it('propagates RetryExhaustedException from initiation untouched', async () => {
+      const { service, retry } = await build();
+      const { chain } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'never-reached';
+      });
+      const exhausted = new RetryExhaustedException(3, 3_500, new Error('503'));
+      retry.execute.mockRejectedValueOnce(exhausted);
+
+      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      expect(collected).toEqual([]);
+      expect(error).toBe(exhausted);
+    });
+
+    it('does NOT retry on a mid-stream iterator failure (consumption is unprotected)', async () => {
+      const { service, retry } = await build();
+      const midStreamErr = new Error('upstream dropped mid-flight after 2 tokens');
+      const { chain, streamSpy } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'token1';
+        yield 'token2';
+        throw midStreamErr;
+      });
+      retry.execute.mockImplementation(async (op) => {
+        const iter = await op();
+        return { success: true, result: iter, attempts: 1, totalDurationMs: 1 };
+      });
+
+      const { collected, error } = await collectUntilError(service.streamChain(chain, 'q'));
+
+      // First two tokens made it through before the iterator threw.
+      expect(collected).toEqual(['token1', 'token2']);
+      expect(error).toBe(midStreamErr);
+      // CRITICAL: chain.stream was called exactly once — the iterator's
+      // throw did NOT trigger a retry-cycle re-stream. Mid-stream
+      // failures are intentionally unprotected.
+      expect(streamSpy).toHaveBeenCalledTimes(1);
+      expect(retry.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws the programmer-error guard if retry resolves with no result', async () => {
+      const { service, retry } = await build();
+      const { chain } = makeStreamingChain(async function* () {
+        await Promise.resolve(); // satisfies @typescript-eslint/require-await; async required for `for await`
+
+        yield 'unused';
+      });
+      retry.execute.mockResolvedValueOnce({
+        success: false,
+        result: undefined,
+        attempts: 1,
+        totalDurationMs: 0,
+        finalError: undefined,
+      });
+
+      const { collected, error } = await collectUntilError(service.streamChain(chain, 'in'));
+      expect(collected).toEqual([]);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain('Retry policy returned no stream');
+    });
+  });
 });
