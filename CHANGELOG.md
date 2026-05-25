@@ -5,6 +5,187 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.6 Sprint Prompt-Security] — Multi-layer prompt injection mitigation — 2026-05-25
+
+Three-step sprint adding three independent defensive layers against
+OWASP LLM01 (Prompt Injection). Each layer addresses a different
+attack vector and reinforces the others.
+
+- **Layer 1 — Input sanitization.** `PromptSanitizationService`
+  inspects raw questions before any work happens, classifies them as
+  ALLOWED / FLAGGED / REJECTED, strips invisible Unicode tricks, and
+  enforces a 1000-char cap. Hard-reject patterns (9 high-confidence
+  injection signals) → 400 with generic message. Soft-flag patterns
+  (4 medium-confidence signals) → warn log + proceed.
+- **Layer 2 — System prompt hardening.** The chain's prompt template
+  is rewritten as an instruction sandwich: CAPABILITIES + LIMITATIONS
+  frame the persona, a SECURITY clause primes the LLM before
+  `{context}`, a REMINDER reinforces after `{context}`, the user
+  question is wrapped in explicit `<<<USER_QUESTION>>>` /
+  `<<<END_USER_QUESTION>>>` delimiters, and a FINAL INSTRUCTIONS
+  block at the end gives the last word to the system.
+- **Layer 3 — Output validation.** `OutputValidationService` inspects
+  the LLM's answer for distinctive phrases from our hardened prompt
+  (system-prompt leakage detection) and for required `[Source N]`
+  citation markers on substantive non-refusal answers. Refusals via
+  `NO_INFO_ANSWER` are auto-bypassed.
+
+Commit range: `5c242d5..2b9f0af` (3 implementation commits, plus
+this docs commit).
+
+### Added
+
+- `src/modules/qa/types/sanitization.types.ts` — `SanitizationVerdict`
+  enum + `SanitizationResult` shape.
+- `src/modules/qa/services/prompt-sanitization.constants.ts` — 9
+  hard-reject patterns (e.g. `ignore previous instructions`, role
+  markers, `reveal your prompt`, admin/developer mode), 4 soft-flag
+  patterns (`you are now`, `pretend to be`, embedded-instruction
+  brackets, system-marked code fences), 5 Unicode strip ranges (built
+  via `new RegExp(...)` with explicit `\\uXXXX` escapes so source
+  stays ASCII-portable), and `MAX_QUESTION_LENGTH = 1000`.
+- `src/modules/qa/exceptions/question-rejected.exception.ts` — 400
+  with deliberately generic public message.
+- `src/modules/qa/services/prompt-sanitization.service.ts` — Layer 1
+  service. Strip Unicode → length check → hard reject → soft flag.
+  All rejections log at WARN with correlation ID + matched pattern
+  IDs; the user-facing exception stays generic so attackers can't
+  iterate against feedback.
+- 22 unit tests in `prompt-sanitization.service.spec.ts`.
+
+- Hardened prompt template in `qa-chain.service.ts` constructor.
+  CAPABILITIES + LIMITATIONS sections (positive/negative framing) +
+  SECURITY clause + SOURCES + REMINDER + delimited question + FINAL
+  INSTRUCTIONS. `NO_INFO_ANSWER` interpolated so the fast-path and
+  the LLM-side refusal stay byte-identical and BOTH match the
+  Layer-3 valid-refusal regex.
+- `NO_INFO_ANSWER` constant updated from "I don't have enough
+  information to answer this question." to "I cannot answer this
+  question from the provided sources." — the new wording is matched
+  by `VALID_NO_ANSWER_PHRASES[0]`'s `/cannot answer/i` regex,
+  bypassing the citation gate for legitimate refusals.
+
+- `src/modules/qa/types/output-validation.types.ts` — `OutputVerdict`
+  + `OutputValidationResult` shape.
+- `src/modules/qa/services/output-validation.constants.ts` — 8
+  SYSTEM_PROMPT_LEAKAGE_PHRASES (hand-curated against the Step 2
+  template), 4 VALID_NO_ANSWER_PHRASES (regex bypasses for the
+  citation gate), MIN_ANSWER_LENGTH_FOR_CITATION_CHECK = 50.
+- `src/modules/qa/exceptions/output-rejected.exception.ts` — 500
+  with generic public message.
+- `src/modules/qa/services/output-validation.service.ts` — Layer 3
+  service. Two gates evaluated in order: leakage (first match wins,
+  early return) then citation presence (with short-answer and
+  valid-refusal bypasses).
+- 14 unit tests in `output-validation.service.spec.ts`.
+
+### Changed
+
+- `QaChainService` — constructor injects both new services.
+- `QaChainService.ask()` — sanitizes input AFTER lock + integrity
+  check and BEFORE the try block (so `QuestionRejectedException`
+  propagates as a clean 400 without going through the wrap-error
+  catch ladder). Uses `sanitizedQuestion` for retrieval AND chain
+  invocation. After `cleanAnswer`, validates the LLM's output and
+  throws `OutputRejectedException` (added to the pass-through
+  ladder) on REJECTED.
+- `QaChainService.askStream()` — sanitises pre-yield so a rejection
+  becomes a clean HTTP 400 before any SSE headers ship. Uses
+  `sanitizedQuestion` for retrieval + `streamChain`. Accumulates
+  every yielded token so the full answer can be validated after the
+  for-await loop. On REJECTED, yields an SSE `error` event with
+  `code: 'OUTPUT_REJECTED'` and the correlation ID in the message —
+  NOT thrown (tokens have already shipped; throwing would close the
+  stream abruptly with whatever status NestJS could still set).
+
+- `src/modules/qa/qa-chain.service.spec.ts` — 5 prompt-contract
+  tests rewritten for the new structure (CAPABILITIES /
+  LIMITATIONS / delimiters / SECURITY clause / ordering); the
+  empty-retrieval fast-path test now asserts on the
+  `NO_INFO_ANSWER` constant rather than a hardcoded string;
+  `MockPromptSanitizationService` + `MockOutputValidationService`
+  factories with sensible defaults (ALLOWED / VALID) so existing
+  tests pass through transparently; 11 new "prompt security
+  integration" tests.
+
+- `src/modules/qa/qa.module.ts` — both new services added to
+  providers + exports.
+
+### Tests
+
+- Suite count: 20 → 22 (+2 — prompt-sanitization spec +
+  output-validation spec).
+- Test count: 276 → 326 (+50).
+- Active passing: 262 → 312 (+50).
+- ESLint clean on touched files; build clean.
+
+### Adaptations from the inline plan
+
+- Unicode-strip regexes use `new RegExp('[\\u200B-...]', 'g')`
+  constructor instead of regex literals — plan's `/[​-...]/g`
+  form became actual invisible chars in the source file when
+  written; the constructor form is ASCII-portable.
+- Test-fixture invisible chars built via `String.fromCharCode(0x200B)`
+  etc. — ESLint's `no-irregular-whitespace` rule rightly flags
+  literal zero-width / bidi / BOM in source.
+- `NO_INFO_ANSWER` updated AND interpolated into the new template
+  (single source of truth, preserves the constant's "both paths
+  return EXACT same string" invariant from Phase 1.6 hardening).
+- `QuestionRejectedException` thrown OUTSIDE the try block in
+  `ask()` — propagates directly to the HTTP layer without going
+  through the wrap-error catch. Plan's "add to the ladder"
+  guidance was belt-and-braces; the actual placement makes the
+  pass-through entry unnecessary.
+- Ordering test for the prompt template uses
+  `/^<<<USER_QUESTION>>>$/m` regex to skip the in-prose mention
+  of the delimiter string inside the SECURITY paragraph (the
+  literal delimiter is also written verbatim in the SECURITY
+  explanation; `indexOf` would find the prose mention first).
+
+### Honest acknowledgments
+
+- **No prompt-injection mitigation is 100%.** Sophisticated
+  multi-turn attacks, novel obfuscation techniques, and future
+  model behaviours not anticipated by the hard-reject patterns may
+  still succeed. The three layers raise the bar for casual probing
+  and give operators visibility into attack attempts via WARN log
+  lines; they do not eliminate the risk.
+- **The streaming output-validation trade-off:** by the time
+  Layer 3 inspects the accumulated answer, every token has already
+  shipped to the client. The best the service can do is yield an
+  SSE `error` event so the client knows to discard the partial
+  answer. The non-streaming path doesn't have this limitation
+  because validation runs before the response.
+- **The leakage phrase list is hand-curated against the current
+  template.** Step 2 changes to the prompt template require
+  matching updates to
+  `output-validation.constants.ts::SYSTEM_PROMPT_LEAKAGE_PHRASES`.
+  Both files cross-reference each other.
+
+### Out of scope (deferred to later sprints or intentionally excluded)
+
+- **Off-topic detection** — would require keyword matching against
+  a maintained allow-list, or a second LLM call for relevance
+  scoring. Both have UX cost (false positives on legitimate
+  questions) and latency / cost cost (extra LLM call). Deferred
+  until Phase 2 evaluation gives us evidence about when off-topic
+  questions actually surface.
+- **PII redaction** — the dataset is public podcast transcripts
+  with no PII concerns. Pattern-based PII detection on the user
+  question is a separate sprint when the dataset surface changes.
+- **Content moderation via Gemini SafetySettings** — different
+  decision surface (model-side filters vs application-side
+  validation). Tracked separately; intentionally NOT enabled here
+  because we want operator-visible WARN logs from our own checks
+  rather than opaque safety-rated content blocks.
+- **Adversarial training-time defenses** — not applicable; we
+  don't train the model.
+- **Metrics endpoint for rejection counts** — Phase 1.7.5
+  observability sprint. WARN logs already give operators visibility;
+  a counter surface is additive.
+- **Per-user / per-session tracking of rejection patterns** —
+  requires auth layer (Phase 1.7.5).
+
 ## [Phase 1.6 Sprint Token] — LLM token usage telemetry — 2026-05-25
 
 Three-step sprint capturing Gemini's `usage_metadata` (input_tokens,
