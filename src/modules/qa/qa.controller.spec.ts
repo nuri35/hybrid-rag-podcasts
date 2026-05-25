@@ -1,20 +1,51 @@
+import type { MessageEvent } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { Observable } from 'rxjs';
 import { ChromaUnreachableException } from '../vector-store/exceptions';
 import { RetrievalFailedException } from '../retrieval/exceptions';
 import { AskQuestionDto } from './dto/ask-question.dto';
+import { CircuitOpenException } from './exceptions/circuit-open.exception';
 import { QaChainFailedException } from './exceptions';
 import { QaChainService } from './qa-chain.service';
 import { QaController } from './qa.controller';
 import type { QaResult } from './qa.types';
+import type { StreamEvent } from './dto/stream-event.types';
 
 interface MockQaChainService {
   ask: jest.Mock<Promise<QaResult>, [string, { topK?: number } | undefined]>;
+  askStream: jest.Mock<
+    AsyncGenerator<StreamEvent, void, void>,
+    [string, { topK?: number } | undefined]
+  >;
 }
 
 function makeMockQaChainService(): MockQaChainService {
   return {
     ask: jest.fn<Promise<QaResult>, [string, { topK?: number } | undefined]>(),
+    // Default askStream produces no events. Sprint Streaming tests
+    // override per-test to drive specific sequences.
+    askStream: jest.fn<
+      AsyncGenerator<StreamEvent, void, void>,
+      [string, { topK?: number } | undefined]
+      // eslint-disable-next-line require-yield
+    >(async function* () {
+      await Promise.resolve();
+    }),
   };
+}
+
+/** Subscribe to the controller's Observable and collect all MessageEvents until complete/error. */
+async function collectObservable(
+  observable: Observable<MessageEvent>,
+): Promise<{ events: MessageEvent[]; error: unknown }> {
+  return new Promise((resolve) => {
+    const events: MessageEvent[] = [];
+    observable.subscribe({
+      next: (e) => events.push(e),
+      complete: () => resolve({ events, error: undefined }),
+      error: (error: unknown) => resolve({ events, error }),
+    });
+  });
 }
 
 async function buildController(
@@ -105,5 +136,132 @@ describe('QaController', () => {
     const caught = await controller.ask(makeDto('a valid question')).catch((e: unknown) => e);
 
     expect(caught).toBe(error);
+  });
+
+  // ----------------------------------------------------------------------
+  // Phase 1.6 Sprint Streaming — POST /api/v1/questions/stream
+  // ----------------------------------------------------------------------
+  describe('askStream (SSE endpoint)', () => {
+    it('delegates to QaChainService.askStream with question + topK from the DTO', async () => {
+      const qaChainService = makeMockQaChainService();
+      qaChainService.askStream.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* () {
+          await Promise.resolve();
+        },
+      );
+
+      const { controller } = await buildController(qaChainService);
+      await collectObservable(controller.askStream(makeDto('a valid question', 7)));
+
+      expect(qaChainService.askStream).toHaveBeenCalledTimes(1);
+      expect(qaChainService.askStream).toHaveBeenCalledWith('a valid question', { topK: 7 });
+    });
+
+    it('passes topK=undefined when DTO omits it (service applies its own default)', async () => {
+      const qaChainService = makeMockQaChainService();
+      qaChainService.askStream.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* () {
+          await Promise.resolve();
+        },
+      );
+
+      const { controller } = await buildController(qaChainService);
+      await collectObservable(controller.askStream(makeDto('a valid question')));
+
+      expect(qaChainService.askStream).toHaveBeenCalledWith('a valid question', {
+        topK: undefined,
+      });
+    });
+
+    it('emits each yielded StreamEvent as a MessageEvent with JSON-stringified data, in order', async () => {
+      const qaChainService = makeMockQaChainService();
+      qaChainService.askStream.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: 'sources', data: [] };
+        yield { type: 'token', data: 'Hello' };
+        yield { type: 'token', data: ' world' };
+        yield { type: 'done', data: { totalChunks: 0 } };
+      });
+
+      const { controller } = await buildController(qaChainService);
+      const { events, error } = await collectObservable(
+        controller.askStream(makeDto('a valid question')),
+      );
+
+      expect(error).toBeUndefined();
+      expect(events.map((e) => e.data)).toEqual([
+        '{"type":"sources","data":[]}',
+        '{"type":"token","data":"Hello"}',
+        '{"type":"token","data":" world"}',
+        '{"type":"done","data":{"totalChunks":0}}',
+      ]);
+    });
+
+    it('completes the Observable when the underlying generator completes', async () => {
+      const qaChainService = makeMockQaChainService();
+      qaChainService.askStream.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: 'sources', data: [] };
+        yield { type: 'done', data: { totalChunks: 0 } };
+      });
+
+      const { controller } = await buildController(qaChainService);
+      const { events, error } = await collectObservable(
+        controller.askStream(makeDto('a valid question')),
+      );
+
+      // `error: undefined` means the Promise resolved via `complete`, not via `error`.
+      expect(error).toBeUndefined();
+      expect(events).toHaveLength(2);
+    });
+
+    it('surfaces a thrown pass-through exception via subscriber.error (HTTP layer maps to 503)', async () => {
+      const qaChainService = makeMockQaChainService();
+      const circuitErr = new CircuitOpenException(30);
+      qaChainService.askStream.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* () {
+          await Promise.resolve();
+          throw circuitErr;
+        },
+      );
+
+      const { controller } = await buildController(qaChainService);
+      const { events, error } = await collectObservable(
+        controller.askStream(makeDto('a valid question')),
+      );
+
+      expect(events).toEqual([]);
+      expect(error).toBe(circuitErr);
+      expect(error).toBeInstanceOf(CircuitOpenException);
+    });
+
+    it('forwards an SSE error event yielded by the service (unknown mid-stream failures) without throwing', async () => {
+      const qaChainService = makeMockQaChainService();
+      qaChainService.askStream.mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: 'sources', data: [] };
+        // askStream converts unknown mid-stream errors to this SSE event
+        // internally — controller should treat it like any other yielded
+        // event (next + complete normally, no Observable error).
+        yield {
+          type: 'error',
+          data: { code: 'STREAM_FAILED', message: 'Stream failed. Reference: abc-123' },
+        };
+      });
+
+      const { controller } = await buildController(qaChainService);
+      const { events, error } = await collectObservable(
+        controller.askStream(makeDto('a valid question')),
+      );
+
+      expect(error).toBeUndefined();
+      expect(events.map((e) => e.data)).toEqual([
+        '{"type":"sources","data":[]}',
+        '{"type":"error","data":{"code":"STREAM_FAILED","message":"Stream failed. Reference: abc-123"}}',
+      ]);
+    });
   });
 });
