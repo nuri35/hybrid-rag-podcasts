@@ -6,6 +6,7 @@ import { VectorStoreModule } from '../vector-store/vector-store.module';
 import { QaChainService } from './qa-chain.service';
 import { QaController } from './qa.controller';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
+import { PromptSanitizationService } from './services/prompt-sanitization.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { RetryPolicyService } from './services/retry-policy.service';
 import { TokenUsageService } from './services/token-usage.service';
@@ -41,6 +42,7 @@ import { TokenUsageService } from './services/token-usage.service';
     CircuitBreakerService,
     ResilientLlmService,
     TokenUsageService,
+    PromptSanitizationService,
   ],
   exports: [
     QaChainService,
@@ -48,6 +50,7 @@ import { TokenUsageService } from './services/token-usage.service';
     CircuitBreakerService,
     ResilientLlmService,
     TokenUsageService,
+    PromptSanitizationService,
   ],
 })
 export class QaModule {}
