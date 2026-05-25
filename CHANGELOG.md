@@ -5,6 +5,135 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.6 Sprint Streaming] — SSE token-by-token responses — 2026-05-25
+
+Three-step sprint adding a new SSE streaming endpoint
+`POST /api/v1/questions/stream` alongside the unchanged
+`POST /api/v1/questions`. Streaming and non-streaming share the lock
+guard, integrity check, retrieval, prompt template, and resilience
+wrap — only the LLM invocation differs (`chain.stream` vs
+`chain.invoke`). Sprint Retry's circuit breaker + retry protect ONLY
+the stream INITIATION; mid-stream consumption is intentionally
+unprotected (partial streams cannot be cleanly replayed, and a stream
+that has begun emitting tokens implies the upstream was healthy
+enough to start).
+
+Commit range: `7616b3a..dbe4c7f` (3 implementation commits, plus this
+docs commit).
+
+### Added
+
+- `src/modules/qa/dto/stream-event.types.ts` — `StreamEvent` union
+  (`sources` / `token` / `done` / `error`) + per-event interfaces.
+  Event ordering contract: exactly one `sources` event, then zero or
+  more `token` events, then exactly one terminator (`done` happy path
+  or `error` for unrecoverable mid-stream unknown failures). Heartbeat
+  is intentionally NOT in the union — it's a controller-layer concern
+  emitted by RxJS merge to keep idle proxies happy.
+
+- `ResilientLlmService.streamChain<TInput>(chain, input)` — splits
+  `chain.stream(input)` into two distinct phases. INITIATION (the
+  Promise resolution + first chunk arrival) is protected by circuit
+  (outer) + retry (inner) just like `invokeChain`. CONSUMPTION (the
+  `for await` over the resolved iterable) is unprotected: any
+  mid-stream throw propagates to the caller verbatim. Failed
+  initiations count as one circuit-level failure; mid-stream failures
+  do not register with the circuit at all.
+
+- `QaChainService.askStream(question, options)` — SSE-shaped variant
+  of `ask()`. Same pre-yield guards (lock check, integrity gate, query
+  validation via retriever) and same retrieval path. Yields events in
+  the contracted order. Mid-stream unknown errors are converted to
+  SSE `error` events with a correlation ID inside the generator's
+  catch; known exceptions (`CircuitOpenException`,
+  `RetryExhaustedException`, the full validation/infra pass-through
+  ladder from `ask()`) throw out of the generator instead.
+
+- `QaChainService.invokeStreamWithTimeout` — stream-aware timeout
+  helper. `LLM_TIMEOUT_MS` wraps ONLY the first chunk arrival; once
+  tokens are flowing, the timeout is released so a 5-minute essay-
+  style answer is legitimate. Contrast with the non-streaming
+  `invokeWithTimeout` which bounds the entire chain.invoke.
+
+- `POST /api/v1/questions/stream` controller endpoint with
+  `@Sse('stream')` decorator. Heartbeats interleave every 15 s as
+  typed JSON (`{"type":"heartbeat"}`) so clients can ignore them
+  uniformly; SSE comment lines (`:heartbeat`) were considered and
+  rejected because some clients and intermediaries mishandle them.
+  Observable is constructed via `new Observable<MessageEvent>(...)`
+  with explicit subscriber control rather than `merge(events$,
+  heartbeat$)` — the merge approach leaks the unbounded `interval$`
+  after the content stream completes, which would keep NestJS
+  holding the HTTP connection open indefinitely.
+
+- `docs/ADR/0011-sse-streaming-with-initiation-only-resilience.md` —
+  the seven design decisions + alternatives.
+
+### Tests
+
+- 7 new tests in `resilient-llm.service.spec.ts` covering streamChain:
+  composition order; per-token yield ordering; non-retryable
+  initiation propagation; CircuitOpen / RetryExhausted propagation;
+  mid-stream iterator throw NOT triggering a retry (the critical
+  unprotected-consumption invariant); programmer-error guard.
+- 10 new tests in `qa-chain.service.spec.ts` covering askStream:
+  lock guard, integrity gate, retrieval validation pre-yield
+  propagation, sources-before-token ordering, per-chunk token events,
+  done-as-terminator, empty-chunks fast path (sources empty + done(0)
+  without LLM call), unknown mid-stream → SSE error event with
+  correlation ID, CircuitOpen pass-through, RetryExhausted pass-
+  through.
+- 6 new tests in `qa.controller.spec.ts` covering the SSE endpoint:
+  delegation with question + topK, topK-undefined pass-through,
+  JSON-stringified MessageEvent emission per yielded event, Observable
+  completion on generator completion, thrown pass-through via
+  subscriber.error, yielded SSE `error` event forwarded as-is.
+- Suite count: 19 → 19 (no new spec files — additions extend existing
+  specs). Test count: 233 → 256 (+23). Active passing: 219 → 242
+  (+23). ESLint clean on touched files (3 `require-yield` disables
+  for intentional throw-only / no-yield mock generators).
+
+### Adaptations from the inline plan
+
+- Plan's StreamEvent imports `SourceDto from ./source.dto` — actual
+  DTO is `QaSourceDto` in `qa-response.dto.ts`. Used that.
+- Plan's `streamChain` signature `TOutput extends string` simplified
+  to `Runnable<TInput, string>` — chain output is always string after
+  `StringOutputParser`, no constraint gymnastics needed.
+- Plan's askStream calls `this.validateQuestion(question)` — no such
+  method exists; query validation lives in `VectorRetrieverService.
+  retrieve` and throws before any yield. Plan's `buildContext`
+  renamed to the actual method `formatContext`.
+- Plan's pass-through ladder in askStream listed a subset; extended
+  to match `ask()`'s full list (validation exceptions, infra Chroma
+  exceptions, Sprint Retry exceptions).
+- Plan's controller uses `merge(events$, heartbeat$)` with
+  `error.constructor.name` matching. Replaced with `new
+  Observable(subscriber => ...)` for correct heartbeat lifecycle and
+  `subscriber.error` delegation (minification-safe). Teardown calls
+  `generator.return()` so client disconnects cancel the pending
+  for-await cleanly.
+- Inline `async function*` generators in tests need a no-op `await
+  Promise.resolve()` to satisfy `@typescript-eslint/require-await`
+  (the rule doesn't understand that `async` on generators is for
+  for-await semantics, not for await use inside). Throw-only test
+  generators need `// eslint-disable-next-line require-yield`.
+
+### Out of scope (deferred to later sprints)
+
+- Client SDK (a TypeScript helper that consumes the SSE stream and
+  reconstructs answers) — separate concern, can be a separate repo.
+- Resumable streams (Last-Event-ID header support, server-side
+  buffer of recent tokens) — adds significant state-management
+  complexity for marginal benefit at portfolio scale.
+- Multi-region streaming / sticky-session routing — irrelevant for
+  single-process deployment.
+- Token-usage tracking in the stream (per-event `usage` field) —
+  separate observability sprint.
+- Stream-level metrics endpoint (open streams, total tokens emitted,
+  heartbeat fires) — Phase 1.7.5 Sprint C observability.
+- Mid-stream retry — intentionally excluded by design, not deferred.
+
 ## [Phase 1.6 Sprint Retry] — Production-grade resilience for LLM calls — 2026-05-24
 
 Three-phase sprint adding retry policy + circuit breaker + composer
