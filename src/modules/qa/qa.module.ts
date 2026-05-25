@@ -8,6 +8,7 @@ import { QaController } from './qa.controller';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { RetryPolicyService } from './services/retry-policy.service';
+import { TokenUsageService } from './services/token-usage.service';
 
 /**
  * QA module — Phase 1.6 + 1.7 + 1.7.5 Sprint A + Phase 1.6 Sprint Retry
@@ -34,7 +35,19 @@ import { RetryPolicyService } from './services/retry-policy.service';
 @Module({
   imports: [RetrievalModule, LlmModule, RedisModule, VectorStoreModule],
   controllers: [QaController],
-  providers: [QaChainService, RetryPolicyService, CircuitBreakerService, ResilientLlmService],
-  exports: [QaChainService, RetryPolicyService, CircuitBreakerService, ResilientLlmService],
+  providers: [
+    QaChainService,
+    RetryPolicyService,
+    CircuitBreakerService,
+    ResilientLlmService,
+    TokenUsageService,
+  ],
+  exports: [
+    QaChainService,
+    RetryPolicyService,
+    CircuitBreakerService,
+    ResilientLlmService,
+    TokenUsageService,
+  ],
 })
 export class QaModule {}
