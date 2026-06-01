@@ -6,12 +6,14 @@ import { LlmModule } from './modules/llm/llm.module';
 import { QaModule } from './modules/qa/qa.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RetrievalModule } from './modules/retrieval/retrieval.module';
+import { ThrottlerModule } from './modules/throttler/throttler.module';
 
 @Module({
   imports: [
     ConfigModule,
     HealthModule,
     RedisModule,
+    ThrottlerModule,
     IngestionModule,
     RetrievalModule,
     LlmModule,

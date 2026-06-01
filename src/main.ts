@@ -44,6 +44,11 @@ async function bootstrap(): Promise<void> {
   // 1 KB-ish JSON envelope a 1000-char `question` produces. Configurable env
   // var is deferred to Phase 1.7.5.
   const expressInstance = express();
+  // Behind a load balancer / reverse proxy — trust X-Forwarded-* so
+  // ProxyAwareThrottlerGuard can read the real client IP from
+  // X-Forwarded-For (and Express populates req.ip from it) instead of
+  // bucketing every client under the proxy's address.
+  expressInstance.set('trust proxy', true);
   expressInstance.use(json({ limit: '10kb' }));
   expressInstance.use(urlencoded({ extended: true, limit: '10kb' }));
 

@@ -9,6 +9,7 @@ import {
   type MessageEvent,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Observable } from 'rxjs';
 import { AskQuestionDto } from './dto/ask-question.dto';
 import { AskQuestionStreamQuery } from './dto/ask-question-stream.query';
@@ -23,6 +24,10 @@ const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 export class QaController {
   constructor(private readonly qaChainService: QaChainService) {}
 
+  // Scope to the `default` throttler (30/min). Both named throttlers apply to
+  // every route by default; skipping `stream` here stops the stricter 5/min
+  // stream limit from also binding this endpoint.
+  @SkipThrottle({ stream: true })
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -105,6 +110,10 @@ export class QaController {
    * Example (curl):
    *   curl -N "http://localhost:3000/api/v1/questions/stream?question=What%20is%20consciousness"
    */
+  // Scope to the `stream` throttler (5/min, stricter — SSE connections are
+  // long-lived and heavier). Skip `default` so this endpoint's own quota is
+  // independent of the question endpoint's.
+  @SkipThrottle({ default: true })
   @Sse('stream')
   @ApiOperation({
     summary: 'Ask a question (streaming, GET)',

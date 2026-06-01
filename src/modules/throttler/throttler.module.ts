@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule as NestThrottlerModule } from '@nestjs/throttler';
+import { ProxyAwareThrottlerGuard } from './proxy-aware-throttler.guard';
 import { RedisModule } from '../redis/redis.module';
 import { RedisService } from '../redis/redis.service';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
@@ -20,8 +22,11 @@ import type { Env } from '../../common/config/env.schema';
  * inject that and construct the (stateless) storage ourselves. The storage is
  * also registered as a provider/export for direct use and testability.
  *
- * The global guard (`ProxyAwareThrottlerGuard` via `APP_GUARD`) is wired in
- * Step 2 — this module only configures storage + throttler definitions.
+ * The global guard (`ProxyAwareThrottlerGuard`) is registered here via
+ * `APP_GUARD`, so every controller route is throttled unless it opts out with
+ * `@SkipThrottle()`. Because BOTH named throttlers apply to every route by
+ * default, endpoints scope themselves with `@SkipThrottle({ <name>: true })`
+ * (see QaController / HealthController).
  */
 @Module({
   imports: [
@@ -46,7 +51,13 @@ import type { Env } from '../../common/config/env.schema';
       }),
     }),
   ],
-  providers: [RedisThrottlerStorage],
+  providers: [
+    RedisThrottlerStorage,
+    {
+      provide: APP_GUARD,
+      useClass: ProxyAwareThrottlerGuard,
+    },
+  ],
   exports: [NestThrottlerModule, RedisThrottlerStorage],
 })
 export class ThrottlerModule {}
