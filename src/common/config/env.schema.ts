@@ -90,6 +90,15 @@ export const envSchema = z.object({
     .min(10000)
     .max(1800000)
     .default(300000),
+
+  // Rate limiting (Phase 1.7 Sprint Rate-Limit) — per-IP throttling via
+  // @nestjs/throttler backed by RedisThrottlerStorage (fixed-window counter).
+  // The `default` throttler covers POST /api/v1/questions; the `stream`
+  // throttler is stricter because SSE connections are long-lived and heavier.
+  THROTTLE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(30),
+  THROTTLE_WINDOW_MS: z.coerce.number().int().min(1000).max(3600_000).default(60_000),
+  THROTTLE_STREAM_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(5),
+  THROTTLE_STREAM_WINDOW_MS: z.coerce.number().int().min(1000).max(3600_000).default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

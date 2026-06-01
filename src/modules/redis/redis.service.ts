@@ -153,4 +153,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new RedisUnavailableException(`exists ${key}`, error);
     }
   }
+
+  /**
+   * Remaining time-to-live of a key in milliseconds. Mirrors ioredis/Redis
+   * PTTL semantics: a positive number is the remaining TTL, `-1` means the
+   * key exists but has no expiry, `-2` means the key does not exist. Used by
+   * RedisThrottlerStorage to translate the rate-limit window's remaining time
+   * into the HTTP `Retry-After` value.
+   */
+  async pttl(key: string): Promise<number> {
+    try {
+      return await this.client.pttl(key);
+    } catch (error) {
+      throw new RedisUnavailableException(`pttl ${key}`, error);
+    }
+  }
 }

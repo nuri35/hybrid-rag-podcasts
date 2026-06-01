@@ -21,6 +21,7 @@ jest.mock('ioredis', () => {
     del: jest.fn(),
     eval: jest.fn(),
     exists: jest.fn(),
+    pttl: jest.fn(),
     quit: jest.fn().mockResolvedValue('OK'),
     on: jest.fn(),
   };
@@ -35,6 +36,7 @@ interface MockRedis {
   del: jest.Mock;
   eval: jest.Mock;
   exists: jest.Mock;
+  pttl: jest.Mock;
   quit: jest.Mock;
   on: jest.Mock;
 }
@@ -188,6 +190,22 @@ describe('RedisService', () => {
       mockRedis.eval.mockRejectedValueOnce(new Error('script error'));
       const caught = await service.eval('return 1', [], []).catch((e: unknown) => e);
       expect(caught).toBeInstanceOf(RedisUnavailableException);
+    });
+  });
+
+  describe('pttl', () => {
+    it('returns the remaining TTL in milliseconds from ioredis', async () => {
+      mockRedis.pttl.mockResolvedValueOnce(42_000);
+      const result = await service.pttl('throttle:default:1.2.3.4');
+      expect(result).toBe(42_000);
+      expect(mockRedis.pttl).toHaveBeenCalledWith('throttle:default:1.2.3.4');
+    });
+
+    it('wraps ioredis errors in RedisUnavailableException', async () => {
+      mockRedis.pttl.mockRejectedValueOnce(new Error('disconnected'));
+      const caught = await service.pttl('k').catch((e: unknown) => e);
+      expect(caught).toBeInstanceOf(RedisUnavailableException);
+      expect((caught as RedisUnavailableException).message).toContain("'pttl k'");
     });
   });
 
