@@ -5,6 +5,94 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.7 Sprint Rate-Limit] — Redis-backed per-IP rate limiting — 2026-06-01
+
+Two-step sprint adding production-grade per-IP rate limiting to the API
+via `@nestjs/throttler` with a custom Redis-backed storage, so limits hold
+correctly across multiple deployed instances. Different limits per endpoint;
+the health endpoint is bypassed. All Redis operations fail open. See ADR 0014.
+
+- **Step 1 — `RedisThrottlerStorage`.** A `ThrottlerStorage` implementation
+  backed by Sprint A's `RedisService`. Fixed-window counter: one Redis key
+  per `(throttler, client-IP)`, atomic `INCR` + first-hit `EXPIRE` via a Lua
+  script so the window anchors to the first request and never leaks a
+  TTL-less key. Fails open (zeros + WARN log) on any Redis error.
+- **Step 2 — global guard + proxy IP + per-endpoint scoping.**
+  `ProxyAwareThrottlerGuard` reads the real client IP from `X-Forwarded-For`;
+  registered as a global `APP_GUARD`. `trust proxy` enabled in `main.ts`.
+  Per-endpoint limits via `@SkipThrottle` scoping (30/min questions,
+  5/min stream, health fully bypassed).
+
+Commit range: `0adf963..0bc7769` (2 implementation commits, plus this docs
+commit).
+
+### Added
+
+- `src/modules/throttler/redis-throttler.storage.ts` — `RedisThrottlerStorage`
+  implementing `@nestjs/throttler`'s `ThrottlerStorage`. Fixed-window counter
+  keyed `throttle:<throttlerName>:<ip>`; atomic `INCR`+`EXPIRE` Lua script;
+  fail-open. `ThrottlerStorageRecord` times returned in SECONDS to match the
+  library's `Retry-After` contract (see Adaptations).
+- `src/modules/throttler/proxy-aware-throttler.guard.ts` —
+  `ProxyAwareThrottlerGuard extends ThrottlerGuard`, overriding `getTracker`
+  to take the first `X-Forwarded-For` entry → `req.ip` → `'unknown'`.
+- `src/modules/throttler/throttler.module.ts` — wraps
+  `ThrottlerModule.forRootAsync` with two env-driven named throttlers
+  (`default`, `stream`) and the Redis storage; registers the guard as a
+  global `APP_GUARD`.
+- `RedisService.pttl()` — thin ioredis `PTTL` wrapper (remaining TTL in ms),
+  used to compute `Retry-After`.
+- Four `THROTTLE_*` env vars (`*_LIMIT_PER_MINUTE`, `*_WINDOW_MS`, plus the
+  `*_STREAM_*` pair) in `env.schema.ts` + matching `.env.example` entries.
+- `docs/ADR/0014-redis-backed-rate-limiting.md`.
+- 9 unit tests (`redis-throttler.storage.spec.ts`), 6 guard unit tests
+  (`proxy-aware-throttler.guard.spec.ts`), 5 deterministic integration tests
+  (`throttler.integration.spec.ts`), 2 `pttl` tests (in
+  `redis.service.spec.ts`).
+
+### Changed
+
+- `src/main.ts` — `expressInstance.set('trust proxy', true)` so Express
+  honors `X-Forwarded-*` (set on the custom `ExpressAdapter` instance, since
+  `INestApplication` has no `.set()`).
+- `src/app.module.ts` — `ThrottlerModule` added to imports.
+- `src/modules/qa/qa.controller.ts` — `@SkipThrottle({ stream: true })` on
+  `POST /questions` (→ only `default` 30/min) and
+  `@SkipThrottle({ default: true })` on the SSE `stream` endpoint (→ only
+  `stream` 5/min, independent counter).
+- `src/common/health/health.controller.ts` —
+  `@SkipThrottle({ default: true, stream: true })` to bypass both throttlers.
+
+### Tests
+
+- Suite count: 22 → 25 (+3 — storage spec, guard spec, throttler integration
+  spec).
+- Test count: 326 → 348 (+22).
+- Active passing: 312 → 334 (+22).
+- Real `ThrottlerModule` `forRootAsync` DI verified to boot via a throwaway
+  smoke (the committed integration test uses the library's in-memory storage
+  for determinism, so it needs no Redis in CI).
+- ESLint clean on touched files; `nest build` clean.
+
+### Adaptations from the inline plan
+
+- `ThrottlerStorageRecord.timeToExpire` / `timeToBlockExpire` returned in
+  SECONDS, not milliseconds. The v6 guard copies `timeToBlockExpire` into the
+  HTTP `Retry-After` header (seconds), and the library's default storage
+  returns seconds (`getExpirationTime` divides by 1000). Returning ms would
+  inflate `Retry-After` 1000×.
+- Per-endpoint scoping uses `@SkipThrottle({ <name>: true })`, not the plan's
+  "no decorator on ask" / hardcoded `@Throttle` on stream. In v6 every named
+  throttler applies to every route by default, so the question endpoint would
+  otherwise be bound by the stricter `stream(5)` limit. Health needs both
+  names listed explicitly — bare `@SkipThrottle()` defaults to
+  `{ default: true }` only (the integration test caught this).
+- `RedisThrottlerStorage` is constructed inside the `forRootAsync` factory
+  from an injected `RedisService`, not DI-injected by class token — the
+  factory's inner module can't resolve the outer module's providers.
+- `@nestjs/throttler` installed with `--legacy-peer-deps`, matching the
+  project's existing chromadb peer-conflict convention.
+
 ## [Phase 1.6 Sprint Prompt-Security] — Multi-layer prompt injection mitigation — 2026-05-25
 
 Three-step sprint adding three independent defensive layers against
