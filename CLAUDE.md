@@ -24,7 +24,7 @@ A hybrid RAG (vector + graph) Q&A system over podcast transcripts. Built as a po
 - **Generation model:** `gpt-4o-mini` (configurable via env)
 - **Schema validation:** Zod (LLM outputs) + class-validator (HTTP DTOs)
 - **CLI:** nest-commander
-- **Coordination / cache:** Redis via ioredis (Phase 1.7.5 Sprint A — ingestion lock, integrity marker, rate-limit counters)
+- **Coordination / cache:** Redis via ioredis (Phase 1.7.5 Sprint A — ingestion lock, integrity marker, rate-limit counters; Sprint Cache — LLM response cache)
 - **Rate limiting:** `@nestjs/throttler` with a custom Redis-backed storage (Phase 1.7 Sprint Rate-Limit)
 - **Testing:** Jest (unit + e2e)
 - **Evaluation:** Ragas-equivalent metrics via LangChain.js evaluation tools (Phase 2)
@@ -105,6 +105,8 @@ Each was a deliberate choice. Do not revisit without an ADR.
 17. **Per-IP rate limiting via `@nestjs/throttler` + custom Redis-backed storage.** `RedisThrottlerStorage` (fixed-window counter: atomic Lua `INCR` + first-hit `EXPIRE`, keyed `throttle:<name>:<ip>`) replaces the library's in-memory storage so limits hold across replicas. **All Redis ops fail open** (WARN + proceed) — rate limiting is a defense layer, not a correctness primitive (mirrors Sprint A). `ProxyAwareThrottlerGuard` reads the client IP from the first `X-Forwarded-For` entry (`trust proxy` enabled in `main.ts`); registered as a global `APP_GUARD`. Two env-driven named throttlers — `default` (30/60s, question endpoint) and `stream` (5/60s, SSE). **`@nestjs/throttler` v6 applies EVERY named throttler to EVERY route by default**, so endpoints scope themselves with `@SkipThrottle({ <name>: true })`; `GET /health` bypasses both. `ThrottlerStorageRecord` times are returned in **seconds** (the guard feeds `timeToBlockExpire` into `Retry-After`, which is seconds — returning ms inflates it 1000×). See ADR 0014.
 
 18. **Distributed circuit breaker state in Redis (`CircuitBreakerRedisStorage`).** `CircuitBreakerService` state (CLOSED/OPEN/HALF_OPEN machine, failure window, opened-at, probe lock) moved from in-process fields to five Redis keys under `circuit:llm:`, so one shared circuit federates across all instances — a trip on one is respected by all. Every multi-step transition runs as an atomic **Lua script** (no read-modify-write races); the half-open probe is gated by a `SET NX` token (exactly one probe cluster-wide; crashed holder self-heals via token TTL). Keys carry `max(windowMs, openDurationMs) × 4` TTLs so stale state self-expires. **Fail-open** on Redis errors (run unprotected, WARN `circuit_storage_failed`) — the circuit is a coordination optimisation, not a correctness primitive. Public `execute()` contract, log shapes, and `CircuitOpenException` unchanged; `getSnapshot()` is now async. `ResilientLlmService` untouched. See ADR 0015.
+
+19. **Redis-backed exact-match LLM response cache (`QaResponseCacheService`, non-streaming only).** `ask()` consults a Redis cache before the LLM: key `qa:v1:{model}:{temperature}:{promptHash}:{topK}:{ingestionTimestamp}:SHA256(normalizedQuestion|sortedChunkIds)`. **Exact-match, never semantic** (a similar-but-different query must never serve the wrong grounded answer). Lookup runs **after retrieval** (the key needs the chunk IDs) — so a hit saves the ~2.4 s LLM call but not the ~230 ms retrieval (net ~250 ms, not ~10 ms). The `{ingestionTimestamp}` segment (Sprint A marker) auto-invalidates the whole cache on re-ingestion; `{promptHash}` (SHA-256 of the shared `QA_PROMPT_TEMPLATE` constant) auto-invalidates on any prompt edit; 1 h TTL is a secondary safety net only. Empty-retrieval fallback and output-validation rejections are **never cached**. **Fail-open** on every Redis error (degrade to a normal LLM call / silent write, WARN `qa_cache_failed`). `askStream()` is deliberately **not** cached. `qa_complete` log gains `cache=hit|miss`. See ADR 0016.
 
 ---
 
@@ -255,7 +257,7 @@ See the `langchain-js-lcel` skill for full guidance.
 
 ## Phase tracking
 
-Current phase: **Phase 1 complete; Phase 1.7.5 Sprint Distributed-Breaker complete — ready for Phase 2 (Evaluation Framework).** Next major milestone: **Phase 2 — Evaluation (Ragas-style metrics + golden dataset).**
+Current phase: **Phase 1 complete; Phase 1.7.5 Sprint Cache complete — ready for Phase 2 (Evaluation Framework).** Next major milestone: **Phase 2 — Evaluation (Ragas-style metrics + golden dataset).**
 
 | Phase | Status | Goal |
 |---|---|---|

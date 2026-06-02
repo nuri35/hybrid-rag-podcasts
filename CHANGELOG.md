@@ -5,6 +5,64 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.7.5 Sprint Cache] — LLM response cache (Cache C) — 2026-06-02
+
+Adds a Redis-backed exact-match response cache to the non-streaming QA
+endpoint (`POST /api/v1/questions`). The same question over the same
+retrieved context, model, and prompt returns the cached answer without
+invoking Gemini — turning a ~2.5 s repeat query into ~250 ms and spending
+zero chat tokens. The streaming endpoint is deliberately **not** cached.
+All cache operations fail open. See ADR 0016.
+
+- **Step 1 — `QaResponseCacheService`.** Standalone service owning the
+  cache key, Redis read/write, and fail-open handling. The key folds in the
+  model, temperature, prompt-template hash, topK, the Sprint A ingestion
+  timestamp, and a SHA-256 of the normalized question + sorted chunk IDs, so
+  a cached answer is only ever returned for the exact inputs that produced
+  it (and re-ingestion invalidates the whole cache automatically).
+- **Step 2 — integration into `ask()`.** Lookup runs after retrieval (the
+  key needs the chunk IDs); a hit skips the LLM call, a miss runs it then
+  stores the result. The empty-retrieval fallback and output-validation
+  rejections are never cached.
+
+Commit range: `180d3dc..1ee1fae` (2 implementation commits, plus this docs
+commit).
+
+### Added
+
+- `src/modules/qa/services/qa-response-cache.service.ts` —
+  `QaResponseCacheService`: deterministic `buildKey`, `get`/`set` with JSON
+  (de)serialisation, `getIngestionTimestamp` (reads the Sprint A marker),
+  corrupt-entry self-heal (delete + miss), fail-open on every Redis error,
+  `promptHash` computed once from `QA_PROMPT_TEMPLATE`.
+- `src/modules/qa/services/qa-response-cache.types.ts` — `CachedResponse`
+  (answer + `QaSource[]` + chunksCount + cachedAt) and `BuildKeyInput`.
+- `src/modules/qa/services/qa-response-cache.service.spec.ts` — 22 unit
+  tests (key determinism / normalization / segment sensitivity, get / set
+  fail-open, marker parsing).
+- `CACHE_TTL_SECONDS` env var (default 3600) — schema + `.env.example`.
+- `QA_PROMPT_TEMPLATE` constant in `qa.constants.ts` — the instruction-
+  sandwich prompt extracted verbatim from `QaChainService` so the chain and
+  the cache key share one source of truth.
+- `docs/ADR/0016-llm-response-cache.md`.
+
+### Changed
+
+- `src/modules/qa/qa-chain.service.ts` — `ask()` consults the cache: builds
+  the key from the retrieved chunk IDs, returns a cached answer on hit
+  (logging `cache=hit` with zero token counts), otherwise runs the LLM and
+  stores the validated result (logging `cache=miss`). Reads
+  `LLM_MODEL` / `LLM_TEMPERATURE` for the key. Builds its `PromptTemplate`
+  from the shared `QA_PROMPT_TEMPLATE`. `askStream()` is unchanged.
+- `src/modules/qa/qa.module.ts` — `QaResponseCacheService` added to
+  providers.
+
+### Tests
+
+- Test count: 353 → 385 active passing (+32: 22 cache-service unit, +10
+  qa-chain integration). 19 skipped unchanged.
+- `tsc --noEmit` clean; ESLint clean on touched files.
+
 ## [Phase 1.7.5 Sprint Distributed-Breaker] — Redis-backed circuit breaker state — 2026-06-02
 
 Migrates `CircuitBreakerService` state from in-process memory to Redis so a
