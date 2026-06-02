@@ -31,6 +31,7 @@ import {
 import { NO_INFO_ANSWER, QA_PROMPT_TEMPLATE } from './qa.constants';
 import { OutputValidationService } from './services/output-validation.service';
 import { PromptSanitizationService } from './services/prompt-sanitization.service';
+import { QaResponseCacheService } from './services/qa-response-cache.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { TokenUsageService } from './services/token-usage.service';
 import { OutputRejectedException } from './exceptions/output-rejected.exception';
@@ -88,6 +89,10 @@ export class QaChainService implements OnModuleInit {
   private readonly defaultTopK: number;
   private readonly sourceExcerptLength: number;
   private readonly llmTimeoutMs: number;
+  // Phase 1.7.5 Sprint Cache — cache-key segments scoping a cached answer
+  // to the exact model + temperature that produced it.
+  private readonly modelName: string;
+  private readonly temperature: number;
   private readonly promptTemplate: PromptTemplate;
   private readonly llm: BaseChatModel;
   private readonly chain: Runnable<{ context: string; question: string }, string>;
@@ -102,12 +107,15 @@ export class QaChainService implements OnModuleInit {
     private readonly tokenUsageService: TokenUsageService,
     private readonly promptSanitization: PromptSanitizationService,
     private readonly outputValidation: OutputValidationService,
+    private readonly responseCache: QaResponseCacheService,
     llmService: LlmService,
     config: ConfigService<Env, true>,
   ) {
     this.defaultTopK = config.get('QA_DEFAULT_TOP_K', { infer: true });
     this.sourceExcerptLength = config.get('QA_SOURCE_EXCERPT_LENGTH', { infer: true });
     this.llmTimeoutMs = config.get('LLM_TIMEOUT_MS', { infer: true });
+    this.modelName = config.get('LLM_MODEL', { infer: true });
+    this.temperature = config.get('LLM_TEMPERATURE', { infer: true });
     this.llm = llmService.createChatModel();
     // Phase 1.6 Sprint Prompt-Security — Layer 2 of the multi-layer
     // injection defence. The "instruction sandwich" template now lives in
@@ -229,10 +237,50 @@ export class QaChainService implements OnModuleInit {
       //    retriever — it throws Empty/TooShort/TooLong before we get here.
       const chunks = await this.retriever.retrieve(cleanedQuestion, { topK });
 
-      // 2. Empty retrieval → canned fallback, NO LLM call.
+      // 2. Empty retrieval → canned fallback, NO LLM call. Runs BEFORE the
+      //    cache so the "I cannot answer" path is never cached (it's cheap
+      //    and deterministic already; caching it would also need
+      //    invalidation if the dataset later gains matching content).
       if (chunks.length === 0) {
         this.logger.warn(`qa_no_chunks question_length=${cleanedQuestion.length}`);
         return { answer: NO_INFO_ANSWER, sources: [] };
+      }
+
+      // 2b. Phase 1.7.5 Sprint Cache — exact-match response cache lookup.
+      //     The key folds in the retrieved chunk IDs, so we must retrieve
+      //     FIRST (the ~230 ms retrieval cost is paid even on a hit); the
+      //     win is skipping the ~2.4 s LLM call. The whole read is
+      //     fail-open: any cache error degrades to a normal LLM call with
+      //     a warn log, never a 500. `cacheKey` stays null on failure so
+      //     the later write is skipped too.
+      let cacheKey: string | null = null;
+      try {
+        const ingestionTimestamp = await this.responseCache.getIngestionTimestamp();
+        cacheKey = this.responseCache.buildKey({
+          question: cleanedQuestion,
+          topK,
+          chunkIds: chunks.map((chunk) => chunk.id),
+          model: this.modelName,
+          temperature: this.temperature,
+          promptHash: this.responseCache.promptHash,
+          ingestionTimestamp,
+        });
+        const cached = await this.responseCache.get(cacheKey, correlationId);
+        if (cached) {
+          const duration = Date.now() - startTime;
+          this.logger.log(
+            `qa_complete correlation_id=${correlationId} duration_ms=${duration} ` +
+              `sources=${cached.sources.length} cache=hit ` +
+              `input_tokens=0 output_tokens=0 total_tokens=0`,
+          );
+          return { answer: cached.answer, sources: cached.sources };
+        }
+      } catch (cacheError) {
+        cacheKey = null;
+        this.logger.warn(
+          `qa_cache_failed action=fail_open correlation_id=${correlationId} stage=lookup ` +
+            `error=${cacheError instanceof Error ? cacheError.message : String(cacheError)}`,
+        );
       }
 
       // 3. Format chunks as a single context string for the prompt.
@@ -271,6 +319,32 @@ export class QaChainService implements OnModuleInit {
       // 5. Map chunks to caller-facing source citations.
       const sources = this.mapChunksToSources(chunks);
 
+      // 5b. Phase 1.7.5 Sprint Cache — store the freshly generated answer.
+      //     Runs AFTER output validation so a rejected answer never reaches
+      //     the cache. Skipped when the lookup failed (cacheKey null).
+      //     `set` already fails open internally; the extra `.catch` is
+      //     belt-and-suspenders so a write error can never break the
+      //     response the user is about to receive.
+      if (cacheKey !== null) {
+        await this.responseCache
+          .set(
+            cacheKey,
+            {
+              answer,
+              sources,
+              chunksCount: chunks.length,
+              cachedAt: new Date().toISOString(),
+            },
+            correlationId,
+          )
+          .catch((cacheError: unknown) => {
+            this.logger.warn(
+              `qa_cache_failed action=fail_open correlation_id=${correlationId} stage=write ` +
+                `error=${cacheError instanceof Error ? cacheError.message : String(cacheError)}`,
+            );
+          });
+      }
+
       // Phase 2 evaluation baseline: capture score distribution per request
       // so we can later tune score thresholds and reranker comparisons.
       const topScore = chunks[0]?.score ?? 0;
@@ -286,7 +360,8 @@ export class QaChainService implements OnModuleInit {
           `answer_length=${answer.length} ` +
           `top_score=${topScore.toFixed(4)} ` +
           `avg_score=${avgScore.toFixed(4)} ` +
-          `min_score=${minScore.toFixed(4)}` +
+          `min_score=${minScore.toFixed(4)} ` +
+          `cache=miss` +
           this.formatTokenFields(tokenUsage),
       );
 

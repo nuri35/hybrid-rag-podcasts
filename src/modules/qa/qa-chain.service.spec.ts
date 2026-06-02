@@ -29,6 +29,8 @@ import { OutputValidationService } from './services/output-validation.service';
 import { PromptSanitizationService } from './services/prompt-sanitization.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { TokenUsageService } from './services/token-usage.service';
+import { QaResponseCacheService } from './services/qa-response-cache.service';
+import type { BuildKeyInput, CachedResponse } from './services/qa-response-cache.types';
 import { OutputRejectedException } from './exceptions/output-rejected.exception';
 import { QuestionRejectedException } from './exceptions/question-rejected.exception';
 import { OutputVerdict, type OutputValidationResult } from './types/output-validation.types';
@@ -221,6 +223,30 @@ function makeMockOutputValidationService(): MockOutputValidationService {
   return mock;
 }
 
+interface MockQaResponseCacheService {
+  promptHash: string;
+  buildKey: jest.Mock<string, [BuildKeyInput]>;
+  getIngestionTimestamp: jest.Mock<Promise<string>, []>;
+  get: jest.Mock<Promise<CachedResponse | null>, [string, string]>;
+  set: jest.Mock<Promise<void>, [string, CachedResponse, string]>;
+}
+
+/**
+ * Default cache mock — always a MISS (`get` → null) so existing tests
+ * keep exercising the full LLM path unchanged. `buildKey` returns a fixed
+ * sentinel key; `getIngestionTimestamp` returns 'none'; `set` resolves.
+ * Sprint Cache tests override per-test to drive hit / fail-open paths.
+ */
+function makeMockQaResponseCacheService(): MockQaResponseCacheService {
+  return {
+    promptHash: 'testhash',
+    buildKey: jest.fn<string, [BuildKeyInput]>().mockReturnValue('qa:v1:test-cache-key'),
+    getIngestionTimestamp: jest.fn<Promise<string>, []>().mockResolvedValue('none'),
+    get: jest.fn<Promise<CachedResponse | null>, [string, string]>().mockResolvedValue(null),
+    set: jest.fn<Promise<void>, [string, CachedResponse, string]>().mockResolvedValue(undefined),
+  };
+}
+
 interface BuildOverrides {
   retriever?: MockRetriever;
   lockService?: MockLockService;
@@ -230,6 +256,7 @@ interface BuildOverrides {
   tokenUsageService?: MockTokenUsageService;
   promptSanitization?: MockPromptSanitizationService;
   outputValidation?: MockOutputValidationService;
+  cache?: MockQaResponseCacheService;
 }
 
 /**
@@ -256,6 +283,7 @@ async function buildService(
   tokenUsageService: MockTokenUsageService;
   promptSanitization: MockPromptSanitizationService;
   outputValidation: MockOutputValidationService;
+  cache: MockQaResponseCacheService;
   llmModel: FakeListChatModel;
 }> {
   const llmModel = new FakeListChatModel({ responses: llmResponses });
@@ -270,6 +298,7 @@ async function buildService(
   const tokenUsageService = builds.tokenUsageService ?? makeMockTokenUsageService();
   const promptSanitization = builds.promptSanitization ?? makeMockPromptSanitizationService();
   const outputValidation = builds.outputValidation ?? makeMockOutputValidationService();
+  const cache = builds.cache ?? makeMockQaResponseCacheService();
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -282,6 +311,7 @@ async function buildService(
       { provide: TokenUsageService, useValue: tokenUsageService },
       { provide: PromptSanitizationService, useValue: promptSanitization },
       { provide: OutputValidationService, useValue: outputValidation },
+      { provide: QaResponseCacheService, useValue: cache },
       { provide: LlmService, useValue: llmService },
       { provide: ConfigService, useValue: makeConfig(configOverrides) },
     ],
@@ -297,6 +327,7 @@ async function buildService(
     tokenUsageService,
     promptSanitization,
     outputValidation,
+    cache,
     llmModel,
   };
 }
@@ -1553,6 +1584,218 @@ describe('QaChainService', () => {
         const types = events.map((e) => e.type);
         expect(types).toEqual(['sources', 'token', 'token', 'done']);
       });
+    });
+  });
+
+  // ----------------------------------------------------------------------
+  // Phase 1.7.5 Sprint Cache — response cache integration in ask()
+  // (askStream is intentionally NOT cached — out of scope.)
+  // ----------------------------------------------------------------------
+  describe('response cache integration (Sprint Cache)', () => {
+    it('builds the cache key from the sanitized question, topK, chunk IDs, model, temperature, promptHash, and ingestion timestamp', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([
+        makeFakeChunk('ep_001_chunk_0', 'doc a'),
+        makeFakeChunk('ep_001_chunk_1', 'doc b'),
+      ]);
+      const cache = makeMockQaResponseCacheService();
+      cache.getIngestionTimestamp.mockResolvedValueOnce('ts-123');
+      const promptSanitization = makeMockPromptSanitizationService();
+      promptSanitization.inspect.mockReturnValueOnce({
+        verdict: SanitizationVerdict.ALLOWED,
+        sanitizedQuestion: 'normalised q',
+        detectedPatterns: [],
+        rejectionReason: null,
+      });
+
+      const { service } = await buildService(
+        ['answer [Source 1]'],
+        {},
+        { retriever, cache, promptSanitization },
+      );
+      await service.ask('raw q', { topK: 9 });
+
+      expect(cache.buildKey).toHaveBeenCalledTimes(1);
+      expect(cache.buildKey).toHaveBeenCalledWith({
+        question: 'normalised q',
+        topK: 9,
+        chunkIds: ['ep_001_chunk_0', 'ep_001_chunk_1'],
+        model: 'fake-model',
+        temperature: 0,
+        promptHash: 'testhash',
+        ingestionTimestamp: 'ts-123',
+      });
+    });
+
+    it('returns the cached response and does NOT invoke the LLM on a cache hit', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      const cachedSources = [{ chunkId: 'c0', score: 0.9, excerpt: 'doc', metadata: {} }];
+      cache.get.mockResolvedValueOnce({
+        answer: 'cached answer [Source 1]',
+        sources: cachedSources,
+        chunksCount: 1,
+        cachedAt: '2026-06-01T00:00:00.000Z',
+      });
+
+      const { service, resilientLlmService } = await buildService(
+        ['SHOULD NOT BE USED'],
+        {},
+        { retriever, cache },
+      );
+      const result = await service.ask('a valid question');
+
+      expect(result.answer).toBe('cached answer [Source 1]');
+      expect(result.sources).toEqual(cachedSources);
+      expect(resilientLlmService.invokeChain).not.toHaveBeenCalled();
+      // A hit must NOT re-cache.
+      expect(cache.set).not.toHaveBeenCalled();
+    });
+
+    it('invokes the LLM on a cache miss', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService(); // get → null (miss)
+
+      const { service, resilientLlmService } = await buildService(
+        ['fresh answer [Source 1]'],
+        {},
+        { retriever, cache },
+      );
+      const result = await service.ask('a valid question');
+
+      expect(result.answer).toBe('fresh answer [Source 1]');
+      expect(resilientLlmService.invokeChain).toHaveBeenCalledTimes(1);
+    });
+
+    it('stores the freshly generated response in the cache on a miss', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc', 0.88)]);
+      const cache = makeMockQaResponseCacheService();
+
+      const { service } = await buildService(['fresh answer [Source 1]'], {}, { retriever, cache });
+      await service.ask('a valid question');
+
+      expect(cache.set).toHaveBeenCalledTimes(1);
+      const [keyArg, valueArg, corrArg] = cache.set.mock.calls[0];
+      expect(keyArg).toBe('qa:v1:test-cache-key');
+      expect(valueArg.answer).toBe('fresh answer [Source 1]');
+      expect(valueArg.chunksCount).toBe(1);
+      expect(valueArg.sources).toHaveLength(1);
+      expect(valueArg.sources[0].chunkId).toBe('c0');
+      expect(typeof valueArg.cachedAt).toBe('string');
+      // correlation ID is a UUID
+      expect(corrArg).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    });
+
+    it('does NOT touch the cache on the empty-retrieval fast path', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([]);
+      const cache = makeMockQaResponseCacheService();
+
+      const { service } = await buildService(['ignored'], {}, { retriever, cache });
+      const result = await service.ask('a valid question');
+
+      expect(result.answer).toBe(NO_INFO_ANSWER);
+      expect(cache.get).not.toHaveBeenCalled();
+      expect(cache.set).not.toHaveBeenCalled();
+    });
+
+    it('does NOT store a response that fails output validation', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      const outputValidation = makeMockOutputValidationService();
+      outputValidation.validate.mockReturnValueOnce({
+        verdict: OutputVerdict.REJECTED,
+        rejectionReason: 'missing_citation',
+      });
+
+      const { service } = await buildService(
+        ['some answer with no citation'],
+        {},
+        { retriever, cache, outputValidation },
+      );
+      const caught = await service.ask('a valid question').catch((e: unknown) => e);
+
+      expect(caught).toBeInstanceOf(OutputRejectedException);
+      expect(cache.set).not.toHaveBeenCalled();
+    });
+
+    it('qa_complete log line contains cache=hit on a cache hit', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      cache.get.mockResolvedValueOnce({
+        answer: 'cached',
+        sources: [],
+        chunksCount: 1,
+        cachedAt: 'x',
+      });
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+      const { service } = await buildService(['ignored'], {}, { retriever, cache });
+      await service.ask('a valid question');
+
+      const line = logSpy.mock.calls
+        .map((a) => String(a[0]))
+        .find((m) => m.startsWith('qa_complete'));
+      expect(line).toContain('cache=hit');
+
+      logSpy.mockRestore();
+    });
+
+    it('qa_complete log line contains cache=miss on a cache miss', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+      const { service } = await buildService(['answer [Source 1]'], {}, { retriever, cache });
+      await service.ask('a valid question');
+
+      const line = logSpy.mock.calls
+        .map((a) => String(a[0]))
+        .find((m) => m.startsWith('qa_complete'));
+      expect(line).toContain('cache=miss');
+
+      logSpy.mockRestore();
+    });
+
+    it('falls open to the LLM when the cache read throws', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      cache.get.mockRejectedValueOnce(new Error('redis down'));
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      const { service, resilientLlmService } = await buildService(
+        ['fresh [Source 1]'],
+        {},
+        { retriever, cache },
+      );
+      const result = await service.ask('a valid question');
+
+      expect(result.answer).toBe('fresh [Source 1]');
+      expect(resilientLlmService.invokeChain).toHaveBeenCalledTimes(1);
+
+      warnSpy.mockRestore();
+    });
+
+    it('returns the answer even when the cache write throws', async () => {
+      const retriever = makeMockRetriever();
+      retriever.retrieve.mockResolvedValue([makeFakeChunk('c0', 'doc')]);
+      const cache = makeMockQaResponseCacheService();
+      cache.set.mockRejectedValueOnce(new Error('redis down'));
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      const { service } = await buildService(['fresh [Source 1]'], {}, { retriever, cache });
+      const result = await service.ask('a valid question');
+
+      expect(result.answer).toBe('fresh [Source 1]');
+
+      warnSpy.mockRestore();
     });
   });
 });
