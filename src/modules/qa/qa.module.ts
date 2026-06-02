@@ -5,6 +5,7 @@ import { RetrievalModule } from '../retrieval/retrieval.module';
 import { VectorStoreModule } from '../vector-store/vector-store.module';
 import { QaChainService } from './qa-chain.service';
 import { QaController } from './qa.controller';
+import { CircuitBreakerRedisStorage } from './services/circuit-breaker-redis.storage';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { OutputValidationService } from './services/output-validation.service';
 import { PromptSanitizationService } from './services/prompt-sanitization.service';
@@ -40,6 +41,7 @@ import { TokenUsageService } from './services/token-usage.service';
   providers: [
     QaChainService,
     RetryPolicyService,
+    CircuitBreakerRedisStorage,
     CircuitBreakerService,
     ResilientLlmService,
     TokenUsageService,
