@@ -5,6 +5,84 @@ All notable changes to **hybrid-rag-podcasts** are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Each phase from the project plan (`CLAUDE.md` Phase tracking table) gets one entry.
 
+## [Phase 1.7.5 Sprint Distributed-Breaker] — Redis-backed circuit breaker state — 2026-06-02
+
+Migrates `CircuitBreakerService` state from in-process memory to Redis so a
+single shared circuit federates across every deployed instance: when one
+instance trips the breaker, all others immediately respect it. The three-state
+machine (CLOSED / OPEN / HALF_OPEN), the public `execute()` contract, and
+`CircuitOpenException` are unchanged — only the storage moved. All Redis
+operations fail open. See ADR 0015.
+
+- **Step 1 — `CircuitBreakerRedisStorage`.** Owns the Redis side: five keys
+  under `circuit:llm:` plus Lua scripts that perform every transition
+  atomically (no read-modify-write races across instances). The half-open
+  probe is gated by a `SET NX` token — exactly one probe runs cluster-wide,
+  and a crashed probe-holder self-heals when the token TTL expires.
+- **Step 2 — service migration.** `CircuitBreakerService` drops its in-memory
+  fields and delegates to the storage; fail-open on Redis errors; `getSnapshot()`
+  becomes async (reads Redis, safe CLOSED default on failure).
+
+Commit range: `43696ad..d3cc994` (2 implementation commits, plus this docs
+commit).
+
+### Added
+
+- `src/modules/qa/services/circuit-breaker-redis.storage.ts` — Redis-backed
+  storage with four Lua scripts:
+  - `EVALUATE_AND_ACQUIRE_PROBE_LUA` — prune window, gate via `SET NX` probe
+    token; returns `[state, acquiredProbe, retryAfterMs]`.
+  - `RECORD_FAILURE_LUA` — `ZADD` (unique member `${now}-${uuid}`), prune,
+    trip to OPEN on probe-failure or threshold breach.
+  - `RECORD_PROBE_SUCCESS_LUA` — full `DEL` reset to implicit-CLOSED.
+  - `READ_SNAPSHOT_LUA` — read-only diagnostics for `getSnapshot()`.
+  Every mutating script `PEXPIRE`s touched keys with
+  `max(windowMs, openDurationMs) × 4` so stale state self-expires.
+- `src/modules/qa/services/circuit-breaker-redis.storage.spec.ts` — 17 unit
+  tests (mocked `eval`: invocation shape + parse edge cases for all 4 ops).
+- `src/modules/qa/services/circuit-breaker-redis.storage.integration.spec.ts`
+  — 5 live-Redis tests (`describe.skip`; validated locally) covering the real
+  Lua state machine: CLOSED→OPEN, OPEN→HALF_OPEN after cool-down, single
+  probe, probe-success→CLOSED, probe-failure→OPEN.
+- `docs/ADR/0015-distributed-circuit-breaker-state.md`.
+
+### Changed
+
+- `src/modules/qa/services/circuit-breaker.service.ts` — removed in-memory
+  fields (`state`, `failureTimestamps`, `openedAt`, `halfOpenProbeInFlight`);
+  injects `CircuitBreakerRedisStorage`. `execute()` keeps its signature and
+  log shapes (`circuit_blocked`, `circuit_transition`); fail-open with WARN
+  `circuit_storage_failed action=fail_open` when Redis is unreachable.
+  `getSnapshot()` now async.
+- `src/modules/qa/services/circuit-breaker.service.spec.ts` — rewritten to
+  drive the public API with a mocked storage (15 behavioral tests); internal-
+  field assertions removed.
+- `src/modules/qa/qa.module.ts` — `CircuitBreakerRedisStorage` added to
+  providers.
+
+### Tests
+
+- Suite count: 25 → 27 (+2 — storage unit spec + storage integration spec).
+- Test count: 348 → 372 (+24: 13 storage unit Step 1, +4 readSnapshot Step 2,
+  +5 live integration, service spec net +2).
+- Active passing: 334 → 353 (+19).
+- ESLint clean on touched files; `nest build` clean. Live integration spec and
+  `READ_SNAPSHOT_LUA` validated against the docker Redis.
+
+### Adaptations from the inline plan
+
+- `evaluateAndAcquireProbe` drops the unused `failureThreshold` param (only
+  `recordFailure` needs it).
+- `recordProbeSuccess` fully `DEL`s all five keys (implicit-CLOSED baseline)
+  instead of `SET state=CLOSED` + `state_changed_at` — no lingering key, no
+  TTL argument needed.
+- The `SET NX` probe token gates BOTH "OPEN cooled down" and "already
+  HALF_OPEN", so a non-probe caller is reported as OPEN (blocked), never
+  HALF_OPEN. The live integration test caught the plan's gap where a 2nd
+  concurrent caller in HALF_OPEN would have wrongly proceeded.
+- `ResilientLlmService`, `RetryPolicyService`, `QaChainService`,
+  `PromptSanitizationService`, `OutputValidationService` all unchanged.
+
 ## [Phase 1.7 Sprint Rate-Limit] — Redis-backed per-IP rate limiting — 2026-06-01
 
 Two-step sprint adding production-grade per-IP rate limiting to the API
