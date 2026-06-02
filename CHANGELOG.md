@@ -63,6 +63,16 @@ commit).
   qa-chain integration). 19 skipped unchanged.
 - `tsc --noEmit` clean; ESLint clean on touched files.
 
+### Hotfixes
+
+- Redis client `commandTimeout` configurable (`REDIS_COMMAND_TIMEOUT_MS`,
+  default 2000ms) so a connected-but-unresponsive Redis (hang/pause/partition)
+  triggers existing fail-open paths instead of blocking indefinitely. Surfaced
+  during Sprint Cache validation (`docker pause` → 30s hang → HTTP 000; after
+  the fix → fail-open success). The timeout lives on the shared `RedisService`
+  client, so it protects every Redis layer (throttler, lock, circuit, cache) at
+  once. +1 unit test (385 → 386).
+
 ## [Phase 1.7.5 Sprint Distributed-Breaker] — Redis-backed circuit breaker state — 2026-06-02
 
 Migrates `CircuitBreakerService` state from in-process memory to Redis so a

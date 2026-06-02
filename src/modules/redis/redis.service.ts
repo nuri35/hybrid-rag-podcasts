@@ -43,6 +43,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       password: password.length > 0 ? password : undefined,
       db: configService.get('REDIS_DB', { infer: true }),
       connectTimeout: configService.get('REDIS_CONNECTION_TIMEOUT_MS', { infer: true }),
+      // Per-command timeout — a connected-but-unresponsive Redis (pause /
+      // partition / host stall) would otherwise leave commands hanging
+      // forever, bypassing every fail-open path. With this, a hung command
+      // rejects so the caller's catch/fail-open engages. See sprint-cache
+      // validation report (2026-06-02).
+      commandTimeout: configService.get('REDIS_COMMAND_TIMEOUT_MS', { infer: true }),
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
       lazyConnect: true,

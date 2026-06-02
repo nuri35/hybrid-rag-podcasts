@@ -79,6 +79,12 @@ export const envSchema = z.object({
   REDIS_PASSWORD: z.string().default(''),
   REDIS_DB: z.coerce.number().int().min(0).max(15).default(0),
   REDIS_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(5000),
+  // Per-command timeout. A connected-but-unresponsive Redis (docker pause,
+  // network partition, host stall) leaves ioredis commands hanging forever
+  // without this — which bypasses every Redis fail-open path in the codebase.
+  // 2s converts a hang into a thrown error so the existing catch/fail-open
+  // logic engages. See sprint-cache validation report (2026-06-02).
+  REDIS_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(2000),
 
   // Ingestion lock (Phase 1.7.5 Sprint A) — 2 h TTL is the safety net for
   // a crashed-mid-ingest process; the in-flight worker refreshes every

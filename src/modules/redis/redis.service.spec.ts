@@ -54,6 +54,7 @@ function makeConfigService(): ConfigService<Env, true> {
     REDIS_PASSWORD: '',
     REDIS_DB: 0,
     REDIS_CONNECTION_TIMEOUT_MS: 5000,
+    REDIS_COMMAND_TIMEOUT_MS: 2000,
   };
   return {
     get: jest.fn((key: keyof Env) => values[key]),
@@ -74,6 +75,18 @@ describe('RedisService', () => {
     });
     // quit() is invoked in onModuleDestroy at teardown; keep the resolved default.
     mockRedis.quit.mockResolvedValue('OK');
+  });
+
+  describe('client construction', () => {
+    it('constructs the ioredis client with commandTimeout from config', () => {
+      // A connected-but-unresponsive Redis (docker pause / partition) leaves
+      // commands hanging forever without a per-command timeout, which bypasses
+      // every fail-open path. commandTimeout converts the hang into an error.
+      const calls = (Redis as unknown as jest.Mock).mock.calls as Array<
+        [{ commandTimeout?: number }]
+      >;
+      expect(calls[0][0].commandTimeout).toBe(2000);
+    });
   });
 
   describe('ping', () => {

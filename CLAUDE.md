@@ -24,7 +24,7 @@ A hybrid RAG (vector + graph) Q&A system over podcast transcripts. Built as a po
 - **Generation model:** `gpt-4o-mini` (configurable via env)
 - **Schema validation:** Zod (LLM outputs) + class-validator (HTTP DTOs)
 - **CLI:** nest-commander
-- **Coordination / cache:** Redis via ioredis (Phase 1.7.5 Sprint A — ingestion lock, integrity marker, rate-limit counters; Sprint Cache — LLM response cache)
+- **Coordination / cache:** Redis via ioredis (Phase 1.7.5 Sprint A — ingestion lock, integrity marker, rate-limit counters; Sprint Cache — LLM response cache). **Client uses a 2s `commandTimeout` (`REDIS_COMMAND_TIMEOUT_MS`) — a connected-but-unresponsive Redis (hang/pause/partition) converts to a thrown error and engages the existing fail-open paths instead of blocking indefinitely (surfaced by Sprint Cache validation 2026-06-02).**
 - **Rate limiting:** `@nestjs/throttler` with a custom Redis-backed storage (Phase 1.7 Sprint Rate-Limit)
 - **Testing:** Jest (unit + e2e)
 - **Evaluation:** Ragas-equivalent metrics via LangChain.js evaluation tools (Phase 2)
