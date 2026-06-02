@@ -53,7 +53,7 @@ describe.skip('VectorRetrieverService (integration — requires Chroma + GOOGLE_
       expect(chunk.metadata).toHaveProperty('episode_id');
     });
     // Visual inspection aid — scores should be descending and meaningfully > 0.
-    // eslint-disable-next-line no-console
+
     console.log(
       `Top 5 (consciousness): ${chunks.map((c) => `${c.id}=${c.score.toFixed(4)}`).join(', ')}`,
     );
@@ -70,7 +70,7 @@ describe.skip('VectorRetrieverService (integration — requires Chroma + GOOGLE_
     chunks.forEach((chunk) => {
       expect(chunk.score).toBeGreaterThanOrEqual(threshold);
     });
-    // eslint-disable-next-line no-console
+
     console.log(
       `AI w/ threshold=${threshold}: kept ${chunks.length}/10, ` +
         `score range=[${chunks[chunks.length - 1]?.score.toFixed(4)}, ${chunks[0]?.score.toFixed(4)}]`,
@@ -83,7 +83,7 @@ describe.skip('VectorRetrieverService (integration — requires Chroma + GOOGLE_
     const duration = Date.now() - start;
 
     expect(chunks.length).toBeGreaterThan(0);
-    // eslint-disable-next-line no-console
+
     console.log(`Latency (deep learning, topK=5): ${duration}ms`);
     expect(duration).toBeLessThan(1000);
   }, 30_000);
@@ -96,7 +96,6 @@ describe.skip('VectorRetrieverService (integration — requires Chroma + GOOGLE_
     const relevantKeywords = ['neural', 'network', 'learn', 'training', 'weight', 'gradient'];
     const matched = relevantKeywords.filter((kw) => topDoc.includes(kw));
 
-    // eslint-disable-next-line no-console
     console.log(
       `Neural-net top match: id=${chunks[0].id}, score=${chunks[0].score.toFixed(4)}, ` +
         `keywords matched=[${matched.join(', ')}]`,
@@ -104,7 +103,6 @@ describe.skip('VectorRetrieverService (integration — requires Chroma + GOOGLE_
     // Soft assertion — log only, do not fail the test on a single retrieval
     // miss. Phase 1.8 golden-questions harness will do strict validation.
     if (matched.length === 0) {
-      // eslint-disable-next-line no-console
       console.warn(
         `⚠️ no neural-net keyword found in top doc; review whether the dataset / cleaning is healthy`,
       );

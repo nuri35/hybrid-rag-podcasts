@@ -154,7 +154,7 @@ export class EmbedderService {
         return;
       }
       rejected += 1;
-      const reason = outcome.reason;
+      const reason: unknown = outcome.reason;
       const raw = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
       const truncated = raw.length > STACK_LOG_MAX ? `${raw.slice(0, STACK_LOG_MAX)}…` : raw;
       this.logger.error(`Batch ${batchIdx} failed after retries: ${truncated}`);

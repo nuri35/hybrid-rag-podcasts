@@ -1,15 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { Runnable } from '@langchain/core/runnables';
+import type { Runnable } from '@langchain/core/runnables';
 import { EmbedderService } from '../ingestion/services/embedder.service';
-import {
-  ChromaRepository,
-  type SimilarityResult,
-} from '../vector-store/chroma.repository';
-import {
-  ChromaUnreachableException,
-} from '../vector-store/exceptions';
+import { ChromaRepository, type SimilarityResult } from '../vector-store/chroma.repository';
+import { ChromaUnreachableException } from '../vector-store/exceptions';
 import { EmbeddingFailedException } from '../../common/exceptions';
 import {
   EmptyQueryException,
@@ -348,9 +343,7 @@ describe('VectorRetrieverService', () => {
       const embedder = makeMockEmbedder();
       const chroma = makeMockChroma();
       embedder.embedQuery.mockResolvedValue([0.1]);
-      chroma.similaritySearch.mockRejectedValue(
-        new Error('API key starts with AIza_TEST'),
-      );
+      chroma.similaritySearch.mockRejectedValue(new Error('API key starts with AIza_TEST'));
       const { service } = await buildService({}, embedder, chroma);
 
       const caught = await service.retrieve('valid query').catch((e: unknown) => e);
@@ -498,13 +491,13 @@ describe('VectorRetrieverService', () => {
     const embedder = makeMockEmbedder();
     const chroma = makeMockChroma();
     embedder.embedQuery.mockResolvedValue([0.1]);
-    chroma.similaritySearch.mockResolvedValue([
-      fakeSearchResult('ep_001_chunk_0', 0.9, 'doc', 0),
-    ]);
+    chroma.similaritySearch.mockResolvedValue([fakeSearchResult('ep_001_chunk_0', 0.9, 'doc', 0)]);
     const { service } = await buildService({}, embedder, chroma);
 
-    const runnable: Runnable<string, ReturnType<typeof service.retrieve> extends Promise<infer R> ? R : never> =
-      service.toRunnable({ topK: 1 });
+    const runnable: Runnable<
+      string,
+      ReturnType<typeof service.retrieve> extends Promise<infer R> ? R : never
+    > = service.toRunnable({ topK: 1 });
     const result = await runnable.invoke('valid query');
 
     expect(result).toHaveLength(1);

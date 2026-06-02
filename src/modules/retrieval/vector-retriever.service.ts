@@ -3,14 +3,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RunnableLambda, type Runnable } from '@langchain/core/runnables';
 import { EmbedderService } from '../ingestion/services/embedder.service';
-import {
-  ChromaRepository,
-  type SimilarityResult,
-} from '../vector-store/chroma.repository';
-import {
-  ChromaUnreachableException,
-  ChromaWriteFailedException,
-} from '../vector-store/exceptions';
+import { ChromaRepository, type SimilarityResult } from '../vector-store/chroma.repository';
+import { ChromaUnreachableException, ChromaWriteFailedException } from '../vector-store/exceptions';
 import { EmbeddingFailedException } from '../../common/exceptions';
 import {
   EmptyQueryException,
@@ -67,10 +61,7 @@ export class VectorRetrieverService implements IRetriever {
     this.maxQueryLength = config.get('RETRIEVAL_MAX_QUERY_LENGTH', { infer: true });
   }
 
-  async retrieve(
-    query: string,
-    options: RetrievalOptions = {},
-  ): Promise<RetrievedChunk[]> {
+  async retrieve(query: string, options: RetrievalOptions = {}): Promise<RetrievedChunk[]> {
     const startTime = Date.now();
 
     this.validateQuery(query);
@@ -201,9 +192,7 @@ export class VectorRetrieverService implements IRetriever {
   private validateAndResolveTopK(topK?: number): number {
     if (topK === undefined) return this.defaultTopK;
     if (!Number.isInteger(topK) || topK < 1) {
-      throw new InvalidRetrievalOptionsException(
-        `topK must be a positive integer (got ${topK})`,
-      );
+      throw new InvalidRetrievalOptionsException(`topK must be a positive integer (got ${topK})`);
     }
     if (topK > this.maxTopK) {
       throw new InvalidRetrievalOptionsException(
