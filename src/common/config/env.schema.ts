@@ -83,6 +83,11 @@ export const envSchema = z.object({
   // Ingestion lock (Phase 1.7.5 Sprint A) — 2 h TTL is the safety net for
   // a crashed-mid-ingest process; the in-flight worker refreshes every
   // 5 min so the lock never naturally expires while work is ongoing.
+  // Response cache (Phase 1.7.5 Sprint Cache) — TTL for cached non-streaming
+  // QA answers. Secondary safety net beyond the ingestion-timestamp segment
+  // in the cache key (which already invalidates on re-ingestion). 1 h default.
+  CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(3600),
+
   INGESTION_LOCK_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(7200),
   INGESTION_LOCK_REFRESH_INTERVAL_MS: z.coerce
     .number()

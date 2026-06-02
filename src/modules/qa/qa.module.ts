@@ -9,6 +9,7 @@ import { CircuitBreakerRedisStorage } from './services/circuit-breaker-redis.sto
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { OutputValidationService } from './services/output-validation.service';
 import { PromptSanitizationService } from './services/prompt-sanitization.service';
+import { QaResponseCacheService } from './services/qa-response-cache.service';
 import { ResilientLlmService } from './services/resilient-llm.service';
 import { RetryPolicyService } from './services/retry-policy.service';
 import { TokenUsageService } from './services/token-usage.service';
@@ -47,6 +48,7 @@ import { TokenUsageService } from './services/token-usage.service';
     TokenUsageService,
     PromptSanitizationService,
     OutputValidationService,
+    QaResponseCacheService,
   ],
   exports: [
     QaChainService,
