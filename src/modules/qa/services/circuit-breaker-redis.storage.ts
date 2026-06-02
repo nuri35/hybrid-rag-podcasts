@@ -48,6 +48,13 @@ export interface ProbeAcquisitionResult {
   retryAfterMs: number;
 }
 
+export interface CircuitStateSnapshot {
+  state: CircuitState;
+  failureCount: number;
+  openedAtMs: number | null;
+  lastFailureAtMs: number | null;
+}
+
 /**
  * Read state, prune the failure window, and decide whether the caller may
  * proceed. The probe token (SET NX) is the single-flight gate:
@@ -168,6 +175,27 @@ end
 return 'CLOSED'
 `;
 
+/**
+ * Read-only snapshot for diagnostics / health: prune the window, then return
+ * [state, failureCount, openedAt|'0', lastFailureScore|'0']. Does not mutate
+ * state beyond the standard window prune.
+ */
+export const READ_SNAPSHOT_LUA = `
+local now = tonumber(ARGV[1])
+local windowMs = tonumber(ARGV[2])
+redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now - windowMs)
+
+local state = redis.call('GET', KEYS[1]) or 'CLOSED'
+local failureCount = redis.call('ZCARD', KEYS[2])
+local openedAt = redis.call('GET', KEYS[3]) or '0'
+
+local lastScore = '0'
+local last = redis.call('ZRANGE', KEYS[2], -1, -1, 'WITHSCORES')
+if last[2] ~= nil then lastScore = last[2] end
+
+return {state, failureCount, openedAt, lastScore}
+`;
+
 @Injectable()
 export class CircuitBreakerRedisStorage {
   constructor(private readonly redisService: RedisService) {}
@@ -214,6 +242,15 @@ export class CircuitBreakerRedisStorage {
     await this.redisService.eval(RECORD_PROBE_SUCCESS_LUA, CIRCUIT_KEYS, []);
   }
 
+  async readSnapshot(windowMs: number): Promise<CircuitStateSnapshot> {
+    const now = Date.now();
+    const raw = await this.redisService.eval(READ_SNAPSHOT_LUA, CIRCUIT_KEYS, [
+      String(now),
+      String(windowMs),
+    ]);
+    return this.parseSnapshot(raw);
+  }
+
   private computeTtlMs(windowMs: number, openDurationMs: number): number {
     return Math.max(windowMs, openDurationMs) * 4;
   }
@@ -234,5 +271,24 @@ export class CircuitBreakerRedisStorage {
       return raw;
     }
     return CircuitState.CLOSED;
+  }
+
+  private parseSnapshot(raw: unknown): CircuitStateSnapshot {
+    if (!Array.isArray(raw) || raw.length < 4) {
+      return {
+        state: CircuitState.CLOSED,
+        failureCount: 0,
+        openedAtMs: null,
+        lastFailureAtMs: null,
+      };
+    }
+    const openedAt = Number(raw[2]);
+    const lastFailure = Number(raw[3]);
+    return {
+      state: this.parseState(raw[0]),
+      failureCount: Number(raw[1]) > 0 ? Number(raw[1]) : 0,
+      openedAtMs: openedAt > 0 ? openedAt : null,
+      lastFailureAtMs: lastFailure > 0 ? lastFailure : null,
+    };
   }
 }

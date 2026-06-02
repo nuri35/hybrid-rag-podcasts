@@ -4,6 +4,7 @@ import {
   CIRCUIT_KEYS,
   CircuitBreakerRedisStorage,
   EVALUATE_AND_ACQUIRE_PROBE_LUA,
+  READ_SNAPSHOT_LUA,
   RECORD_FAILURE_LUA,
   RECORD_PROBE_SUCCESS_LUA,
 } from './circuit-breaker-redis.storage';
@@ -159,6 +160,55 @@ describe('CircuitBreakerRedisStorage', () => {
     it('resolves without throwing when the circuit is already CLOSED (no-op path)', async () => {
       redis.eval.mockResolvedValueOnce('CLOSED');
       await expect(storage.recordProbeSuccess()).resolves.toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // readSnapshot
+  // ---------------------------------------------------------------
+  describe('readSnapshot', () => {
+    it('invokes EVAL with the read-snapshot script, 5 keys, and [now, windowMs]', async () => {
+      redis.eval.mockResolvedValueOnce(['CLOSED', 0, '0', '0']);
+      await storage.readSnapshot(WINDOW_MS);
+
+      const [script, keys, args] = lastCall();
+      expect(script).toBe(READ_SNAPSHOT_LUA);
+      expect(keys).toEqual(CIRCUIT_KEYS);
+      expect(args[0]).toMatch(/^\d+$/);
+      expect(args[1]).toBe(String(WINDOW_MS));
+    });
+
+    it('parses a populated OPEN snapshot', async () => {
+      redis.eval.mockResolvedValueOnce(['OPEN', 3, '1000000', '1000500']);
+      const snap = await storage.readSnapshot(WINDOW_MS);
+      expect(snap).toEqual({
+        state: CircuitState.OPEN,
+        failureCount: 3,
+        openedAtMs: 1_000_000,
+        lastFailureAtMs: 1_000_500,
+      });
+    });
+
+    it('maps zero/absent timestamps to null', async () => {
+      redis.eval.mockResolvedValueOnce(['CLOSED', 0, '0', '0']);
+      const snap = await storage.readSnapshot(WINDOW_MS);
+      expect(snap).toEqual({
+        state: CircuitState.CLOSED,
+        failureCount: 0,
+        openedAtMs: null,
+        lastFailureAtMs: null,
+      });
+    });
+
+    it('defends against a malformed Redis return (safe CLOSED default)', async () => {
+      redis.eval.mockResolvedValueOnce(null);
+      const snap = await storage.readSnapshot(WINDOW_MS);
+      expect(snap).toEqual({
+        state: CircuitState.CLOSED,
+        failureCount: 0,
+        openedAtMs: null,
+        lastFailureAtMs: null,
+      });
     });
   });
 });
