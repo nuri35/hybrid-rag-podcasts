@@ -1,0 +1,9 @@
+# Evaluation tooling dependencies (Phase 2) — dev-time only, never a runtime dependency.
+# Pinned to the Chroma server version in docker-compose (0.5.23) so the Python
+# client speaks the same HTTP API generation (v1) as the server; chromadb 1.x
+# clients use the v2 API and cannot talk to a 0.5.x server.
+chromadb==0.5.23
+# chromadb 0.5.x calls posthog's old capture() signature; posthog 6.x changed
+# the API and spams "Failed to send telemetry event" warnings on every client
+# creation. Pin below 6 to keep stderr clean.
+posthog<6

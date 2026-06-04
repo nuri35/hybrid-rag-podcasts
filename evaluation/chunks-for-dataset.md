@@ -1,0 +1,437 @@
+# Chunks for Golden Dataset
+
+## Episode 269 — Origin of Life, Aliens, Complexity, and Consciousness (guest: Lee Cronin)
+
+### Chunk 269_chunk_303
+
+you tweeted it's state machines all the way down, which presumably is the origin story of this discussion. And then Joscha said, again, nudging, nudging, nudging slash trolling, Joscha said, you've seen the light, welcome friend. Many foundational physicists effectively believe in some form of hyper computation. Lee is coming around to this idea. And then you said, I think there are notable differences. First, I think the universe does not have to be a computer. Second, I want to understand how the universe emerges, constructors that build computers. And third is that there is something below church touring. Okay, what the heck is this dinner conversation about? Maybe put another way, maybe zooming out a little bit. Are there interesting agreements or disagreements between you and Joscha
+
+### Chunk 269_chunk_304
+
+zooming out a little bit. Are there interesting agreements or disagreements between you and Joscha Bach that can elucidate some of the other topics we've been talking about? Yeah, so Jascha has an incredible mind and he has, he's so well read and uses language really elegantly. It bamboozles me at times. So I'm, so often I'm using, I'm describing concepts in a way that I built from the ground up. And so we misunderstand each other a lot. And he's floating in the clouds, is that what you're saying? Something like, not quite, but I think, so this concept of a Turing machine. So a Turing machine, Turing machines, I would argue, and I think this is not, the Turing machine, the universe is not a Turing machine. Biology is not even a Turing machine, right? And because Turing machines don't
+
+### Chunk 269_chunk_305
+
+a Turing machine. Biology is not even a Turing machine, right? And because Turing machines don't evolve, right? There is this problem that people see Turing machines everywhere, but isn't it interesting the universe gave rise to biology that gave rise to intelligence, that gave rise to Alan Turing, who invented the abstraction of the Turing machine and allowed us to digitize. And so I've been looking for the mystery at the origin of life, the origin of intelligence and the origin of this. And I, when I discussed with Yasha, I think Yasha, he was saying, well, the universe, of course the universe is a Turing machine. Of course there's a hyper computer there. And I think we got kind of trapped in our words and terms because of course it's possible for a Turing machine or computers to exist
+
+### Chunk 269_chunk_306
+
+in our words and terms because of course it's possible for a Turing machine or computers to exist in the universe. We have them. But what I'm trying to understand is where did the transition of continuous discrete occur? And I've been, and this is because of my general foolishness of understanding the continuous. But I guess what I'm trying to say is there were constructors before there were abstractors because how did the universe abstract itself into existence? And it goes back to earlier saying, could the universe of intelligence have come first? What's a constructor, what's an abstractor? So the abstractor is the ability of say, of Alan Turing and Gödel and Church to think about the mathematical universe and to label things. And then from those labels to come up with a set of axioms
+
+### Chunk 269_chunk_307
+
+universe and to label things. And then from those labels to come up with a set of axioms with those labels and to basically understand the universe mathematically and say, okay, I can label things. Where did the labeler come from? Where is the prime labeler? Even if the universe is not a Turing computer, does that negate the possibility that a Turing computer can simulate the universe? Just because the abstraction was formed at a later time, does that mean that abstraction, this is to our cellular automata conversation. You were taking away some of the magic from the cellular automata because very intelligent biological systems came up with that cellular automata. Well, this is where the existence is the default, right? Is it, does the fact that we exist and we can come up with a Turing
+
+### Chunk 269_chunk_308
+
+is the default, right? Is it, does the fact that we exist and we can come up with a Turing machine, does that mean the universe has to be a Turing machine as well? But can it be a Turing machine though? That's a, so the has to be and the can it be. Can it be? Sure. I don't know, I don't understand if it has to be or not, can it be? But can the universe have Turing machines in it? Sure, they exist now. I'm wondering though, maybe, and this is where things get really hairy, is I think the universe maybe in the past did not have the computational power that it has now. This is almost like a law of physics kind of, so the computational power is not, you can get some free lunch. Yeah, I mean, the fact that we now, we sit here in this period in time and we can imagine all these robots and all
+
+### Chunk 269_chunk_309
+
+fact that we now, we sit here in this period in time and we can imagine all these robots and all these machines and we built them. And so we can easily imagine going back in time that the universe was capable of having them, but I don't think it can. So the universe may have been a lot dumber computationally. And I think that's why, I don't want to go back to the time discussion, but I think it has some relationship with it. The universe is basically smarter now than it used to be and it's going to continue getting smarter over time because of novelty, generation, and the ability to create objects within objects within objects. You know, there's a, perhaps it's grounded in physics, there's this intuition of conservation. Yeah. That stuff is conserved. Like you're not, you've always had
+
+### Chunk 269_chunk_310
+
+this intuition of conservation. Yeah. That stuff is conserved. Like you're not, you've always had all, everything, you're just rearranging books on the bookshelf through time. So, okay. But you're saying like new books are being written. Which laws do you want to break? At the origin of the big bang, you had to break the second law because we got order for free. Yeah. Well, what I'm telling you now is that the energy isn't conserved in the universe. Oh, it's the second law. Okay. I got you. So because, but not in a mad way. Okay. So computation potentially is not conserved, which is a fascinating idea. Intelligence is not conserved. Complexity is not conserved. I suppose that's deeply connected to time being fundamental. The natural consequence of that is if time is fundamental and the
+
+### Chunk 269_chunk_311
+
+to time being fundamental. The natural consequence of that is if time is fundamental and the universe is inflating in time, if you like, then there are one or two conservation laws that we need to have a look at. And I wonder if that means the total energy of the universe is actually increasing over time. And this may be completely ludicrous, but we do have all this dark energy. We have some anomalies, let's say, dark matter and dark energy. If we don't add them in, galaxies, so dark matter, I think doesn't hold. You need to hold the galaxies together and there's some other observational issues. Could dark energy just be time? So figuring out what dark energy is might give us some deep clues about this, not just time, but the consequences of time. So it could be that, I mean, I'm not
+
+### Chunk 269_chunk_312
+
+clues about this, not just time, but the consequences of time. So it could be that, I mean, I'm not saying there's perpetual motions allowed and it's free lunch, but I'm saying if the universe is intrinsically asymmetric and it appears to be, and it's generating novelty and it appears to, couldn't that just be mechanistically how reality works? And therefore I don't really like this idea that the, so I want to live in a deterministic universe that is undetermined, right? The only way I can do that is if time is fundamental. Because otherwise it's all the rest of us, it's just sleight of hand because the physicists will say, yes, everything's deterministic. Newtonian mechanics is deterministic. Quantum mechanics is deterministic. Let's take the Everettian view. And then basically we can
+
+### Chunk 269_chunk_313
+
+Quantum mechanics is deterministic. Let's take the Everettian view. And then basically we can just draw out this massive universe branching, but it closes again and we get it all back. And don't worry, your feeling of free will is effective. But what the physicists are actually saying is the entire future is mapped out. And that is clearly problematical. And clearly. That's not so clear. Yeah. It's just problematic. Well, yeah, yeah, so it's. Because that maybe is just the way it is. It's problematic to you, a particular creature along this timeline. I want to reduce the number of beliefs I need to understand the universe. So if time is fundamental, I don't need to have magic order at the beginning, and I don't need a second law. But you do need the magical belief that time is
+
+### Chunk 269_chunk_314
+
+at the beginning, and I don't need a second law. But you do need the magical belief that time is fundamental. Well, I need the observation that I'm seeing to be just how it is all the way down. But the Earth also looks flat if you agree with your observation. So we can't necessarily trust our observation. I know the Earth isn't flat because I can send a satellite into space. No, but now you see, now you're using the tools of science and the technology of science. But I'm saying I'm going to do experiments that start to show. I mean, I think that it's worth. So if you can't, so if I cannot do an experiment or a thought experiment that will test this assumption, then the assumption is without merit really in the end. You know, that's fine. Yeah. That's a beautiful ideal you hold yourself
+
+## Episode 220 — New York Firefighters and the Heroes of 9/11 (guest: Niels Jorgensen)
+
+### Chunk 220_chunk_20
+
+of daily events. Everything that takes place in the firehouse 24 seven has to be logged. And I logged myself as coming in, reporting for duty. And as the guys came in, I logged them in. And then one of our lieutenants took command. We grabbed up a bunch of gear, and they basically told us, get 12 guys, get a city bus, and get down to the battery tunnel they said would probably be closed. There was threats it was going to be blown up to get to the Brooklyn Bridge. And so we did. We got a city bus. We flagged it down, and the bus driver said, I'm sorry. I can't give you the bus. I will drive you. And he took us, and we stopped at Engine 201, which is just about a quarter mile down the road from us. That's our affiliated engine company, and my childhood best friend here, Johnny Schardt, he
+
+### Chunk 220_chunk_21
+
+us. That's our affiliated engine company, and my childhood best friend here, Johnny Schardt, he was assigned there, and he was on shift. And then they went through the tunnel. And we picked up those guys, the off duty guys from 201, and then we kept going down Fourth Avenue, and we picked up 239's crew. And then we hightailed it down the bridge, and there was a lot of traffic. There was a lot of people fleeing, coming over the bridge in waves, so it affected the inbound. What was the mood like among the crew? It was somber, because just prior to getting on the bus, the first tower went down. So we figured that I heard 114, my lieutenant, Dennis Oberg, heard him on the radio. And he said, 114, Manhattan, we're on your frequency. What do you need us? And they said, Tally Ho, which is our
+
+### Chunk 220_chunk_22
+
+114, Manhattan, we're on your frequency. What do you need us? And they said, Tally Ho, which is our nickname. Tally Ho, respond to the Vessian West to the command post and receive your orders. And I heard Dennis say, Tally Ho, 10 4. And Dennis, a little while after that, they were proceeding to go into, I believe it was, I get this mixed up, and I'm sorry. I should know this by the back of my hand, but sometimes it's just such a haze. But the second tower hit was the first one to go down. And they were heading over to go in it. And all of a sudden, he looked up, and he saw what he thought to be disintegration. And he turned the guys around. He said, run. Just run. Don't look back. Don't look up. Go. They sprinted as fast as they could. And they dove under a fire truck. And the guys that
+
+### Chunk 220_chunk_23
+
+up. Go. They sprinted as fast as they could. And they dove under a fire truck. And the guys that were sprinting behind him 40 feet away were underneath a pile that was 10 stories deep. They were killed. And just further into that pile was his rookie son, Dennis's rookie son, who was working in Ladder 105, which was my first command under the department. I worked for it, proudly served for three years. And just aside them was my childhood best friend, John Chard, and his crew from 201. And they were all killed. And a strange irony to that is that Dennis's son, Dennis Jr., was working underneath, under the wing of a senior man, as we say. A senior man is a guy with a lot of experience. And he'll watch over you, make sure you don't veer off, like I veer off a lot in talking. And you don't
+
+### Chunk 220_chunk_24
+
+he'll watch over you, make sure you don't veer off, like I veer off a lot in talking. And you don't veer off, and you get yourself hurt. In the morning of 1993 bombing, Henry Miller was my senior man. And I was the young guy under his wing. And he protected me. And toward the end of the day, he looked around. He said, kid, it's a bad day. He said, they didn't do it right. They blew it up in the middle. If they did it in a corner, they would have dropped this building half a mile down at Canal Street. But don't kid yourself. They'll be back, and they'll do it. And they'll do it right next time. And it's so strange and so prophetic, because he was there with them. He died with Dennis. He knew it. And like 1994, we had a training manual with a picture of the towers with a target. And this is
+
+### Chunk 220_chunk_25
+
+it. And like 1994, we had a training manual with a picture of the towers with a target. And this is not a matter of if, but a matter of when, be prepared. And it's haunting. It was like people knew, right? And we didn't stop it. And so we got off the bus, but just prior to that, coming over the bridge of the second tower, it's gone now. And we're just destroyed, because we're like, our guys are there. They're all in there. Now we're feeling like cowards, because we got there late. And initially, we're thinking there's 500 guys that are gone, because there was a tent alarm assignment, which means 50, 60 fire trucks, five to six guys per, you know, you're looking at. At least there was even more tent alarm, plus multiple alarms on top of it. There was a dispatch, basically equivalent of
+
+### Chunk 220_chunk_26
+
+more tent alarm, plus multiple alarms on top of it. There was a dispatch, basically equivalent of five to 600 firefighters. We figured, oh, they're all in there, all gone. All the police officers, Port Authority police, NYPD police, court officers just up the street from the courts, transit cops from the train tunnels. Like, just, you know, we knew everybody was going there, and now they're gone. So what you saw, what were we looking at? What did it look like? So you saw rubble, and then you knew that many, that 105 and 201, many of those guys are in the, they're dead. Yeah, and we thought 114 was in there, too. We didn't realize at that point. We didn't even realize that they had gotten under that truck. We thought they were all gone. But yeah, it looked like, it looked like a movie
+
+### Chunk 220_chunk_27
+
+under that truck. We thought they were all gone. But yeah, it looked like, it looked like a movie scene with just end of the earth destruction. It's just massive piles of intertwined steel, what was left of the steel. And you know, there was no cement. It was all just dust. And it was just a burning pile of dust and concrete and plastic. And it was just, everything was just pulverized. And it was truly hard to mentally compute that. Like, it was like, what? And then there was just fighter jets, a couple of fighter jets just circling. And you just heard them flying by over your head. I mean, you'd literally see the guy banking a turn around a Brooklyn bridge and just coming back. And I'm like, holy shoot, we're under attack? And we couldn't really get concrete intel as to what exactly we
+
+### Chunk 220_chunk_28
+
+holy shoot, we're under attack? And we couldn't really get concrete intel as to what exactly we knew planes. But then we kept hearing there was multiple devices. There was devices in a battery tunnel. And there was devices on a George Washington bridge and in the subways. And it was just chaos. It was, I mean, we kept it together, obviously, because that's kind of, we try. That's what we do. But the just constant barrage of different reports, it was like, holy shoot. And then as we were being deployed, it was a little frustrating. But they were trying to take command and send us in groups now because they realized we have to start searching this. You could hear the alarms on the Scott Air Mask, the packs we wear to go into the building. It has a motion alarm. And if you stop moving for 30
+
+### Chunk 220_chunk_29
+
+the packs we wear to go into the building. It has a motion alarm. And if you stop moving for 30 seconds, it just sounds like this whining, just screaming bell. And it just keeps going and going. And you could hear multiple units of those going off. And you're like, wait a minute. There's guys with those. Where are they? And it's emanating from underneath the pile. And it was just surreal and truly like a war zone. I mean, I was a soldier in the reserves. And I never saw combat. And I would never claim that I did. But we trained. We trained for a lot of situations. And we trained in real life atmospheres and whatnot. And this was just beyond that by leaps and bounds. It was bizarre. Did you see the towers collapse? As we were coming over the bridge, the first one, as we were deploying from
+
+### Chunk 220_chunk_30
+
+the towers collapse? As we were coming over the bridge, the first one, as we were deploying from the firehouse, we had a television on. And I saw it go down. And we were so involved in getting gear together and getting teams set up and, OK, you're going to be with these two guys. And I just yelled, there's the guys. And they're looking at me. I dropped to my knees. And I started praying. They're like, what the hell's wrong? I said, I couldn't even say. I was like, 114, they're in there. And they're like, what? I said, the tower's gone. And all you saw on the TV was just this pile of dust. And I guess because they didn't see it going down, they probably thought I truly lost it. And then the realization came. It was like, wow, the tower's down. So now it was like, wow, this is really on. So
+
+### Chunk 220_chunk_31
+
+came. It was like, wow, the tower's down. So now it was like, wow, this is really on. So we just took off and got that boss. And so if you thought many of the guys on 114 were dead, if you thought that, did you think you were going to die? I mean, if you're rushing towards the rubble? As crazy as it sounds, I never thought that the other tower would go down. I said, OK, maybe some freak chance that one went down. But no, the other one's not going to go. They're built so strong. I was in those towers so many times. I mean, I ate dinner up in the top floor restaurant windows on the world. And I'm saying, nah, there's no way. Like, how the hell did this one happen? But I was having a hard time mentally processing that the building was gone. And believe me, if you don't have fear in this
+
+### Chunk 220_chunk_32
+
+time mentally processing that the building was gone. And believe me, if you don't have fear in this industry and police, fire, military, then you're kidding yourself or you're a danger to everyone. I don't care who it is, as tough as they are, this and that. Everybody has a certain level of fear with doing this. And I don't care how long you do it, there's always that chance of something going bad. And everyone who does it has that certain amount of fear. But at that point, it was such a feeling of disbelief that fear wasn't even kicking in. It was just like, what the hell just happened? And I honestly think it was almost like a shock. And it just stayed that whole day. So the building is, before it collapses, is burning. It's just burning. I mean, upper floors, up in the 78th, up to the
+
+## Episode 226 — How to Learn Math (guest: Jo Boaler)
+
+### Chunk 226_chunk_10
+
+Just like let's take whatever the heck we're looking at and draw it and draw like the pattern as it evolves, as the thing grows for N equals one, for N equals two, N equals three, you start to play with it. And then in the modern day, which I loved doing is, you can write a program that then visualizes it for you. And then you can start exploring it programmatically. And then you can do so interactively too. I tend to not like interactive because it takes way too much work because you have to click and move and stuff. I love to interact through writing programs, but that's my particular brain, software engineer. So like you can do all these kinds of visualizations and then there's the tools of visualization, like color, all of those kinds of things that you're absolutely right. They're
+
+### Chunk 226_chunk_11
+
+of visualization, like color, all of those kinds of things that you're absolutely right. They're actually not taught very much. Like the art of visualization. Not taught. And we love as well color coding. Like when you represent something mathematically, you can show color to show the growth and kind of code that. So if I have an algebraic expression for a pattern, maybe I show the X with a certain color, but also write in that color so you can see the relationship. Very cool. And yeah, particularly in our work with elementary teachers, many of them come to our workshops and they're literally in tears when they see things making sense visually because they've spent their whole lives not realizing you can really understand things with these visuals. It's quite powerful. You say that
+
+### Chunk 226_chunk_12
+
+realizing you can really understand things with these visuals. It's quite powerful. You say that there's something valuable to learning when the thing that you're doing is challenging, is difficult. So a lot of people say math is hard or math is too hard or too hard for me. Do you think math should be easy or should it be hard? I think it's great when things are challenging, but there's something that's really key to being able to deal with challenging maths and that is knowing that you can do it. And I think the problem in education is a lot of people have got this idea that you're either born with a maths brain or you're not. So when they start to struggle, they think, oh, I don't have that maths brain. And then they will literally sort of switch off in their brain and things will go
+
+### Chunk 226_chunk_13
+
+that maths brain. And then they will literally sort of switch off in their brain and things will go downhill from that point. So struggle becomes a lot easier and you're able to struggle if you don't have that idea, but you know that you can do it. You have to go through this struggle to get there, but you're able to do that. And so we're hampered in being able to struggle with these ideas we've been given about what we can do. Can I ask a difficult question here? Yeah. So there's kind of, I don't know what the right term is, but some people struggle with learning in different ways, like their brain is constructed in different ways. And how much should, as educators, should we make room for that? So how do you know the difference between this is hard and I don't like doing hard things
+
+### Chunk 226_chunk_14
+
+for that? So how do you know the difference between this is hard and I don't like doing hard things versus my brain is wired in a way where I need to learn in very different ways. I can't learn it this way. How do you find that line? How do you operate in that gray area? So this is why being a teacher is so hard and people really don't appreciate how difficult teaching is when you're faced with, I don't know, 30 students who think in different ways. So, but this is also why I believe it's so important to have this multi dimensional approach to maths. We've really offered it in one way, which is here's some numbers in a method. You follow me, do what I just did and then reproduce it. And so there are some kids who like doing that and they do well. And a lot of kids who don't like doing it
+
+### Chunk 226_chunk_15
+
+there are some kids who like doing that and they do well. And a lot of kids who don't like doing it and don't do well. But when you open up maths and you give, you let kids experience it in different ways, maybe visually with numbers, with words. What happens is kids, there are many more kids who can access it. So those different brain wirings you're talking about, where some people are just more able to do something in a particular way. That's why we want to, that's one of the reasons we want to open it up so that there are different ways of accessing it. And then that's not really a problem. So I grew up in the Soviet Union and fell in love with math early. I was forced into math early and fell in love through force. That's good. Well, good that you fell in love about the force. Well,
+
+### Chunk 226_chunk_16
+
+fell in love through force. That's good. Well, good that you fell in love about the force. Well, but something we talked about a little bit is there is such a value for excellence. It's competitive and it's also everybody kind of looks up the definition of success is being in a particular class is being really good at it. And like, it's not improving. It's like being really good. I mean, we are much more like that with sports, for example. We're not, it's like, it's understood, you're going to star on the basketball team if you're gonna start on the basketball team if you're going to be better than the other guys, the other girls on the team. So that coupled with the belief, this could be partially a communist belief, I don't know, but the belief that everybody is capable of being great.
+
+### Chunk 226_chunk_17
+
+a communist belief, I don't know, but the belief that everybody is capable of being great. But if you're not great, that's your fault and you need to work harder. And I remember I had a sense that probably delusional, but I could win a Nobel prize. I don't even know what that entails. But I thought, like my dad early on told me just offhand and it always stuck with me that if you can figure out how to build a time machine, how to travel back in time, it will probably give you a Nobel prize. And I remember early in my life thinking I'm going to invent the time machine. And like the tools of mathematics were in service of that dream of winning the Nobel prize. It's silly. I didn't really think in those concrete terms, but I just thought I could be great at feeling. And then when you
+
+### Chunk 226_chunk_18
+
+think in those concrete terms, but I just thought I could be great at feeling. And then when you struggle, the belief that you could be great is like, struggle is good. Right, pushes you on, yeah. And so the other thing about the Soviet system that I'd love to hear your comments about is just the sheer like hours of math. Like the number of courses, you're talking about a lot of geometry, a lot more geometry. I think in the American system, you take maybe one year of geometry. In high school, yeah. In high school. First of all, geometry is beautiful, it's visual. And then you get to reason through proofs and stuff like that. In Russia, I remember just being nailed over and over with geometry. It was just nonstop. And then of course there's different perspectives on calculus and just the
+
+### Chunk 226_chunk_19
+
+It was just nonstop. And then of course there's different perspectives on calculus and just the whole, the sense was that math is like fundamental to the development of the human mind. So math, but also science and literature, by the way, was also hit very hard. Like we read a lot of serious adult stuff. America does that a little bit too. They challenge young adults with good literature, but they don't challenge adults very much with math. So those two things, valuing excellence and just a lot of math in the curriculum. Do you think, do you find that interesting? Because it seems to have been successful. Yeah, I think that's very interesting. And there is a lot of success, people coming through the Soviet system. I think something that's very different to the US and other countries in
+
+### Chunk 226_chunk_20
+
+through the Soviet system. I think something that's very different to the US and other countries in the world is that idea that excellence is important and you can get there if you work hard. In the US, there's an idea that excellence is important, but then kids are given the idea in many ways that you can either do it or you're one of the people who can't. So many students in the school system think they're one of the kids who can't. So there's no point in trying hard because you're never going to get there. So if you can switch that idea, it would be huge. And it seems from what you've said that in the Soviet Union, that idea is really different. Now, the downside of that idea that anybody can get there if you work hard is that thought that if you're not getting there, it's your fault.
+
+### Chunk 226_chunk_21
+
+can get there if you work hard is that thought that if you're not getting there, it's your fault. And I would add something into that. I would say that anybody can get there, but they need to work hard and they also need good teaching because there are some people who really can't get there because they're not given access to that good teaching. So, but that would be huge, that change. As to doing lots of maths, if maths was interesting and open and creative and multi dimensional, I would be all for it. We actually run summer camps at Stanford where we invite kids in and we give them this maths that I love. And in our camp classrooms, they were three hours long. And when we were planning, the teachers were like three hours, are we going to be able to keep the kids excited for three hours?
+
+### Chunk 226_chunk_22
+
+teachers were like three hours, are we going to be able to keep the kids excited for three hours? Turned out they didn't want to go to break or lunch. They'd be so into these mathematical patterns. We couldn't stop them. It was amazing. So yeah, if maths was more like that, then I think having more of it would be a really good thing. So what age are you talking about? Is there, could you comment on what age is like the most important when people quit math or give up on themselves or on math in general? And perhaps that age or something earlier is really an important moment for them to discover, to be inspired to discover the magic of math. I think a lot of kids start to give up on themselves and maths around from about fifth grade. And then those middle school years are really important.
+
+### Chunk 226_chunk_23
+
+and maths around from about fifth grade. And then those middle school years are really important. And fifth grade can be pivotal for kids just because they're allowed to explore and think in good ways in the early grades of elementary school. But fifth grade teachers are often like, okay, we're going to prepare you now for middle school and we're going to give you grades and lots of tests. And that's when kids start to feel really badly about themselves. And so middle school years, our camps are middle school students. We think of those years as really pivotal. Many kids in those years are deciding, yes, I'm going to keep going with STEM subjects or no, I'm not, that this isn't for me. So, I mean, all years are important and in all years you can kind of switch kids and get them on a
+
+### Chunk 226_chunk_24
+
+So, I mean, all years are important and in all years you can kind of switch kids and get them on a different pathway. But I think those middle school years are really important. So what's the role of the teacher in this? So one is the explanation of the subject, but do you think teachers should almost do like one on one, you know, little Johnny, I believe in you kind of thing? Like that energy of like. Turns out it's really important. There's a study that was done, it was actually done in high school English classrooms where all kids wrote an essay for their teacher. And this was done as an experiment. Half of the kids got feedback from their teacher, diagnostic feedback, which is great. But for half of the kids, it said an extra sentence at the bottom that the researchers had put on. And
+
+## Episode 87 — Evolution, Intelligence, Simulation, and Memes (guest: Richard Dawkins)
+
+### Chunk 87_chunk_16
+
+about consciousness. Do you have any, have you ever thought about, do you ever think about ideas of consciousness or a little bit more about the mystery of intelligence and consciousness that seems to pop up just like you're saying from our brain? I agree with Roger Penrose that there is a mystery there. I mean, he's one of the world's greatest physicists. I can't possibly argue with his... But nobody knows anything about consciousness. And in fact, if we talk about religion and so on, the mystery of consciousness is so awe inspiring and we know so little about it that the leap to sort of religious or mystical explanations is too easy to make. I think that it's just an act of cowardice to leap to religious explanations and Roger doesn't do that, of course. But I accept that there may be
+
+### Chunk 87_chunk_17
+
+leap to religious explanations and Roger doesn't do that, of course. But I accept that there may be something that we don't understand about it. So correct me if I'm wrong, but in your book, Selfish Gene, the gene centered view of evolution allows us to think of the physical organisms as just the medium through which the software of our genetics and the ideas sort of propagate. So maybe can we start just with the basics? What in this context does the word meme mean? It would mean the cultural equivalent of a gene, cultural equivalent in the sense of that which plays the same role as the gene in the transmission of culture and the transmission of ideas in the broadest sense. And it's a useful word if there's something Darwinian going on. Obviously, culture is transmitted, but is there
+
+### Chunk 87_chunk_18
+
+word if there's something Darwinian going on. Obviously, culture is transmitted, but is there anything Darwinian going on? And if there is, that means there has to be something like a gene, which becomes more numerous or less numerous in the population. So it can replicate? It can replicate. Well, it clearly does replicate. There's no question about that. The question is, does it replicate in a sort of differential way in a Darwinian fashion? Could you say that certain ideas propagate because they're successful in the meme pool? In a sort of trivial sense, you can. Would you wish to say, though, that in the same way as an animal body is modified, adapted to serve as a machine for propagating genes, is it also a machine for propagating memes? Could you actually say that something about the
+
+### Chunk 87_chunk_19
+
+genes, is it also a machine for propagating memes? Could you actually say that something about the way a human is, is modified, adapted, is modified, adapted for the function of meme propagation? That's such a fascinating possibility, if that's true. That it's not just about the genes which seem somehow more comprehensible as these things of biology. The idea that culture or maybe ideas, you can really broadly define it, operates under these mechanisms. Even morphology, even anatomy does evolve by memetic means. I mean, things like hairstyles, styles of makeup, circumcision, these things are actual changes in the body form which are nongenetic and which get passed on from generation to generation or sideways like a virus in a quasi genetic way. But the moment you start drifting away from
+
+### Chunk 87_chunk_20
+
+or sideways like a virus in a quasi genetic way. But the moment you start drifting away from the physical, it becomes interesting because the space of ideas, ideologies, political systems. Of course, yes. So what's your sense? Are memes a metaphor more or are they really, is there something fundamental, almost physical presence of memes? Well, I think they're a bit more than a metaphor. And I mentioned the physical bodily characteristics which are a bit trivial in a way, but when things like the propagation of religious ideas, both longitudinally down generations and transversely as in a sort of epidemiology of ideas, when a charismatic preacher converts people, that resembles viral transmission. Whereas the longitudinal transmission from grandparent to parent to child, et cetera, is more
+
+### Chunk 87_chunk_21
+
+Whereas the longitudinal transmission from grandparent to parent to child, et cetera, is more like conventional genetic transmission. That's such a beautiful, especially in the modern day idea. Do you think about this implication in social networks where the propagation of ideas, the viral propagation of ideas, and has the new use of the word meme to describe? Well, the internet, of course, provides extremely rapid method of transmission. Before, when I first coined the word, the internet didn't exist. And so I was thinking that in terms of books, newspapers, broader radio, television, that kind of thing. Now an idea can just leap around the world in all directions instantly. And so the internet provides a step change in the facility of propagation of memes. How does that make you feel?
+
+### Chunk 87_chunk_22
+
+provides a step change in the facility of propagation of memes. How does that make you feel? Isn't it fascinating that sort of ideas, it's like you have Galapagos Islands or something, it's the 70s, and the internet allowed all these species to just like globalize. And in a matter of seconds, you can spread the message to millions of people. And these ideas, these memes can breed, can evolve, can mutate. And there's a selection, and there's like different, I guess, groups that have all like, there's a dynamics that's fascinating here. Do you think, yes, basically, do you think your work in this direction, while fundamentally was focused on life on Earth, do you think it should continue, like to be taken further? Well, I do think it would probably be a good idea to think in a Darwinian way
+
+### Chunk 87_chunk_23
+
+to be taken further? Well, I do think it would probably be a good idea to think in a Darwinian way about this sort of thing. We conventionally think of the transmission of ideas from an evolutionary context as being limited to, in our ancestors, people living in villages, living in small bands where everybody knew each other, and ideas could propagate within the village, and they might hop to a neighboring village, occasionally, and maybe even to a neighboring continent eventually. And that was a slow process. Nowadays, villages are international. I mean, you have people, it's been called echo chambers, where people are in a sort of internet village, where the other members of the village may be geographically distributed all over the world, but they just happen to be interested in the
+
+### Chunk 87_chunk_24
+
+may be geographically distributed all over the world, but they just happen to be interested in the same things, use the same terminology, the same jargon, have the same enthusiasm. So, people like the Flat Earth Society, they don't all live in one place, they find each other, and they talk the same language to each other, they talk the same nonsense to each other. And they, so this is a kind of distributed version of the primitive idea of people living in villages and propagating their ideas in a local way. Is there Darwinist parallel here? So, is there evolutionary purpose of villages, or is that just a... I wouldn't use a word like evolutionary purpose in that case, but villages will be something that just emerged, that's the way people happen to live. And in just the same kind of way,
+
+### Chunk 87_chunk_25
+
+that just emerged, that's the way people happen to live. And in just the same kind of way, the Flat Earth Society, societies of ideas emerge in the same kind of way in this digital space. Yes, yes. Is there something interesting to say about the, I guess, from a perspective of Darwin, could we fully interpret the dynamics of social interaction in these social networks? Or is there some much more complicated thing need to be developed? Like, what's your sense? Well, a Darwinian selection idea would involve investigating which ideas spread and which don't. So, some ideas don't have the ability to spread. I mean, the Flat Earth, Flat Earthism is, there are a few people believe in it, but it's not going to spread because it's obvious nonsense. But other ideas, even if they are wrong, can
+
+### Chunk 87_chunk_26
+
+not going to spread because it's obvious nonsense. But other ideas, even if they are wrong, can spread because they are attractive in some sense. So the spreading and the selection in the Darwinian context is, it just has to be attractive in some sense. Like we don't have to define, like it doesn't have to be attractive in the way that animals attract each other. It could be attractive in some other way. Yes. All that matters is, all that is needed is that it should spread. And it doesn't have to be true to spread. In truth, there's one criterion which might help an idea to spread. But there are other criteria which might help it to spread. As you say, attraction in animals is not necessarily valuable for survival. The famous peacock's tail doesn't help the peacock to survive. It helps it
+
+### Chunk 87_chunk_27
+
+valuable for survival. The famous peacock's tail doesn't help the peacock to survive. It helps it to pass on its genes. Similarly, an idea which is actually rubbish, but which people don't know is rubbish and think is very attractive will spread in the same way as a peacock's gene spread. It's a small sidestep. I remember reading somewhere, I think recently, that in some species of birds, sort of the idea that beauty may have its own purpose and the idea that some birds, I'm being ineloquent here, but there's some aspects of their feathers and so on that serve no evolutionary purpose whatsoever. There's somebody making an argument that there are some things about beauty that animals do that may be its own purpose. Does that ring a bell for you? Does that sound ridiculous? I think it's a
+
+### Chunk 87_chunk_28
+
+may be its own purpose. Does that ring a bell for you? Does that sound ridiculous? I think it's a rather distorted bell. Darwin, when he coined the phrase sexual selection, didn't feel the need to suggest that what was attractive to females, usually is males attracting females, that what females found attractive had to be useful. He said it didn't have to be useful. It was enough that females found it attractive. And so it could be completely useless, probably was completely useless in the conventional sense, but was not at all useless in the sense of passing on, Darwin didn't call them genes, but in the sense of reproducing. Others, starting with Wallace, the co discoverer of natural selection, didn't like that idea and they wanted sexually selected characteristics like peacock's tails
+
+### Chunk 87_chunk_29
+
+didn't like that idea and they wanted sexually selected characteristics like peacock's tails to be in some sense useful. It's a bit of a stretch to think of a peacock's tail as being useful, but in the sense of survival, but others have run with that idea and have brought it up to date. And so there are two schools of thought on sexual selection, which are still active and about equally supported now. Those who follow Darwin in thinking that it's just enough to say it's attractive and those who follow Wallace and say that it has to be in some sense useful. Do you fall into one category or the other? No, I'm open minded. I think they both could be correct in different cases. I mean, they've both been made sophisticated in a mathematical sense, more so than when Darwin and Wallace first
+
+### Chunk 87_chunk_30
+
+both been made sophisticated in a mathematical sense, more so than when Darwin and Wallace first started talking about it. I'm Russian, I romanticize things, so I prefer the former, where the beauty in itself is a powerful attraction, is a powerful force in evolution. On religion, do you think there will ever be a time in our future where almost nobody believes in God, or God is not a part of the moral fabric of our society? Yes, I do. I think it may happen after a very long time. It may take a long time for that to happen. So do you think ultimately for everybody on Earth, religion, other forms of doctrines, ideas could do better job than what religion does? Yes. I mean, following in truth, reason. Well, truth is a funny, funny word. And reason too. There's, yeah, it's a difficult idea
+
+## Episode 59 — Flying Cars, Autonomous Vehicles, and Education (guest: Sebastian Thrun)
+
+### Chunk 59_chunk_0
+
+You mentioned that The Matrix may be your favorite movie. So let's start with a crazy philosophical question. Do you think we're living in a simulation? And in general, do you find the thought experiment interesting? Define simulation, I would say. Maybe we are, maybe we are not, but it's completely irrelevant to the way we should act. Putting aside, for a moment, the fact that it might not have any impact on how we should act as human beings, for people studying theoretical physics, these kinds of questions might be kind of interesting, looking at the universe as an information processing system. The universe is an information processing system. It's a huge physical, biological, chemical computer, there's no question. But I live here and now. I care about people, I care about us. What do
+
+### Chunk 59_chunk_1
+
+there's no question. But I live here and now. I care about people, I care about us. What do you think is trying to compute? I don't think there's an intention. I think the world evolves the way it evolves. And it's beautiful, it's unpredictable. And I'm really, really grateful to be alive. Spoken like a true human. Which last time I checked, I was. Or that, in fact, this whole conversation is just a touring test to see if indeed you are. You've also said that one of the first programs, or the first few programs you've written was a, wait for it, TI57 calculator. Yeah. Maybe that's early 80s. We don't want to date calculators or anything. That's early 80s, correct. Yeah. So if you were to place yourself back into that time, into the mindset you were in, could you have predicted the
+
+### Chunk 59_chunk_2
+
+to place yourself back into that time, into the mindset you were in, could you have predicted the evolution of computing, AI, the internet technology in the decades that followed? I was super fascinated by Silicon Valley, which I'd seen on television once and thought, my god, this is so cool. They build like DRAMs there and CPUs. How cool is that? And as a college student a few years later, I decided to really study intelligence and study human beings. And found that even back then in the 80s and 90s, artificial intelligence is what fascinated me the most. What's missing is that back in the day, the computers are really small. The brains we could build were not anywhere bigger than a cockroach. And cockroaches aren't very smart. So we weren't at the scale yet where we are today. Did you
+
+### Chunk 59_chunk_3
+
+And cockroaches aren't very smart. So we weren't at the scale yet where we are today. Did you dream at that time to achieve the kind of scale we have today? Or did that seem possible? I always wanted to make robots smart. And I felt it was super cool to build an artificial human. And the best way to build an artificial human was to build a robot, because that's kind of the closest we could do. Unfortunately, we aren't there yet. The robots today are still very brittle. But it's fascinating to study intelligence from a constructive perspective when you build something. To understand you build, what do you think it takes to build an intelligent system, an intelligent robot? I think the biggest innovation that we've seen is machine learning. And it's the idea that the computers can basically
+
+### Chunk 59_chunk_4
+
+innovation that we've seen is machine learning. And it's the idea that the computers can basically teach themselves. Let's give an example. I'd say everybody pretty much knows how to walk. And we learn how to walk in the first year or two of our lives. But no scientist has ever been able to write down the rules of human gait. We don't understand it. We have it in our brains somehow. We can practice it. We understand it. But we can't articulate it. We can't pass it on by language. And that, to me, is kind of the deficiency of today's computer programming. When you program a computer, they're so insanely dumb that you have to give them rules for every contingencies. Very unlike the way people learn from data and experience, computers are being instructed. And because it's so hard to get
+
+### Chunk 59_chunk_5
+
+learn from data and experience, computers are being instructed. And because it's so hard to get this instruction set right, we pay software engineers $200,000 a year. Now, the most recent innovation, which has been in the make for 30, 40 years, is an idea that computers can find their own rules. So they can learn from falling down and getting up the same way children can learn from falling down and getting up. And that revolution has led to a capability that's completely unmatched. Today's computers can watch experts do their jobs, whether you're a doctor or a lawyer, pick up the regularities, learn those rules, and then become as good as the best experts. So the dream of in the 80s of expert systems, for example, had at its core the idea that humans could boil down their expertise on a
+
+### Chunk 59_chunk_6
+
+systems, for example, had at its core the idea that humans could boil down their expertise on a sheet of paper, so to sort of reduce, sort of be able to explain to machines how to do something explicitly. So do you think, what's the use of human expertise into this whole picture? Do you think most of the intelligence will come from machines learning from experience without human expertise input? So the question for me is much more how do you express expertise? You can express expertise by writing a book. You can express expertise by showing someone what you're doing. You can express expertise by applying it by many different ways. And I think the expert systems was our best attempt in AI to capture expertise and rules. But someone sat down and said, here are the rules of human gait.
+
+### Chunk 59_chunk_7
+
+AI to capture expertise and rules. But someone sat down and said, here are the rules of human gait. Here's when you put your big toe forward and your heel backwards and you always stop stumbling. And as we now know, the set of rules, the set of language that we can command is incredibly limited. The majority of the human brain doesn't deal with language. It deals with subconscious, numerical, perceptual things that we don't even self aware of. Now, when an AI system watches an expert do their job and practice their job, it can pick up things that people can't even put into writing, into books or rules. And that's where the real power is. We now have AI systems that, for example, look over the shoulders of highly paid human doctors like dermatologists or radiologists, and they can somehow
+
+### Chunk 59_chunk_8
+
+shoulders of highly paid human doctors like dermatologists or radiologists, and they can somehow pick up those skills that no one can express in words. So you were a key person in launching three revolutions, online education, autonomous vehicles, and flying cars or VTOLs. So high level, and I apologize for all the philosophical questions. There's no apology necessary. How do you choose what problems to try and solve? What drives you to make those solutions a reality? I have two desires in life. I want to literally make the lives of others better. Or as we often say, maybe jokingly, make the world a better place. I actually believe in this. It's as funny as it sounds. And second, I want to learn. I want to get new skills. I don't want to be in a job I'm good at, because if I'm in a job
+
+### Chunk 59_chunk_9
+
+learn. I want to get new skills. I don't want to be in a job I'm good at, because if I'm in a job that I'm good at, the chances for me to learn something interesting is actually minimized. So I want to be in a job I'm bad at. That's really important to me. So in a bill, for example, what people often call flying cars, these are electrical, vertical, takeoff, and landing vehicles. I'm just no expert in any of this. And it's so much fun to learn on the job what it actually means to build something like this. Now, I'd say the stuff that I've done lately after I finished my professorship at Stanford, they really focused on what has the maximum impact on society. Transportation is something that has transformed the 21st or 20th century more than any other invention, in my opinion, even more
+
+### Chunk 59_chunk_10
+
+has transformed the 21st or 20th century more than any other invention, in my opinion, even more than communication. And cities are different. Workers are different. Women's rights are different because of transportation. And yet, we still have a very suboptimal transportation solution where we kill 1.2 or so million people every year in traffic. It's like the leading cause of death for young people in many countries, where we are extremely inefficient resource wise. Just go to your average neighborhood city and look at the number of parked cars. That's a travesty, in my opinion. Or where we spend endless hours in traffic jams. And very, very simple innovations, like a self driving car or what people call a flying car, could completely change this. And it's there. I mean, the technology
+
+### Chunk 59_chunk_11
+
+what people call a flying car, could completely change this. And it's there. I mean, the technology is basically there. You have to close your eyes not to see it. So lingering on autonomous vehicles, a fascinating space, some incredible work you've done throughout your career there. So let's start with DARPA, I think, the DARPA challenge, through the desert and then urban to the streets. I think that inspired an entire generation of roboticists and obviously sprung this whole excitement about this particular kind of four wheeled robots we called autonomous cars, self driving cars. So you led the development of Stanley, the autonomous car that won the race to the desert, the DARPA challenge in 2005. And Junior, the car that finished second in the DARPA urban challenge, also did incredibly
+
+### Chunk 59_chunk_12
+
+in 2005. And Junior, the car that finished second in the DARPA urban challenge, also did incredibly well in 2007, I think. What are some painful, inspiring, or enlightening experiences from that time that stand out to you? Oh my god. Painful were all these incredibly complicated, stupid bugs that had to be found. We had a phase where Stanley, our car that eventually won the DARPA grand challenge, would every 30 miles just commit suicide. And we didn't know why. And it ended up to be that in the sinking of two computer clocks, occasionally a clock went backwards and that negative time elapsed, screwed up the entire internal logic. But it took ages to find this. There were bugs like that. I'd say enlightening is the Stanford team immediately focused on machine learning and on software,
+
+### Chunk 59_chunk_13
+
+I'd say enlightening is the Stanford team immediately focused on machine learning and on software, whereas everybody else seemed to focus on building better hardware. Our analysis had been a human being with an existing rental car can perfectly drive the course but why do I have to build a better rental car? I just should replace the human being. And the human being, to me, was a conjunction of three steps. We had sensors, eyes and ears, mostly eyes. We had brains in the middle. And then we had actuators, our hands and our feet. Now, the actuators are easy to build. The sensors are actually also easy to build. What was missing was the brain. So we had to build a human brain. And nothing clearer than to me that the human brain is a learning machine. So why not just train our robot? So we
+
+## Episode 141 — Economics of AI, Social Networks, and Technology (guest: Erik Brynjolfsson)
+
+### Chunk 141_chunk_111
+
+that they're not gonna have the incentives to put as much effort into it. There you need, it's a classic public good. There you need the government to be involved in it. And the US government used to be investing much more in R&D, but we have slashed that part of the government really foolishly and we're all poorer, significantly poorer as a result. Growth rates are down. We're not having the kind of scientific progress we used to have. It's been sort of a short term eating the seed corn, whatever metaphor you wanna use where people grab some money, put it in their pockets today, but five, 10, 20 years later, they're a lot poorer than they otherwise would have been. So we're living through a pandemic right now, globally in the United States. From an economics perspective, how do you think
+
+### Chunk 141_chunk_112
+
+pandemic right now, globally in the United States. From an economics perspective, how do you think this pandemic will change the world? It's been remarkable. And it's horrible how many people have suffered, the amount of death, the economic destruction. It's also striking just the amount of change in work that I've seen. In the last 20 weeks, I've seen more change than there were in the previous 20 years. There's been nothing like it since probably the World War II mobilization in terms of reorganizing our economy. The most obvious one is the shift to remote work. And I and many other people stopped going into the office and teaching my students in person. I did a study on this with a bunch of colleagues at MIT and elsewhere. And what we found was that before the pandemic, in the
+
+### Chunk 141_chunk_113
+
+a bunch of colleagues at MIT and elsewhere. And what we found was that before the pandemic, in the beginning of 2020, about one in six, a little over 15% of Americans were working remotely. When the pandemic hit, that grew steadily and hit 50%, roughly half of Americans working at home. So a complete transformation. And of course, it wasn't even, it wasn't like everybody did it. If you're an information worker, professional, if you work mainly with data, then you're much more likely to work at home. If you're a manufacturing worker, working with other people or physical things, then it wasn't so easy to work at home. And instead, those people were much more likely to become laid off or unemployed. So it's been something that's had very disparate effects on different parts of the
+
+### Chunk 141_chunk_114
+
+or unemployed. So it's been something that's had very disparate effects on different parts of the workforce. Do you think it's gonna be sticky in a sense that after vaccine comes out and the economy reopens, do you think remote work will continue? That's a great question. My hypothesis is yes, a lot of it will. Of course, some of it will go back, but a surprising amount of it will stay. I personally, for instance, I moved my seminars, my academic seminars to Zoom, and I was surprised how well it worked. So it works? Yeah, I mean, obviously we were able to reach a much broader audience. So we have people tuning in from Europe and other countries, just all over the United States for that matter. I also actually found that it would, in many ways, is more egalitarian. We use the chat feature
+
+### Chunk 141_chunk_115
+
+I also actually found that it would, in many ways, is more egalitarian. We use the chat feature and other tools, and grad students and others who might've been a little shy about speaking up, we now kind of have more of ability for lots of voices. And they're answering each other's questions, so you kind of get parallel. Like if someone had some question about some of the data or a reference or whatever, then someone else in the chat would answer it. And the whole thing just became like a higher bandwidth, higher quality thing. So I thought that was kind of interesting. I think a lot of people are discovering that these tools that thanks to technologists have been developed over the past decade, they're a lot more powerful than we thought. I mean, all the terrible things we've seen with
+
+### Chunk 141_chunk_116
+
+they're a lot more powerful than we thought. I mean, all the terrible things we've seen with COVID and the real failure of many of our institutions that I thought would work better. One area that's been a bright spot is our technologies. Bandwidth has held up pretty well, and all of our email and other tools have just scaled up kind of gracefully. So that's been a plus. Economists call this question of whether it'll go back a hysteresis. The question is like when you boil an egg after it gets cold again, it stays hard. And I think that we're gonna have a fair amount of hysteresis in the economy. We're gonna move to this new, we have moved to a new remote work system, and it's not gonna snap all the way back to where it was before. One of the things that worries me is that the people with
+
+### Chunk 141_chunk_117
+
+all the way back to where it was before. One of the things that worries me is that the people with lots of followers on Twitter and people with voices, people that can, voices that can be magnified by reporters and all that kind of stuff are the people that fall into this category that we were referring to just now where they can still function and be successful with remote work. And then there is a kind of quiet suffering of what feels like millions of people whose jobs are disturbed profoundly by this pandemic, but they don't have many followers on Twitter. What do we, and again, I apologize, but I've been reading the rise and fall of the Third Reich and there's a connection to the depression on the American side. There's a deep, complicated connection to how suffering can turn into
+
+### Chunk 141_chunk_118
+
+on the American side. There's a deep, complicated connection to how suffering can turn into forces that potentially change the world in destructive ways. So like it's something I worry about is like, what is this suffering going to materialize itself in five, 10 years? Is that something you worry about, think about? It's like the center of what I worry about. And let me break it down to two parts. There's a moral and ethical aspect to it. We need to relieve this suffering. I mean, I'm sure the values of, I think most Americans, we like to see shared prosperity or most people on the planet. And we would like to see people not falling behind and they have fallen behind, not just due to COVID, but in the previous couple of decades, median income has barely moved, depending on how you measure
+
+### Chunk 141_chunk_119
+
+but in the previous couple of decades, median income has barely moved, depending on how you measure it. And the incomes of the top 1% have skyrocketed. And part of that is due to the ways technology has been used. Part of this been due to, frankly, our political system has continually shifted more wealth into those people who have the powerful interest. So there's just, I think, a moral imperative to do a better job. And ultimately, we're all gonna be wealthier if more people can contribute, more people have the wherewithal. But the second thing is that there's a real political risk. I'm not a political scientist, but you don't have to be one, I think, to see how a lot of people are really upset with they're getting a raw deal and they want to smash the system in different ways, in 2016
+
+### Chunk 141_chunk_120
+
+upset with they're getting a raw deal and they want to smash the system in different ways, in 2016 and 2018. And now I think there are a lot of people who are looking at the political system and they feel like it's not working for them and they just wanna do something radical. Unfortunately, demagogues have harnessed that in a way that is pretty destructive to the country. And an analogy I see is what happened with trade. Almost every economist thinks that free trade is a good thing, that when two people voluntarily exchange almost by definition, they're both better off if it's voluntary. And so generally, trade is a good thing. But they also recognize that trade can lead to uneven effects, that there can be winners and losers in some of the people who didn't have the skills to compete
+
+### Chunk 141_chunk_121
+
+that there can be winners and losers in some of the people who didn't have the skills to compete with somebody else or didn't have other assets. And so trade can shift prices in ways that are averse to some people. So there's a formula that economists have, which is that you have free trade, but then you compensate the people who are hurt and free trade makes the pie bigger. And since the pie is bigger, it's possible for everyone to be better off. You can make the winners better off, but you can also compensate those who don't win. And so they end up being better off as well. What happened was that we didn't fulfill that promise. We did have some more increased free trade in the 80s and 90s, but we didn't compensate the people who were hurt. And so they felt like the people in power
+
+### Chunk 141_chunk_122
+
+90s, but we didn't compensate the people who were hurt. And so they felt like the people in power reneged on the bargain, and I think they did. And so then there's a backlash against trade. And now both political parties, but especially Trump and company, have really pushed back against free trade. Ultimately, that's bad for the country. Ultimately, that's bad for living standards. But in a way I can understand that people felt they were betrayed. Technology has a lot of similar characteristics. Technology can make us all better off. It makes the pie bigger. It creates wealth and health, but it can also be uneven. Not everyone automatically benefits. It's possible for some people, even a majority of people to get left behind while a small group benefits. What most economists would say,
+
+### Chunk 141_chunk_123
+
+majority of people to get left behind while a small group benefits. What most economists would say, well, let's make the pie bigger, but let's make sure we adjust the system so we compensate the people who are hurt. And since the pie is bigger, we can make the rich richer, we can make the middle class richer, we can make the poor richer. Mathematically, everyone could be better off. But again, we're not doing that. And again, people are saying this isn't working for us. And again, instead of fixing the distribution, a lot of people are beginning to say, hey, technology sucks, we've got to stop it. Let's throw rocks at the Google bus. Let's blow it up. Let's blow it up. And there were the Luddites almost exactly 200 years ago who smashed the looms and the spinning machines because they
+
+## Episode 294 — iPhone, iPod, and Nest (guest: Tony Fadell)
+
+### Chunk 294_chunk_97
+
+it's dead, right? So that was one big one, like, holy shit, right? So that was something we, and we had to design special tests and everything and special software on that. But then there was another one, which was at the early days, the way the first generations of iPods, I had to hack the IDE interface to the hard drives. So I was like, okay, what we're gonna use is we're gonna use this chip for hard drive, hard drive, to make a hard drive, you had to have a chip that did FireWire to a hard drive. Okay, and then that would become a portable hard drive. Well, then we had the MP3 player and the user interface and everything. So there was times when it was just this hard drive and there was times when it was a MP3 player and I had to hot switch between what the hard drive thinks it was
+
+### Chunk 294_chunk_98
+
+times when it was a MP3 player and I had to hot switch between what the hard drive thinks it was talking to, right? So designed this thing, tore it apart, did all this stuff. And I was like, you know, maybe I'm gonna screw up IDE and there's something, there's some holes I'm gonna see. So I go, who's the expert at Apple who understands IDE and everything? So this person comes over, the mass storage specialist comes over and I put on the whiteboard and say, here's how we're gonna do this thing and here's the commands and da da, and this is how it hot switches and everything. He's like, that's never gonna work. Yeah. And I was like, what? It was never gonna work. I said, well, let me go over here and show you this right here. I have it prototyped and it's been working for days. I just wanna
+
+### Chunk 294_chunk_99
+
+and show you this right here. I have it prototyped and it's been working for days. I just wanna see if you're gonna have it, find any holes in the thing. Didn't even, and he just stormed out of the room and never even, right? That's hilarious. I've had a lot of experience like this with experts. Like for example, this ridiculous room. I had a person and there's many people like this that I showed them, here's the situation, you know. For acoustics or something? For acoustics, yeah. They're like, no, no, no, no, this is horrible. This is not, this is not gonna work. The reflection, the curtains are not gonna stop. There's a bunch of terminology they're telling me. It's a similar kind of situation as the ID, which I was like, no, listen, I just need to see is there major issues and they're
+
+### Chunk 294_chunk_100
+
+as the ID, which I was like, no, listen, I just need to see is there major issues and they're like a low hanging fruit that are fixable and major holes I should be aware of. Not like, let's. $100,000 to upgrade. To upgrade for what exact purpose? What, not why? Yeah, exactly, exactly. The why, the focusing on the story, on the content, on the, the why, the why, the why. And that actually I've experienced that unfortunately in the artistic realms too, which is like photography and videography, cinematography. It's interesting, I talk to photographers that are quote unquote experts. And it's always about so much of the focus is on the equipment. The equipment behind the sensors and the lighting. And it's like, all right, all right. But what about, what about the feeling of the story you
+
+### Chunk 294_chunk_101
+
+And it's like, all right, all right. But what about, what about the feeling of the story you create visually? The difference between a movie that's really well told and it doesn't have all the effects and everything versus maybe some of the superhero movies we see all the time, which is good luck if there's a story but man, there's a lot of action and CGI, right? That's right. And there's also value to those, right? CGI, superhero. Can tell a better story but you have to have a good story to begin with. Sure, exactly. But if you're focused on the story, I guess you need to start with a story. You need to start with a story. And if you bring in experts, they can often be detrimental, I guess, to the why. They're too good at doing the what. Well, you can bring in experts for why. There's
+
+### Chunk 294_chunk_102
+
+to the why. They're too good at doing the what. Well, you can bring in experts for why. There's lots of experts for why. Too many times we get experts for what. Yes. And then they only focus on the what. And so they come with the specs and feeds and the numbers and all the other stuff. But what you're really asking for is I need somebody about the why and understanding what we're trying to get done here and fitting the what's into that why, right? That's why I do think that one of the qualities that I really enjoy for people to work with is like humility for a particular problem when you approach it. Basically, I don't know how to solve this but we're going to figure it out. As opposed to, oh, I've solved this thing many, many times before I know exactly what to do. Humility before the
+
+### Chunk 294_chunk_103
+
+oh, I've solved this thing many, many times before I know exactly what to do. Humility before the chaos. So having an open mind that this is going to require a totally new way of doing things. It's a really nice quality to see. You're one of the fascinating humans in the history of Silicon Valley. Steve is another one of those. So those two humans came together for a time to work together. What was it like working with Steve Jobs? What aspect of his behavior and personality, let's say, brought out the best in you? Pushing you, really pushing you, relentless on the details, challenging you for the right reasons. It wasn't bullying, it wasn't demeaning. He would critique the work, not judge the person, at least not in front of them. Or inside of a, you know, in front of a group or anything
+
+### Chunk 294_chunk_104
+
+person, at least not in front of them. Or inside of a, you know, in front of a group or anything like that. I know it was really that attention to detail. And he, when he would make a decision, you know, there are, when you make the first version of anything, something revolutionary, there are a lot of opinion based decisions. And there's only one or two people, three people who hold those opinion based decisions and what they should be. And when you have those opinions and you're trying to work with the team to implement those decisions, you have to really tell the why of those decisions. Just don't go do it, but why it's there. So you can feel part of that decision. You can understand what were the trade offs of the different other answers to that opinion, right? And say, this is the
+
+### Chunk 294_chunk_105
+
+were the trade offs of the different other answers to that opinion, right? And say, this is the reason why we picked the route we picked because it's this for the customer or this for the whole world story, what have you. So that you felt really good because a lot of times most people want a data driven decision, but with the ones you don't get data, right? Maybe in a B2B, you could a little bit cause you can talk to customers, but you can't do that with a consumer product. V1, version one, B2B, business to business versus what's the alternative? Business to consumer, V1. Okay, we're just defining some terms. Yes, you're absolutely. And when you say data driven decisions versus what? Opinion based decisions. So like gut, you have to use, you don't have any. You can't fall back on any data
+
+### Chunk 294_chunk_106
+
+based decisions. So like gut, you have to use, you don't have any. You can't fall back on any data or any previous history to kind of inform you of what's going on, right? And so if you look at most companies who are paralyzed and cannot make new innovations and new products, it's because they're trying to turn, and this is what I saw at Phillips, they're trying to turn opinion based decisions into data driven decisions so they don't lose their jobs. So if you look at management consulting, management consulting is all about taking those opinion based decisions, giving them to someone else to turn into data that comes back to them and says, they can blame the management consultants when something goes wrong, as opposed to it wasn't me, right? When you need to have to tell that story, you
+
+### Chunk 294_chunk_107
+
+goes wrong, as opposed to it wasn't me, right? When you need to have to tell that story, you have to understand that, especially V1, you need to be able to articulate those opinion based decisions and you need to own them. And if you fail with some of them, you didn't get it right, you then own them and fix them and move on, right? Version one of the iPod wasn't perfect. Version one of the iPhone wasn't perfect. We got a lot of opinion based decisions wrong. But as you go through that, because you got more data, because V2, you had data on those original opinions and then you were able to then modulate off of that, right? And you'll still have new opinions because those are differentiators that we call differentiators, the things that move the product forward in its evolution. But at the
+
+### Chunk 294_chunk_108
+
+that we call differentiators, the things that move the product forward in its evolution. But at the revolution stage, opinions, opinions, opinions, no data. And so you have this discussion, you and Steve in the stage and the whole team with opinions. And there you have to be harsh. And I wouldn't say harsh, but you have to be very determined, right? You know, there are two real opinion based decisions that happened on the iPhone. One was the keyboard. Should we have a hardboard keyboard or should we have a virtual keyboard? The Blackberry was the number one productivity messaging device of its time. It was called a Crackberry for a reason because people loved it because it was easy to type and they could get their work done. But when you're saying we're gonna move from that, everyone's
+
+### Chunk 294_chunk_109
+
+and they could get their work done. But when you're saying we're gonna move from that, everyone's talking about that in the market and you say we're gonna move to a virtual keyboard and it's not gonna work as well as the hardware keyboard, that's an opinion based decision, right? Because the data is telling you all the best sales are over here. God, that takes guts. It takes guts, but you have to look at it from a different point of view. And this is how I learned to come to understand this because I had been building virtual keyboards before and I knew the goodness and the badness in them, right? But he was like, look, those are productivity devices. We're making it, ours is born out of an entertainment device and productivity, right? We need to show full screen videos. We are gonna have
+
+## Episode 264 — Elon Musk, Neuralink, AI, Aliens, and the Future of Humanity (guest: Tim Urban)
+
+### Chunk 264_chunk_49
+
+So, like what if it? So, a human has to touch Mars by the end of 2030. Oh, by the year 30. Yeah, by January 1st, 2031. Yeah. Did you agree on the time zone or what? No, no. If it's coming on that exact day, that's gonna be really stressful. But anyway, I think that there will be. That was 2018. I was more confident then. I think it's gonna be around this time. I mean, I still won the general bet because his point was, you are crazy. This is not gonna happen in our lifetimes. I've been offered many, many decades. And I said, you're wrong. You don't know what's going on in SpaceX. I think if the world depended on it, I think probably SpaceX could probably. I mean, I don't know this, but I think the tech is almost there. Like, I don't think, of course, it's delayed many years by safety. So,
+
+### Chunk 264_chunk_50
+
+the tech is almost there. Like, I don't think, of course, it's delayed many years by safety. So, they first wanna send a ship around Mars and they wanna land a cargo ship on Mars. And there's the moon on the way to. Yeah, yeah, there's a lot. But I think the moon, a decade before, seemed like magical tech that humans didn't have. This is like, no, we can, it's totally conceivable that this, you've seen Starship, like it is a interplanetary colonial or interplanetary transport like system. That's what they used to call it. The SpaceX, the way they do it is, every time they do a launch, something fails usually, when they're testing and they learn a thousand things. The amount of data they get and they improve so, each one has, it's like they've moved up like eight generations in each one.
+
+### Chunk 264_chunk_51
+
+and they improve so, each one has, it's like they've moved up like eight generations in each one. Anyway, so it's not inconceivable that pretty soon they could send a Starship to Mars and land it. There's just no good reason I don't think that they couldn't do that. And so, if they could do that, they could in theory send a person to Mars pretty soon. Now, taking off from Mars and coming back, again, I think, I don't think anyone want to be on that voyage today because there's just, you know, they're still in, it's still amateur hour here and getting that perfect. I don't think we're too far away now. The question is, so every 26 months, Earth laps Mars, right? It's like a sinusoidal, soil orbit or whatever it's called, the period, 26 months. So it's right now, like in the evens, like
+
+### Chunk 264_chunk_52
+
+orbit or whatever it's called, the period, 26 months. So it's right now, like in the evens, like 2022 is gonna have one of these, late 2024. So people could, this was the earliest estimate I heard. Elon said, maybe we can send people to Mars in 2024, you know, to land in early 2025. That is not gonna happen because that included 2022 sending a cargo ship to Mars, maybe even a one in 2020. And so I think they're not quite on that schedule, but to win my bet, 2027, I have a chance and 2029, I have another chance. We're not very good at like backing up and seeing the big picture. We're very distracted by what's going on today and what we can believe because it's happening in front of our face. There's no way that humans gonna be landing on Mars and it's not gonna be the only thing everyone
+
+### Chunk 264_chunk_53
+
+There's no way that humans gonna be landing on Mars and it's not gonna be the only thing everyone is talking about, right? I mean, it's gonna be the moon landing, but even bigger deal, going to another planet, right? And for it to start a colony, not just to, again, high five and come back. So this is like the 2020s, maybe the 2030s is gonna be the new 1960s. We're gonna have a space decade. I'm so excited about it. And again, it's one of the great leaps for all of life happening in our lifetimes, like that's wild. To paint a slightly cynical possibility, which I don't see happening, but I just wanna put sort of value into leadership. I think it wasn't obvious that the moon landing would be so exciting for all of human civilization. Some of that have to do with the right speeches, with
+
+### Chunk 264_chunk_54
+
+be so exciting for all of human civilization. Some of that have to do with the right speeches, with the space race. Like space, depending on how it's presented, can be boring. I don't think it's been that so far, but I've actually. I think space is quite boring right now. No, SpaceX is super, but like 10 years ago, space. Some writer, I forget who wrote, it's like the best magic trick in the show happened at the beginning. And now they're starting to do this like easy hazard. It's like, you can't go in that direction. And the line that this writer said is like, watching astronauts go up to the space station after watching the moon is like watching Columbus sail to Ibiza. It's just like, everything is so practical. You're going up to the space station, not to explore, but to do science
+
+### Chunk 264_chunk_55
+
+everything is so practical. You're going up to the space station, not to explore, but to do science experiments in microgravity. And you're sending rockets up, mostly here and there there's a probe, but mostly you're sending them up to put satellites for DirecTV or whatever it is. It's kind of like lame earth industry usage. So I agree with you, space is boring there. The first human setting foot on Mars, that's gotta be a crazy global event. I can't imagine it not being. Maybe you're right. Maybe I'm taking for granted the speeches and the space race and that. I think the value of, I guess what I'm pushing is the value of people like Elon Musk and potentially other leaders that hopefully step up is extremely important here. Like I would argue without the publicity of SpaceX, it's not
+
+### Chunk 264_chunk_56
+
+step up is extremely important here. Like I would argue without the publicity of SpaceX, it's not just the ingenuity of SpaceX, but like what they've done publicly by having a figure that tweets and all that kind of stuff like that, that's a source of inspiration. Totally. NASA wasn't able to quite pull off with a shuttle. That's one of his two reasons for doing this. SpaceX exists for two reasons. One, life insurance for the species. I always think about this way. If you're an alien on some far away planet and you're rooting against humanity and you win the bet if humanity goes extinct, you do not like SpaceX. You do not want them to have their eggs in two baskets now. Yeah. Sure, it's like obviously you could have something that kills everyone on both planets, some AI war or something.
+
+### Chunk 264_chunk_57
+
+obviously you could have something that kills everyone on both planets, some AI war or something. But the point is obviously it's good for our chances, our longterm chances to be having two self sustaining civilizations going on. The second reason, he values this I think just as high is it's the greatest adventure in history going multi planetary and that people need some reason to wake up in the morning and it'll just be this hopefully great uniting event too. I mean, today's nasty, awful political environment, which is like a whirlpool that sucks everything into it. So you name a thing and it's become a nasty political topic. So I hope that space can, Mars can just bring everyone together, but it could become this hideous thing where it's a billionaire, some annoying storyline gets
+
+### Chunk 264_chunk_58
+
+but it could become this hideous thing where it's a billionaire, some annoying storyline gets built. So half the people think that anyone who's excited about Mars is an evil something. Anyway, I hope it is super exciting. So far space has been a uniting, inspiring thing. And in fact, especially during this time of a pandemic has been just a commercial entity putting out humans into space for the first time was just one of the only big sources of hope. Totally in awe, just like watching this huge skyscraper go up in the air, flip over, go back down and land. I mean, it just makes everyone just wanna sit back and clap and kinda like, the way I look at something like SpaceX is it makes me proud to be a human. And I think it makes a lot of people feel that way. It's like good for our self
