@@ -7,3 +7,7 @@ chromadb==0.5.23
 # the API and spams "Failed to send telemetry event" warnings on every client
 # creation. Pin below 6 to keep stderr clean.
 posthog<6
+
+# Step 1 dependencies (eval runner: dataset loader + API client + tests)
+requests==2.32.3
+pytest==8.3.3
