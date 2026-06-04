@@ -1,0 +1,237 @@
+{
+  "version": "1.0",
+  "created_at": "2026-06-04",
+  "total_questions": 25,
+  "distribution": {
+    "easy": 10,
+    "medium": 10,
+    "edge": 5
+  },
+  "questions": [
+    {
+      "id": "q001",
+      "question": "What was the nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11?",
+      "ground_truth": "The company's nickname was 'Tally Ho'. Niels heard the dispatcher call '114, Manhattan' and respond using the nickname when directing them to the command post.",
+      "ground_truth_chunk_ids": ["220_chunk_22"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the fire company's radio nickname from the 9/11 episode."
+    },
+    {
+      "id": "q002",
+      "question": "What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?",
+      "ground_truth": "A clock synchronization bug: the syncing of two computer clocks occasionally made a clock go backwards, and that negative elapsed time corrupted the car's entire internal logic, causing it to 'commit suicide' every 30 miles.",
+      "ground_truth_chunk_ids": ["59_chunk_12"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the clock-sync bug anecdote from Sebastian Thrun's DARPA story."
+    },
+    {
+      "id": "q003",
+      "question": "How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?",
+      "ground_truth": "Dawkins describes longitudinal transmission, passed down generations from grandparent to parent to child, which resembles conventional genetic transmission. Transverse transmission, such as a charismatic preacher converting people, spreads sideways and resembles viral transmission, like an epidemiology of ideas.",
+      "ground_truth_chunk_ids": ["87_chunk_20", "87_chunk_21"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 87_chunk_20 and 87_chunk_21 — the two transmission modes and their analogies are split across the chunk boundary."
+    },
+    {
+      "id": "q004",
+      "question": "What parallel does Erik Brynjolfsson draw between free trade and technology when it comes to winners and losers?",
+      "ground_truth": "Both expand the economic pie but unevenly. Economists prescribe redistributing gains to those hurt, but this didn't happen with trade, causing backlash. Brynjolfsson warns technology faces the same risk — without redistribution, society may turn against it as the Luddites did 200 years ago.",
+      "ground_truth_chunk_ids": ["141_chunk_121", "141_chunk_122", "141_chunk_123"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 141_chunk_121, 141_chunk_122 and 141_chunk_123 — the redistribution prescription, the broken promise and backlash, and the technology parallel each live in a different chunk."
+    },
+    {
+      "id": "q005",
+      "question": "What is Tony Fadell's favorite programming language?",
+      "ground_truth": "The sources do not contain information about Tony Fadell's favorite programming language.",
+      "ground_truth_chunk_ids": [],
+      "difficulty": "edge",
+      "category": "edge_case",
+      "notes": "Tests refusal — answer not in sources. Plausible question for an engineer guest whose chunks discuss iPod hardware hacking, but no programming language preference is ever mentioned."
+    },
+    {
+      "id": "q006",
+      "question": "Why does Lee Cronin say biology is not a Turing machine?",
+      "ground_truth": "Because Turing machines don't evolve. Cronin argues people see Turing machines everywhere, but biology evolved and eventually gave rise to Alan Turing himself, who only then invented the Turing machine abstraction.",
+      "ground_truth_chunk_ids": ["269_chunk_305"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of Cronin's core argument against viewing biology as a Turing machine."
+    },
+    {
+      "id": "q007",
+      "question": "What distinction does Tony Fadell draw between data-driven and opinion-based decisions when building the first version of a product?",
+      "ground_truth": "For the first version of a revolutionary product there is no data or history to fall back on, so the key decisions are opinion-based, held by only one to three people who must articulate the why and own any failures. Companies like Philips become paralyzed trying to turn opinion-based decisions into data-driven ones to avoid blame, which Fadell says is what management consulting exists for. Only with version two do you finally have data on those original opinions.",
+      "ground_truth_chunk_ids": ["294_chunk_105", "294_chunk_106", "294_chunk_107"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 294_chunk_105, 294_chunk_106 and 294_chunk_107 — the V1/no-data premise, the Philips/consulting blame-shifting, and the owning-failures/V2-data resolution are spread over three chunks."
+    },
+    {
+      "id": "q008",
+      "question": "Around what grade does Jo Boaler say many kids start to give up on math?",
+      "ground_truth": "Around fifth grade, when teachers begin preparing kids for middle school with grades and lots of tests. The middle school years that follow are pivotal — that is when many kids decide whether STEM subjects are for them.",
+      "ground_truth_chunk_ids": ["226_chunk_23"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the age at which kids give up on math according to Boaler."
+    },
+    {
+      "id": "q009",
+      "question": "What happened to Dennis Oberg's crew when the tower began to collapse on 9/11?",
+      "ground_truth": "Dennis Oberg looked up, saw what he thought was disintegration, and ordered his men to run without looking back or up; they sprinted and dove under a fire truck, which saved them. The men sprinting about 40 feet behind were buried under a pile ten stories deep and killed — among them Dennis's own rookie son from Ladder 105 and Niels's childhood best friend from Engine 201.",
+      "ground_truth_chunk_ids": ["220_chunk_22", "220_chunk_23"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 220_chunk_22 and 220_chunk_23 — the order to run ends one chunk and the fire truck, the buried crew, and the identities of the dead are in the next."
+    },
+    {
+      "id": "q010",
+      "question": "What is the capital of France?",
+      "ground_truth": "The sources do not contain information about the capital of France.",
+      "ground_truth_chunk_ids": [],
+      "difficulty": "edge",
+      "category": "edge_case",
+      "notes": "Tests refusal — off-topic question entirely unrelated to the podcast content."
+    },
+    {
+      "id": "q011",
+      "question": "Which physicist does Richard Dawkins agree with about there being a genuine mystery to consciousness?",
+      "ground_truth": "Roger Penrose, whom Dawkins calls one of the world's greatest physicists. Dawkins agrees there is a mystery but considers leaping to religious or mystical explanations of it an act of cowardice.",
+      "ground_truth_chunk_ids": ["87_chunk_16"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of which physicist Dawkins credits on the mystery of consciousness."
+    },
+    {
+      "id": "q012",
+      "question": "How does Sebastian Thrun use the example of human walking to explain why machine learning matters?",
+      "ground_truth": "Everyone learns to walk in the first year or two of life, yet no scientist has ever been able to write down the rules of human gait — we have the skill but cannot articulate it or pass it on by language. Traditional programming requires giving computers explicit rules for every contingency, while machine learning lets computers find their own rules, learning from falling down and getting up the way children do.",
+      "ground_truth_chunk_ids": ["59_chunk_4", "59_chunk_5"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 59_chunk_4 and 59_chunk_5 — the inarticulable-gait observation and the computers-finding-their-own-rules conclusion sit in adjacent chunks."
+    },
+    {
+      "id": "q013",
+      "question": "By what deadline does Tim Urban's bet require a human to have touched Mars?",
+      "ground_truth": "By the end of 2030 — January 1st, 2031. The bet was made in 2018 against someone who believed it would not happen in our lifetimes.",
+      "ground_truth_chunk_ids": ["264_chunk_49"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the deadline in Tim Urban's Mars bet."
+    },
+    {
+      "id": "q014",
+      "question": "Why does Jo Boaler advocate a multidimensional approach to teaching math?",
+      "ground_truth": "Math has traditionally been offered in only one way — follow the method shown and reproduce it — which suits some kids but leaves many others disliking it and doing poorly. Opening math up so kids can experience it in different ways, such as visually, with numbers, or with words, lets many more kids access it and accommodates the different ways their brains work.",
+      "ground_truth_chunk_ids": ["226_chunk_14", "226_chunk_15"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 226_chunk_14 and 226_chunk_15 — the one-way critique and the open-access benefit span the chunk boundary."
+    },
+    {
+      "id": "q015",
+      "question": "What did they say about the problem with bringing in experts?",
+      "ground_truth": "In Tony Fadell's discussion, experts can be detrimental because they are too good at the 'what' — specs, feeds, and numbers — when what is really needed is someone who understands the 'why' of what you are trying to accomplish. Fadell values humility before a new problem over confident prior expertise.",
+      "ground_truth_chunk_ids": ["294_chunk_101", "294_chunk_102"],
+      "difficulty": "edge",
+      "category": "edge_case",
+      "notes": "AMBIGUOUS — 'they' is unspecified: the question could refer to Tony Fadell's what-vs-why critique of experts (294_chunk_101/102, most likely), his mass-storage expert anecdote (294_chunk_98/99), or Sebastian Thrun's discussion of expert systems and AI learning from experts (59_chunk_6/59_chunk_7). Ground truth reflects the most likely interpretation; an answer drawing on Thrun is also defensible."
+    },
+    {
+      "id": "q016",
+      "question": "How did the share of Americans working remotely change when the pandemic hit, according to the study Erik Brynjolfsson worked on?",
+      "ground_truth": "Before the pandemic, about one in six Americans — a little over 15% — worked remotely; when the pandemic hit, that grew steadily to roughly 50%. The shift was uneven: information workers could move home, while manufacturing workers were more likely to be laid off.",
+      "ground_truth_chunk_ids": ["141_chunk_113"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the remote-work statistics from Brynjolfsson's MIT study."
+    },
+    {
+      "id": "q017",
+      "question": "What does Lee Cronin mean when he distinguishes constructors from abstractors?",
+      "ground_truth": "An abstractor is the capacity — exemplified by Turing, Gödel, and Church — to label things in the mathematical universe and build axioms from those labels to understand the universe mathematically. Cronin argues there were constructors before abstractors: the universe was building things before anything existed that could label or abstract, which leads to his question of where the 'prime labeler' came from.",
+      "ground_truth_chunk_ids": ["269_chunk_306", "269_chunk_307"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 269_chunk_306 and 269_chunk_307 — the definition of abstractor begins in one chunk and the axioms/prime-labeler elaboration completes in the next."
+    },
+    {
+      "id": "q018",
+      "question": "According to Tony Fadell, how did Steve Jobs deliver criticism?",
+      "ground_truth": "Jobs would critique the work, not judge the person — at least not in front of them or a group. He pushed relentlessly on the details and challenged people for the right reasons; it was not bullying or demeaning.",
+      "ground_truth_chunk_ids": ["294_chunk_103"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of Fadell's description of Steve Jobs's criticism style."
+    },
+    {
+      "id": "q019",
+      "question": "What are the two reasons Tim Urban gives for why SpaceX exists?",
+      "ground_truth": "First, life insurance for the species: putting humanity's eggs in two baskets with self-sustaining civilizations on two planets improves our long-term survival chances. Second, it is the greatest adventure in history — going multi-planetary gives people a reason to wake up in the morning and could be a great uniting event.",
+      "ground_truth_chunk_ids": ["264_chunk_56", "264_chunk_57"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 264_chunk_56 and 264_chunk_57 — the first reason ends one chunk and the second reason opens the next."
+    },
+    {
+      "id": "q020",
+      "question": "Which university is Richard Dawkins affiliated with?",
+      "ground_truth": "The sources do not contain information about Richard Dawkins's university affiliation.",
+      "ground_truth_chunk_ids": [],
+      "difficulty": "edge",
+      "category": "edge_case",
+      "notes": "Tests refusal — answer not in sources. Plausible biographical question about a featured guest, but the sampled chunks discuss memes, consciousness, and sexual selection, never his institution."
+    },
+    {
+      "id": "q021",
+      "question": "How long were the classes at Jo Boaler's Stanford summer math camps?",
+      "ground_truth": "The camp classes were three hours long. When planning them, the teachers worried whether they could keep the kids excited for that long.",
+      "ground_truth_chunk_ids": ["226_chunk_21"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of the class length at Boaler's Stanford summer camps."
+    },
+    {
+      "id": "q022",
+      "question": "What prophetic warning did senior man Henry Miller give after the 1993 World Trade Center bombing?",
+      "ground_truth": "Miller said the bombers 'didn't do it right' — they detonated in the middle instead of a corner, which would have toppled the building — and warned that they would be back to do it right next time. Niels finds it haunting and prophetic because Miller himself died on 9/11, and by 1994 a training manual even showed the towers with a target, framed as a matter of when, not if.",
+      "ground_truth_chunk_ids": ["220_chunk_24", "220_chunk_25"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 220_chunk_24 and 220_chunk_25 — the warning itself and the 1994 training-manual corroboration are in different chunks."
+    },
+    {
+      "id": "q023",
+      "question": "What does Lee Cronin speculate dark energy might actually be?",
+      "ground_truth": "He speculates dark energy could just be time. If time is fundamental and the universe is inflating in time, the total energy of the universe may actually be increasing, and figuring out what dark energy is could give deep clues about the consequences of time.",
+      "ground_truth_chunk_ids": ["269_chunk_311"],
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "notes": "Tests factual recall of Cronin's dark-energy-as-time speculation."
+    },
+    {
+      "id": "q024",
+      "question": "Why did Apple choose a virtual keyboard for the iPhone despite the BlackBerry's success?",
+      "ground_truth": "The BlackBerry was the number one productivity messaging device of its time — nicknamed the 'Crackberry' — and all the sales data favored hardware keyboards, so choosing a virtual keyboard was an opinion-based decision that took guts. Steve Jobs's reasoning was that BlackBerrys were productivity devices, while the iPhone was born out of an entertainment device that needed to show full-screen videos.",
+      "ground_truth_chunk_ids": ["294_chunk_108", "294_chunk_109"],
+      "difficulty": "medium",
+      "category": "multi_source",
+      "notes": "Tests synthesis across 294_chunk_108 and 294_chunk_109 — the BlackBerry context and Jobs's entertainment-device rationale span the chunk boundary."
+    },
+    {
+      "id": "q025",
+      "question": "How do I bake chocolate chip cookies?",
+      "ground_truth": "The sources do not contain information about baking chocolate chip cookies.",
+      "ground_truth_chunk_ids": [],
+      "difficulty": "edge",
+      "category": "edge_case",
+      "notes": "Tests refusal — off-topic how-to question entirely unrelated to the podcast content."
+    }
+  ]
+}
