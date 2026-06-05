@@ -2,11 +2,11 @@
 
 **Dataset version:** 1.0
 **Total questions:** 3
-**Generated:** 2026-06-05T15:54:28
+**Generated:** 2026-06-05T16:20:22
 
 ## Overall Verdict
 
-⚠️ **Issues detected — review diagnostic findings.**
+🔴 **Critical issues — action required before deployment.**
 
 ## Aggregate Scores
 
@@ -25,25 +25,26 @@
 
 | Metric | Value |
 |---|---|
-| Faithfulness | N/A |
-| Answer Relevancy | N/A |
-| Context Precision | 0.000 |
-| Context Recall | N/A |
-| Answer Correctness | N/A |
+| Faithfulness | 0.143 |
+| Answer Relevancy | 0.566 |
+| Context Precision | 0.333 |
+| Context Recall | 0.167 |
+| Answer Correctness | 0.616 |
 
 ## Diagnostic Findings
 
-### ⚠️ Layer-level diagnosis incomplete
+### 🔴 Both retrieval and generation are underperforming
 
-**Severity:** WARNING  
-**Layer:** SYSTEM
+**Severity:** CRITICAL  
+**Layer:** BOTH
 
-Cannot perform full layer diagnosis — faithfulness=N/A, context_recall=N/A. This usually means most questions are refusal-type or Ragas returned NaN.
+Faithfulness (0.143) and Context Recall (0.167) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.
 
 **Suggested actions:**
 
-- Ensure dataset has enough non-refusal questions for context metrics
-- Investigate Ragas output for NaN patterns
+- Focus on retrieval FIRST — generation cannot improve until context is correct
+- Increase top-K or add hybrid retrieval (BM25 + vector)
+- Re-evaluate after retrieval fix, then revisit generation
 
 ### ⚠️ Hit@5 is low — coverage problem
 
@@ -58,6 +59,19 @@ Hit@5 = 0.667. The retrieval often fails to return any relevant chunk in top-5.
 - Switch to a stronger embedding model
 - Add hybrid retrieval (BM25 alongside vector)
 - Review chunking strategy
+
+### ⚠️ Answer Relevancy is low — answers are off-topic or unfocused
+
+**Severity:** WARNING  
+**Layer:** GENERATION
+
+Answer Relevancy = 0.566. The LLM is producing answers that drift from the question or include tangential content.
+
+**Suggested actions:**
+
+- Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'
+- Lower maxOutputTokens to constrain answer length
+- Add few-shot examples of focused answers
 
 ### ℹ️ Precision@5 is low — noise problem
 
@@ -77,7 +91,7 @@ Precision@5 = 0.200. Too many irrelevant chunks are in top-5, which can confuse 
 **Severity:** INFO  
 **Layer:** GENERATION
 
-Context Precision = 0.000. The retrieved chunks include many that aren't needed to answer the question. This can degrade generation quality even when the right information IS present.
+Context Precision = 0.333. The retrieved chunks include many that aren't needed to answer the question. This can degrade generation quality even when the right information IS present.
 
 **Suggested actions:**
 
@@ -89,9 +103,9 @@ Context Precision = 0.000. The retrieved chunks include many that aren't needed 
 
 | ID | Difficulty | MRR | Hit@K | Faithfulness | Relevancy | Refusal |
 |---|---|---|---|---|---|---|
-| q001 | easy | 0.00 | 0 | — | — | — |
-| q002 | easy | 1.00 | 1 | — | — | — |
-| q003 | medium | 1.00 | 1 | — | — | — |
+| q001 | easy | 0.00 | 0 | — | 0.00 | — |
+| q002 | easy | 1.00 | 1 | 0.00 | 0.87 | — |
+| q003 | medium | 1.00 | 1 | 0.29 | 0.83 | — |
 
 ## Failed Questions (Detail)
 
@@ -103,7 +117,23 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** [QUERY FAILED]
 
-**Issues:** low MRR (0.00), missed hit@5
+**Issues:** low MRR (0.00), missed hit@5, low relevancy (0.00)
+
+### q002 (easy)
+
+**Question:** What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?
+
+**Answer:** Stanley, the car that eventually won the DARPA Grand Challenge, would commit suicide every 30 miles due to a bug where the sinking of two computer clocks occasionally caused a clock to go backwards. T...
+
+**Issues:** low faithfulness (0.00)
+
+### q003 (medium)
+
+**Question:** How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?
+
+**Answer:** Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. ...
+
+**Issues:** low faithfulness (0.29)
 
 ## Limitations
 

@@ -1,7 +1,7 @@
 {
   "run_date": "2026-06-05",
   "dataset_version": "1.0",
-  "generated_at": "2026-06-05T15:54:28",
+  "generated_at": "2026-06-05T16:20:22",
   "total_questions": 3,
   "aggregate": {
     "retrieval": {
@@ -14,28 +14,29 @@
       "questions_skipped": 0
     },
     "generation": {
-      "faithfulness": null,
-      "answer_relevancy": null,
-      "context_precision": 0.0,
-      "context_recall": null,
-      "answer_correctness": null,
+      "faithfulness": 0.14285714285714285,
+      "answer_relevancy": 0.5657386609325119,
+      "context_precision": 0.33333333331666665,
+      "context_recall": 0.16666666666666666,
+      "answer_correctness": 0.6159590824039878,
       "questions_total": 3,
-      "questions_evaluated_for_context": 0,
-      "questions_evaluated_for_faithfulness": 0
+      "questions_evaluated_for_context": 3,
+      "questions_evaluated_for_faithfulness": 2
     },
     "refusal": null
   },
   "diagnostic": {
-    "overall_health": "WARNING",
+    "overall_health": "CRITICAL",
     "findings": [
       {
-        "severity": "WARNING",
-        "layer": "SYSTEM",
-        "title": "Layer-level diagnosis incomplete",
-        "detail": "Cannot perform full layer diagnosis \u2014 faithfulness=N/A, context_recall=N/A. This usually means most questions are refusal-type or Ragas returned NaN.",
+        "severity": "CRITICAL",
+        "layer": "BOTH",
+        "title": "Both retrieval and generation are underperforming",
+        "detail": "Faithfulness (0.143) and Context Recall (0.167) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.",
         "suggested_actions": [
-          "Ensure dataset has enough non-refusal questions for context metrics",
-          "Investigate Ragas output for NaN patterns"
+          "Focus on retrieval FIRST \u2014 generation cannot improve until context is correct",
+          "Increase top-K or add hybrid retrieval (BM25 + vector)",
+          "Re-evaluate after retrieval fix, then revisit generation"
         ]
       },
       {
@@ -62,10 +63,21 @@
         ]
       },
       {
+        "severity": "WARNING",
+        "layer": "GENERATION",
+        "title": "Answer Relevancy is low \u2014 answers are off-topic or unfocused",
+        "detail": "Answer Relevancy = 0.566. The LLM is producing answers that drift from the question or include tangential content.",
+        "suggested_actions": [
+          "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
+          "Lower maxOutputTokens to constrain answer length",
+          "Add few-shot examples of focused answers"
+        ]
+      },
+      {
         "severity": "INFO",
         "layer": "GENERATION",
         "title": "Context Precision is low \u2014 LLM is processing too much noise",
-        "detail": "Context Precision = 0.000. The retrieved chunks include many that aren't needed to answer the question. This can degrade generation quality even when the right information IS present.",
+        "detail": "Context Precision = 0.333. The retrieved chunks include many that aren't needed to answer the question. This can degrade generation quality even when the right information IS present.",
         "suggested_actions": [
           "Add a re-ranker to filter chunks before sending to the LLM",
           "Raise similarity threshold",
@@ -91,10 +103,10 @@
       "generation": {
         "question_id": "q001",
         "faithfulness": null,
-        "answer_relevancy": null,
+        "answer_relevancy": 0.0,
         "context_precision": 0.0,
-        "context_recall": null,
-        "answer_correctness": null
+        "context_recall": 0.0,
+        "answer_correctness": 0.16759762656769556
       },
       "refusal": null,
       "retrieved_chunk_ids": [],
@@ -115,11 +127,11 @@
       },
       "generation": {
         "question_id": "q002",
-        "faithfulness": null,
-        "answer_relevancy": null,
-        "context_precision": null,
-        "context_recall": null,
-        "answer_correctness": null
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.8678632938618981,
+        "context_precision": 0.0,
+        "context_recall": 0.0,
+        "answer_correctness": 0.8489201925457122
       },
       "refusal": null,
       "retrieved_chunk_ids": [
@@ -146,11 +158,11 @@
       },
       "generation": {
         "question_id": "q003",
-        "faithfulness": null,
-        "answer_relevancy": null,
-        "context_precision": null,
-        "context_recall": null,
-        "answer_correctness": null
+        "faithfulness": 0.2857142857142857,
+        "answer_relevancy": 0.8293526889356378,
+        "context_precision": 0.99999999995,
+        "context_recall": 0.5,
+        "answer_correctness": 0.8938594280985557
       },
       "refusal": null,
       "retrieved_chunk_ids": [

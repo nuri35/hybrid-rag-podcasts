@@ -35,8 +35,36 @@ from evaluation.modules.dataset import Question
 
 
 GEMINI_JUDGE_MODEL = "gemini-2.5-pro"
-GEMINI_EMBEDDING_MODEL = "models/text-embedding-004"
+# text-embedding-004 was retired from the Generative Language API (404 on
+# v1beta embedContent as of 2026-06-05; absent from ListModels). The judge's
+# embeddings are independent of the production Chroma vector space (they only
+# score answer_relevancy/answer_correctness similarity), so switching models
+# here does NOT require re-ingestion.
+GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-001"
 GEMINI_JUDGE_TEMPERATURE = 0  # deterministic judgment
+
+# Ragas's LangchainLLMWrapper ALWAYS forwards these as per-call kwargs to
+# generate_prompt/agenerate_prompt (ragas 0.2.6 llms/base.py); langchain-google-genai
+# (2.0.x incl. 2.0.11) relays unknown kwargs straight to the raw gRPC client,
+# whose generate_content() rejects them with TypeError. The judge temperature is
+# already fixed at construction (GEMINI_JUDGE_TEMPERATURE), so dropping the
+# per-call kwarg is semantically a no-op.
+_RAGAS_UNSUPPORTED_KWARGS = ("temperature", "n")
+
+
+class RagasCompatibleChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
+    """ChatGoogleGenerativeAI that strips per-call kwargs Ragas passes but the
+    Gemini gRPC client rejects. See _RAGAS_UNSUPPORTED_KWARGS above."""
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        for key in _RAGAS_UNSUPPORTED_KWARGS:
+            kwargs.pop(key, None)
+        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        for key in _RAGAS_UNSUPPORTED_KWARGS:
+            kwargs.pop(key, None)
+        return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
 
 
 # ============================================================
@@ -77,6 +105,35 @@ class PerQuestionGenerationScore:
 # Gemini LLM-as-Judge Configuration
 # ============================================================
 
+def gemini_is_finished_parser(response: Any) -> bool:
+    """
+    Case-insensitive finish_reason check for Gemini responses.
+
+    Ragas's default is_finished compares finish_reason == "stop" (lowercase,
+    OpenAI convention), but Gemini reports "STOP" (uppercase) — so every
+    response is treated as unfinished and Ragas raises LLMDidNotFinishException
+    on all jobs (see ragas issue #1548). Passing this parser to
+    LangchainLLMWrapper restores correct completion detection.
+    """
+    is_finished_list = []
+    for g in response.flatten():
+        resp = g.generations[0][0]
+
+        finish_reason = None
+        if resp.generation_info is not None:
+            finish_reason = resp.generation_info.get("finish_reason")
+        elif getattr(resp, "message", None) is not None:
+            finish_reason = resp.message.response_metadata.get("finish_reason")
+
+        if finish_reason is None:
+            # Mirror Ragas's default: no signal → assume finished
+            is_finished_list.append(True)
+        else:
+            is_finished_list.append(str(finish_reason).lower() == "stop")
+
+    return all(is_finished_list)
+
+
 def create_gemini_judge() -> LangchainLLMWrapper:
     """
     Create the Gemini-based LLM judge for Ragas evaluation.
@@ -93,12 +150,12 @@ def create_gemini_judge() -> LangchainLLMWrapper:
             "Set it in your .env file or shell environment."
         )
 
-    chat_model = ChatGoogleGenerativeAI(
+    chat_model = RagasCompatibleChatGoogleGenerativeAI(
         model=GEMINI_JUDGE_MODEL,
         temperature=GEMINI_JUDGE_TEMPERATURE,
         google_api_key=api_key,
     )
-    return LangchainLLMWrapper(chat_model)
+    return LangchainLLMWrapper(chat_model, is_finished_parser=gemini_is_finished_parser)
 
 
 def create_gemini_embeddings() -> LangchainEmbeddingsWrapper:

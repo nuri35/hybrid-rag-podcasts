@@ -56,7 +56,7 @@ def test_create_gemini_judge_uses_env_key(monkeypatch):
     """create_gemini_judge reads GOOGLE_API_KEY from environment."""
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key-123")
 
-    with patch('evaluation.modules.generation_metrics.ChatGoogleGenerativeAI') as mock_chat:
+    with patch('evaluation.modules.generation_metrics.RagasCompatibleChatGoogleGenerativeAI') as mock_chat:
         with patch('evaluation.modules.generation_metrics.LangchainLLMWrapper'):
             create_gemini_judge()
 
@@ -81,6 +81,112 @@ def test_create_gemini_embeddings_missing_key_raises(monkeypatch):
 
     with pytest.raises(ValueError, match="GOOGLE_API_KEY"):
         create_gemini_embeddings()
+
+
+# ============================================================
+# Ragas-compatibility wrapper tests
+# ============================================================
+# Ragas always passes `temperature` (and sometimes `n`) as per-call kwargs;
+# langchain-google-genai 2.0.x forwards unknown kwargs to the raw gRPC client,
+# which rejects them with TypeError. The wrapper must strip them.
+
+def test_wrapper_strips_temperature_kwarg_sync():
+    """_generate drops temperature/n before delegating to the parent class."""
+    import asyncio
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from evaluation.modules.generation_metrics import RagasCompatibleChatGoogleGenerativeAI
+
+    model = RagasCompatibleChatGoogleGenerativeAI(
+        model="gemini-2.5-pro", temperature=0, google_api_key="fake-key",
+    )
+
+    with patch.object(ChatGoogleGenerativeAI, "_generate", return_value="result") as mock_gen:
+        out = model._generate([], temperature=1e-8, n=3, custom_kwarg="keep")
+
+    assert out == "result"
+    forwarded = mock_gen.call_args.kwargs
+    assert "temperature" not in forwarded
+    assert "n" not in forwarded
+    assert forwarded.get("custom_kwarg") == "keep"  # only known-bad kwargs stripped
+
+
+def test_wrapper_strips_temperature_kwarg_async():
+    """_agenerate drops temperature/n before delegating to the parent class."""
+    import asyncio
+    from unittest.mock import AsyncMock
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from evaluation.modules.generation_metrics import RagasCompatibleChatGoogleGenerativeAI
+
+    model = RagasCompatibleChatGoogleGenerativeAI(
+        model="gemini-2.5-pro", temperature=0, google_api_key="fake-key",
+    )
+
+    with patch.object(ChatGoogleGenerativeAI, "_agenerate", new=AsyncMock(return_value="result")) as mock_agen:
+        out = asyncio.run(model._agenerate([], temperature=1e-8, n=3))
+
+    assert out == "result"
+    forwarded = mock_agen.call_args.kwargs
+    assert "temperature" not in forwarded
+    assert "n" not in forwarded
+
+
+# ============================================================
+# Gemini finish_reason parser tests
+# ============================================================
+# Ragas's default is_finished compares finish_reason == "stop" (lowercase);
+# Gemini reports "STOP" (uppercase) → LLMDidNotFinishException on every job.
+
+def _llm_result_with_finish_reason(finish_reason):
+    """Build a minimal LLMResult carrying the given finish_reason."""
+    from langchain_core.outputs import LLMResult, ChatGeneration
+    from langchain_core.messages import AIMessage
+
+    generation = ChatGeneration(
+        message=AIMessage(content="OK"),
+        generation_info=None if finish_reason is None else {"finish_reason": finish_reason},
+    )
+    return LLMResult(generations=[[generation]])
+
+
+def test_finished_parser_accepts_uppercase_stop():
+    """Gemini's 'STOP' must count as finished."""
+    from evaluation.modules.generation_metrics import gemini_is_finished_parser
+
+    assert gemini_is_finished_parser(_llm_result_with_finish_reason("STOP")) is True
+
+
+def test_finished_parser_accepts_lowercase_stop():
+    """OpenAI-style 'stop' also counts as finished."""
+    from evaluation.modules.generation_metrics import gemini_is_finished_parser
+
+    assert gemini_is_finished_parser(_llm_result_with_finish_reason("stop")) is True
+
+
+def test_finished_parser_rejects_max_tokens():
+    """A truncated response (MAX_TOKENS) is NOT finished."""
+    from evaluation.modules.generation_metrics import gemini_is_finished_parser
+
+    assert gemini_is_finished_parser(_llm_result_with_finish_reason("MAX_TOKENS")) is False
+
+
+def test_finished_parser_defaults_true_when_no_signal():
+    """No finish_reason anywhere → assume finished (mirrors Ragas default)."""
+    from evaluation.modules.generation_metrics import gemini_is_finished_parser
+
+    assert gemini_is_finished_parser(_llm_result_with_finish_reason(None)) is True
+
+
+def test_create_gemini_judge_wires_finished_parser(monkeypatch):
+    """The judge wrapper must receive the Gemini-aware is_finished_parser."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key-123")
+
+    from evaluation.modules.generation_metrics import gemini_is_finished_parser
+
+    with patch('evaluation.modules.generation_metrics.RagasCompatibleChatGoogleGenerativeAI'):
+        with patch('evaluation.modules.generation_metrics.LangchainLLMWrapper') as mock_wrapper:
+            create_gemini_judge()
+
+    assert mock_wrapper.call_args.kwargs.get('is_finished_parser') is gemini_is_finished_parser
 
 
 # ============================================================
