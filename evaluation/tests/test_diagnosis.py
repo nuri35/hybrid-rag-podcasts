@@ -23,8 +23,7 @@ def _healthy_retrieval():
 
 def _healthy_generation():
     return GenerationScores(
-        faithfulness=0.88, answer_relevancy=0.91, context_precision=0.85,
-        context_recall=0.87, answer_correctness=0.83,
+        faithfulness=0.88, answer_relevancy=0.91, context_recall=0.87,
         questions_total=25, questions_evaluated_for_context=21,
         questions_evaluated_for_faithfulness=25,
     )
@@ -54,8 +53,7 @@ def test_diagnose_healthy_system_returns_healthy():
 def test_diagnose_both_layers_low_critical():
     """Faithfulness low + Context Recall low → CRITICAL, BOTH layer."""
     gen = GenerationScores(
-        faithfulness=0.5, answer_relevancy=0.85, context_precision=0.6,
-        context_recall=0.5, answer_correctness=0.6,
+        faithfulness=0.5, answer_relevancy=0.85, context_recall=0.5,
         questions_total=25, questions_evaluated_for_context=21,
         questions_evaluated_for_faithfulness=25,
     )
@@ -69,8 +67,7 @@ def test_diagnose_both_layers_low_critical():
 def test_diagnose_retrieval_only_low():
     """Context Recall low, Faithfulness healthy → RETRIEVAL warning."""
     gen = GenerationScores(
-        faithfulness=0.88, answer_relevancy=0.85, context_precision=0.6,
-        context_recall=0.5, answer_correctness=0.7,
+        faithfulness=0.88, answer_relevancy=0.85, context_recall=0.5,
         questions_total=25, questions_evaluated_for_context=21,
         questions_evaluated_for_faithfulness=25,
     )
@@ -83,8 +80,7 @@ def test_diagnose_retrieval_only_low():
 def test_diagnose_generation_critical_when_faithfulness_very_low():
     """Faithfulness < CRITICAL threshold → CRITICAL severity."""
     gen = GenerationScores(
-        faithfulness=0.4, answer_relevancy=0.85, context_precision=0.85,
-        context_recall=0.85, answer_correctness=0.6,
+        faithfulness=0.4, answer_relevancy=0.85, context_recall=0.85,
         questions_total=25, questions_evaluated_for_context=21,
         questions_evaluated_for_faithfulness=25,
     )
@@ -97,8 +93,7 @@ def test_diagnose_generation_critical_when_faithfulness_very_low():
 def test_diagnose_handles_none_faithfulness():
     """If faithfulness is None (Ragas failed), should emit a warning, not crash."""
     gen = GenerationScores(
-        faithfulness=None, answer_relevancy=0.85, context_precision=None,
-        context_recall=None, answer_correctness=0.7,
+        faithfulness=None, answer_relevancy=0.85, context_recall=None,
         questions_total=25, questions_evaluated_for_context=0,
         questions_evaluated_for_faithfulness=0,
     )

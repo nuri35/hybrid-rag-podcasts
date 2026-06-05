@@ -37,8 +37,7 @@ def _sample_aggregate_retrieval():
 
 def _sample_generation():
     return GenerationScores(
-        faithfulness=0.84, answer_relevancy=0.91, context_precision=0.78,
-        context_recall=0.82, answer_correctness=0.79,
+        faithfulness=0.84, answer_relevancy=0.91, context_recall=0.82,
         questions_total=25, questions_evaluated_for_context=21,
         questions_evaluated_for_faithfulness=25,
     )
@@ -79,7 +78,7 @@ def test_markdown_report_writes_file(tmp_path):
         per_question_retrieval=[RetrievalScores(mrr=0.5, hit_at_k=1.0, precision_at_k=0.2, recall_at_k=1.0, k=5)],
         per_question_generation=[PerQuestionGenerationScore(
             question_id="q001", faithfulness=0.85, answer_relevancy=0.9,
-            context_precision=0.8, context_recall=0.85, answer_correctness=0.8,
+            context_recall=0.85,
         )],
         per_question_refusal=[RefusalCheck(
             question_id="q001", expected_refusal=False, actually_refused=False,
@@ -94,13 +93,20 @@ def test_markdown_report_writes_file(tmp_path):
     assert "0.840" in content  # generation faithfulness
     assert "## Per-Question Breakdown" in content
 
+    # Retained 3 metrics present
+    assert "| Faithfulness |" in content
+    assert "| Answer Relevancy |" in content
+    assert "| Context Recall |" in content
+    # Regression guard: trimmed metrics must NOT appear (5→3 trim)
+    assert "Context Precision" not in content
+    assert "Answer Correctness" not in content
+
 
 def test_markdown_report_handles_none_metrics(tmp_path):
     """Metrics with None values render as 'N/A' instead of crashing."""
     path = tmp_path / "report.md"
     gen_with_nones = GenerationScores(
-        faithfulness=None, answer_relevancy=0.85, context_precision=None,
-        context_recall=None, answer_correctness=0.7,
+        faithfulness=None, answer_relevancy=0.85, context_recall=None,
         questions_total=25, questions_evaluated_for_context=0,
         questions_evaluated_for_faithfulness=0,
     )
@@ -141,9 +147,9 @@ def test_json_report_writes_valid_json(tmp_path):
         ],
         per_question_generation=[
             PerQuestionGenerationScore(question_id="q001", faithfulness=0.85, answer_relevancy=0.9,
-                context_precision=0.8, context_recall=0.85, answer_correctness=0.8),
+                context_recall=0.85),
             PerQuestionGenerationScore(question_id="q005", faithfulness=0.7, answer_relevancy=0.8,
-                context_precision=None, context_recall=None, answer_correctness=0.75),
+                context_recall=None),
         ],
         per_question_refusal=[
             RefusalCheck(question_id="q001", expected_refusal=False, actually_refused=False, answer_excerpt="x"),

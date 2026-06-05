@@ -90,9 +90,7 @@ def write_markdown_report(
     lines.append("|---|---|")
     lines.append(f"| Faithfulness | {_fmt(generation.faithfulness)} |")
     lines.append(f"| Answer Relevancy | {_fmt(generation.answer_relevancy)} |")
-    lines.append(f"| Context Precision | {_fmt(generation.context_precision)} |")
     lines.append(f"| Context Recall | {_fmt(generation.context_recall)} |")
-    lines.append(f"| Answer Correctness | {_fmt(generation.answer_correctness)} |")
     lines.append("")
 
     if refusal is not None:

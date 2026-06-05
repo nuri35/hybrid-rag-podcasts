@@ -258,9 +258,7 @@ def test_calculate_generation_metrics_aggregates_correctly(mock_evaluate):
     mock_evaluate.return_value = _make_mock_ragas_result({
         'faithfulness': [0.8, 0.9, 0.7],
         'answer_relevancy': [0.9, 0.85, 0.95],
-        'context_precision': [0.7, 0.8, 0.6],
         'context_recall': [0.75, 0.85, 0.65],
-        'answer_correctness': [0.8, 0.85, 0.75],
     })
 
     questions = [_make_question(f"q00{i}") for i in range(1, 4)]
@@ -274,9 +272,7 @@ def test_calculate_generation_metrics_aggregates_correctly(mock_evaluate):
 
     assert scores.faithfulness == pytest.approx(0.8)
     assert scores.answer_relevancy == pytest.approx(0.9)
-    assert scores.context_precision == pytest.approx(0.7)
     assert scores.context_recall == pytest.approx(0.75)
-    assert scores.answer_correctness == pytest.approx(0.8)
     assert scores.questions_total == 3
     assert scores.questions_evaluated_for_context == 3
     assert scores.questions_evaluated_for_faithfulness == 3
@@ -284,13 +280,11 @@ def test_calculate_generation_metrics_aggregates_correctly(mock_evaluate):
 
 @patch('evaluation.modules.generation_metrics.evaluate')
 def test_calculate_generation_metrics_handles_nan_in_context_metrics(mock_evaluate):
-    """Refusal questions producing NaN for context_precision/recall don't break aggregation."""
+    """Refusal questions producing NaN for context_recall don't break aggregation."""
     mock_evaluate.return_value = _make_mock_ragas_result({
         'faithfulness': [0.8, 0.9, 0.7],  # all valid
         'answer_relevancy': [0.9, 0.85, 0.95],
-        'context_precision': [0.7, float('nan'), 0.6],  # one NaN
-        'context_recall': [0.75, float('nan'), 0.65],
-        'answer_correctness': [0.8, 0.85, 0.75],
+        'context_recall': [0.75, float('nan'), 0.65],  # one NaN
     })
 
     questions = [
@@ -308,8 +302,7 @@ def test_calculate_generation_metrics_handles_nan_in_context_metrics(mock_evalua
 
     # Faithfulness includes all 3
     assert scores.faithfulness == pytest.approx(0.8)
-    # Context metrics exclude the NaN (mean of 0.7 and 0.6)
-    assert scores.context_precision == pytest.approx(0.65)
+    # Context recall excludes the NaN (mean of 0.75 and 0.65)
     assert scores.context_recall == pytest.approx(0.7)
     assert scores.questions_evaluated_for_context == 2
     assert scores.questions_evaluated_for_faithfulness == 3
@@ -317,13 +310,11 @@ def test_calculate_generation_metrics_handles_nan_in_context_metrics(mock_evalua
 
 @patch('evaluation.modules.generation_metrics.evaluate')
 def test_calculate_generation_metrics_all_nan_returns_none(mock_evaluate):
-    """If every row's context_precision is NaN, the metric should be None."""
+    """If every row's context_recall is NaN, the metric should be None."""
     mock_evaluate.return_value = _make_mock_ragas_result({
         'faithfulness': [0.8, 0.9],
         'answer_relevancy': [0.9, 0.85],
-        'context_precision': [float('nan'), float('nan')],
         'context_recall': [float('nan'), float('nan')],
-        'answer_correctness': [0.8, 0.85],
     })
 
     questions = [_make_question("q001", is_refusal=True), _make_question("q002", is_refusal=True)]
@@ -335,7 +326,6 @@ def test_calculate_generation_metrics_all_nan_returns_none(mock_evaluate):
         embeddings=MagicMock(),
     )
 
-    assert scores.context_precision is None
     assert scores.context_recall is None
     assert scores.faithfulness is not None  # still computable
 
@@ -350,9 +340,7 @@ def test_get_per_question_scores_returns_one_per_question(mock_evaluate):
     mock_evaluate.return_value = _make_mock_ragas_result({
         'faithfulness': [0.9, 0.5],
         'answer_relevancy': [0.85, 0.7],
-        'context_precision': [0.8, 0.6],
         'context_recall': [0.9, 0.7],
-        'answer_correctness': [0.85, 0.65],
     })
 
     questions = [_make_question("q001"), _make_question("q002")]
@@ -377,9 +365,7 @@ def test_get_per_question_scores_handles_nan_per_question(mock_evaluate):
     mock_evaluate.return_value = _make_mock_ragas_result({
         'faithfulness': [0.9, 0.5],
         'answer_relevancy': [0.85, 0.7],
-        'context_precision': [0.8, float('nan')],
         'context_recall': [0.9, float('nan')],
-        'answer_correctness': [0.85, 0.65],
     })
 
     questions = [_make_question("q001"), _make_question("q002", is_refusal=True)]
@@ -391,7 +377,6 @@ def test_get_per_question_scores_handles_nan_per_question(mock_evaluate):
         embeddings=MagicMock(),
     )
 
-    assert per_q[1].context_precision is None
     assert per_q[1].context_recall is None
     assert per_q[1].faithfulness == pytest.approx(0.5)
 

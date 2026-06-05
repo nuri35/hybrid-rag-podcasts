@@ -6,6 +6,15 @@ Provides:
 - Dataset conversion from our QueryResult/Question to HuggingFace Dataset
 - Aggregated and per-question generation scores
 - Graceful NaN handling for refusal questions (empty ground_truth_chunk_ids)
+
+Note: This module evaluates 3 Ragas metrics (faithfulness, answer_relevancy,
+context_recall) instead of the full 5. Context Precision and Answer Correctness
+were dropped to reduce LLM call cost by ~40% — see ADR-0017 (planned) for rationale.
+The retained 3 cover the diagnostic map's core needs:
+- faithfulness + context_recall: layer-level diagnosis
+- answer_relevancy: off-topic detection
+Custom retrieval metrics (Precision@5, Recall@5) cover what Ragas Context Precision
+would have measured deterministically, without LLM calls.
 """
 
 import math
@@ -19,9 +28,7 @@ from ragas import evaluate
 from ragas.metrics import (
     faithfulness,
     answer_relevancy,
-    context_precision,
     context_recall,
-    answer_correctness,
 )
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -38,7 +45,7 @@ GEMINI_JUDGE_MODEL = "gemini-2.5-pro"
 # text-embedding-004 was retired from the Generative Language API (404 on
 # v1beta embedContent as of 2026-06-05; absent from ListModels). The judge's
 # embeddings are independent of the production Chroma vector space (they only
-# score answer_relevancy/answer_correctness similarity), so switching models
+# score answer_relevancy similarity), so switching models
 # here does NOT require re-ingestion.
 GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-001"
 GEMINI_JUDGE_TEMPERATURE = 0  # deterministic judgment
@@ -77,13 +84,11 @@ class GenerationScores:
     Aggregated generation scores across the dataset.
 
     None values mean the metric couldn't be aggregated meaningfully
-    (e.g., context_precision when most questions are refusal-type).
+    (e.g., context_recall when most questions are refusal-type).
     """
     faithfulness: Optional[float]
     answer_relevancy: Optional[float]
-    context_precision: Optional[float]
     context_recall: Optional[float]
-    answer_correctness: Optional[float]
 
     questions_total: int
     questions_evaluated_for_context: int  # excludes refusal questions
@@ -96,9 +101,7 @@ class PerQuestionGenerationScore:
     question_id: str
     faithfulness: Optional[float]
     answer_relevancy: Optional[float]
-    context_precision: Optional[float]
     context_recall: Optional[float]
-    answer_correctness: Optional[float]
 
 
 # ============================================================
@@ -161,7 +164,7 @@ def create_gemini_judge() -> LangchainLLMWrapper:
 def create_gemini_embeddings() -> LangchainEmbeddingsWrapper:
     """
     Create the Gemini embeddings model for similarity-based Ragas metrics
-    (answer_relevancy, answer_correctness).
+    (answer_relevancy).
 
     Raises:
         ValueError: if GOOGLE_API_KEY is not set.
@@ -240,9 +243,8 @@ def calculate_generation_metrics(
     Run Ragas evaluation on the dataset and return aggregated generation scores.
 
     Refusal questions (empty ground_truth_chunk_ids) may produce NaN for
-    context_precision and context_recall. These NaN values are filtered out
-    when computing aggregate means. Faithfulness, answer_relevancy, and
-    answer_correctness work for all questions.
+    context_recall. These NaN values are filtered out when computing
+    aggregate means. Faithfulness and answer_relevancy work for all questions.
 
     Args:
         query_results: API responses for each question.
@@ -266,9 +268,7 @@ def calculate_generation_metrics(
         metrics=[
             faithfulness,
             answer_relevancy,
-            context_precision,
             context_recall,
-            answer_correctness,
         ],
         llm=judge_llm,
         embeddings=embeddings,
@@ -281,9 +281,7 @@ def calculate_generation_metrics(
     return GenerationScores(
         faithfulness=_safe_mean(result_dict.get('faithfulness', [])),
         answer_relevancy=_safe_mean(result_dict.get('answer_relevancy', [])),
-        context_precision=_safe_mean(result_dict.get('context_precision', [])),
         context_recall=_safe_mean(result_dict.get('context_recall', [])),
-        answer_correctness=_safe_mean(result_dict.get('answer_correctness', [])),
         questions_total=len(questions),
         questions_evaluated_for_context=_count_valid(result_dict.get('context_recall', [])),
         questions_evaluated_for_faithfulness=_count_valid(result_dict.get('faithfulness', [])),
@@ -313,9 +311,7 @@ def get_per_question_scores(
         metrics=[
             faithfulness,
             answer_relevancy,
-            context_precision,
             context_recall,
-            answer_correctness,
         ],
         llm=judge_llm,
         embeddings=embeddings,
@@ -328,9 +324,7 @@ def get_per_question_scores(
             question_id=question.id,
             faithfulness=_get_score(df, idx, 'faithfulness'),
             answer_relevancy=_get_score(df, idx, 'answer_relevancy'),
-            context_precision=_get_score(df, idx, 'context_precision'),
             context_recall=_get_score(df, idx, 'context_recall'),
-            answer_correctness=_get_score(df, idx, 'answer_correctness'),
         ))
 
     return per_question

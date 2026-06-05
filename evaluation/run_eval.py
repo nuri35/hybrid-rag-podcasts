@@ -8,7 +8,7 @@ Runs the full evaluation pipeline:
 4. Query API for each question
 5. Compute retrieval metrics (custom)
 6. Compute refusal compliance
-7. Compute generation metrics (Ragas + Gemini, ~25-30 min on Tier 1)
+7. Compute generation metrics (Ragas + Gemini, ~13-17 min on Tier 1; 3 metrics)
 8. Run diagnostic engine
 9. Write markdown + JSON reports
 
@@ -377,8 +377,8 @@ def main():
     # [7/9] Generation metrics (Ragas, slow!)
     # ----------------------------------------------------------------
     print("\n[7/9] Computing generation metrics (Ragas + Gemini)...")
-    print("  ⏳ This will take ~25-30 minutes on Gemini Tier 1 (15 RPM).")
-    print("     Ragas makes ~3-5 LLM calls per question per metric.")
+    print("  ⏳ This will take ~13-17 minutes on Gemini Tier 1 (15 RPM).")
+    print("     Ragas makes ~3 LLM calls per question per metric (3 metrics).")
     print("     Press Ctrl+C to abort (state will be lost).")
     print()
 
@@ -391,9 +391,7 @@ def main():
         print(f"  ✓ Generation metrics computed in {gen_elapsed/60:.1f} min:")
         print(f"     Faithfulness={_fmt(generation_scores.faithfulness)}")
         print(f"     Answer Relevancy={_fmt(generation_scores.answer_relevancy)}")
-        print(f"     Context Precision={_fmt(generation_scores.context_precision)}")
         print(f"     Context Recall={_fmt(generation_scores.context_recall)}")
-        print(f"     Answer Correctness={_fmt(generation_scores.answer_correctness)}")
     except Exception as e:
         print(f"  ✗ Generation metrics FAILED: {type(e).__name__}: {e}")
         print(f"  Cannot continue without generation metrics.")

@@ -35,8 +35,6 @@ CONTEXT_RECALL_PROBLEMATIC = 0.7
 ANSWER_RELEVANCY_HEALTHY = 0.8
 ANSWER_RELEVANCY_PROBLEMATIC = 0.7
 
-CONTEXT_PRECISION_PROBLEMATIC = 0.5
-
 # Retrieval health thresholds
 MRR_HEALTHY = 0.7
 MRR_PROBLEMATIC = 0.5
@@ -113,7 +111,7 @@ def diagnose(
     Order of analysis (per planning discussion):
     1. First check which LAYER has issues (Context Recall vs Faithfulness)
     2. Then drill into the failing layer's metrics
-    3. Check Answer Relevancy and Context Precision as secondary signals
+    3. Check Answer Relevancy as a secondary signal
     4. Check refusal compliance separately
     5. Compute overall health from worst finding
 
@@ -348,24 +346,6 @@ def _diagnose_generation(generation: GenerationScores) -> List[DiagnosticFinding
                 "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
                 "Lower maxOutputTokens to constrain answer length",
                 "Add few-shot examples of focused answers",
-            ],
-        ))
-
-    # Context Precision (LLM is drowning in noise even if information is there)
-    if generation.context_precision is not None and generation.context_precision < CONTEXT_PRECISION_PROBLEMATIC:
-        findings.append(DiagnosticFinding(
-            severity=Severity.INFO,
-            layer=Layer.GENERATION,
-            title="Context Precision is low — LLM is processing too much noise",
-            detail=(
-                f"Context Precision = {generation.context_precision:.3f}. The retrieved chunks "
-                f"include many that aren't needed to answer the question. This can degrade "
-                f"generation quality even when the right information IS present."
-            ),
-            suggested_actions=[
-                "Add a re-ranker to filter chunks before sending to the LLM",
-                "Raise similarity threshold",
-                "Reduce top-K",
             ],
         ))
 
