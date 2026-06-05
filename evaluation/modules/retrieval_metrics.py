@@ -60,7 +60,8 @@ def mrr(retrieved_ids: List[str], ground_truth_ids: List[str]) -> float:
         0.0
     """
     if not ground_truth_ids:
-        raise ValueError("mrr undefined for empty ground_truth_ids; check is_refusal first")
+        raise ValueError(
+            "mrr undefined for empty ground_truth_ids; check is_refusal first")
 
     gt_set = set(ground_truth_ids)
     for i, chunk_id in enumerate(retrieved_ids):
@@ -186,7 +187,8 @@ def aggregate_scores(
     skipped = len(per_question_scores) - len(valid_scores)
 
     if not valid_scores:
-        raise ValueError("No valid scores to aggregate (all questions were refusal-type)")
+        raise ValueError(
+            "No valid scores to aggregate (all questions were refusal-type)")
 
     n = len(valid_scores)
     k = valid_scores[0].k
