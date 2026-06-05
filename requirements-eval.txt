@@ -14,6 +14,9 @@ pytest==8.3.3
 
 # Step 3 dependencies — Ragas generation metrics
 ragas==0.2.6
-langchain-google-genai==2.0.0
+# 2.0.0 forwarded Ragas's `temperature` kwarg straight to the raw gRPC client
+# (generate_content() rejects it → every judge call failed with TypeError).
+# 2.0.11 consumes generation kwargs into generation_config correctly.
+langchain-google-genai==2.0.11
 datasets==2.18.0
 python-dotenv==1.0.0

@@ -1,0 +1,166 @@
+{
+  "run_date": "2026-06-05",
+  "dataset_version": "1.0",
+  "generated_at": "2026-06-05T15:54:28",
+  "total_questions": 3,
+  "aggregate": {
+    "retrieval": {
+      "mrr": 0.6666666666666666,
+      "hit_at_k": 0.6666666666666666,
+      "precision_at_k": 0.20000000000000004,
+      "recall_at_k": 0.6666666666666666,
+      "k": 5,
+      "questions_evaluated": 3,
+      "questions_skipped": 0
+    },
+    "generation": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": 0.0,
+      "context_recall": null,
+      "answer_correctness": null,
+      "questions_total": 3,
+      "questions_evaluated_for_context": 0,
+      "questions_evaluated_for_faithfulness": 0
+    },
+    "refusal": null
+  },
+  "diagnostic": {
+    "overall_health": "WARNING",
+    "findings": [
+      {
+        "severity": "WARNING",
+        "layer": "SYSTEM",
+        "title": "Layer-level diagnosis incomplete",
+        "detail": "Cannot perform full layer diagnosis \u2014 faithfulness=N/A, context_recall=N/A. This usually means most questions are refusal-type or Ragas returned NaN.",
+        "suggested_actions": [
+          "Ensure dataset has enough non-refusal questions for context metrics",
+          "Investigate Ragas output for NaN patterns"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "RETRIEVAL",
+        "title": "Hit@5 is low \u2014 coverage problem",
+        "detail": "Hit@5 = 0.667. The retrieval often fails to return any relevant chunk in top-5.",
+        "suggested_actions": [
+          "Increase top-K (try 10)",
+          "Switch to a stronger embedding model",
+          "Add hybrid retrieval (BM25 alongside vector)",
+          "Review chunking strategy"
+        ]
+      },
+      {
+        "severity": "INFO",
+        "layer": "RETRIEVAL",
+        "title": "Precision@5 is low \u2014 noise problem",
+        "detail": "Precision@5 = 0.200. Too many irrelevant chunks are in top-5, which can confuse the LLM.",
+        "suggested_actions": [
+          "Add a re-ranker to push noise down",
+          "Raise similarity threshold (filter out low-score chunks)",
+          "Reduce top-K to 3"
+        ]
+      },
+      {
+        "severity": "INFO",
+        "layer": "GENERATION",
+        "title": "Context Precision is low \u2014 LLM is processing too much noise",
+        "detail": "Context Precision = 0.000. The retrieved chunks include many that aren't needed to answer the question. This can degrade generation quality even when the right information IS present.",
+        "suggested_actions": [
+          "Add a re-ranker to filter chunks before sending to the LLM",
+          "Raise similarity threshold",
+          "Reduce top-K"
+        ]
+      }
+    ]
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "question": "What was the nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q001",
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": 0.0,
+        "context_recall": null,
+        "answer_correctness": null
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [],
+      "answer": "[QUERY FAILED]"
+    },
+    {
+      "id": "q002",
+      "question": "What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q002",
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null,
+        "context_recall": null,
+        "answer_correctness": null
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [
+        "59_chunk_12",
+        "147_chunk_22",
+        "147_chunk_31",
+        "147_chunk_32",
+        "147_chunk_30"
+      ],
+      "answer": "Stanley, the car that eventually won the DARPA Grand Challenge, would commit suicide every 30 miles due to a bug where the sinking of two computer clocks occasionally caused a clock to go backwards. This negative time elapsed screwed up the entire internal logic, and it took a long time to find this bug [Source 1]."
+    },
+    {
+      "id": "q003",
+      "question": "How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q003",
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null,
+        "context_recall": null,
+        "answer_correctness": null
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [
+        "87_chunk_20",
+        "87_chunk_21",
+        "87_chunk_17",
+        "193_chunk_12",
+        "87_chunk_19"
+      ],
+      "answer": "Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. The other mode is transverse, which he compares to viral transmission, as seen when a charismatic preacher converts people [Source 1]."
+    }
+  ]
+}
