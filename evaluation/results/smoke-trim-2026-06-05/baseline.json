@@ -1,0 +1,159 @@
+{
+  "run_date": "2026-06-05",
+  "dataset_version": "1.0",
+  "generated_at": "2026-06-05T17:37:51",
+  "total_questions": 3,
+  "aggregate": {
+    "retrieval": {
+      "mrr": 0.6666666666666666,
+      "hit_at_k": 0.6666666666666666,
+      "precision_at_k": 0.20000000000000004,
+      "recall_at_k": 0.6666666666666666,
+      "k": 5,
+      "questions_evaluated": 3,
+      "questions_skipped": 0
+    },
+    "generation": {
+      "faithfulness": 0.14285714285714285,
+      "answer_relevancy": 0.5633683217932457,
+      "context_recall": 0.16666666666666666,
+      "questions_total": 3,
+      "questions_evaluated_for_context": 3,
+      "questions_evaluated_for_faithfulness": 2
+    },
+    "refusal": null
+  },
+  "diagnostic": {
+    "overall_health": "CRITICAL",
+    "findings": [
+      {
+        "severity": "CRITICAL",
+        "layer": "BOTH",
+        "title": "Both retrieval and generation are underperforming",
+        "detail": "Faithfulness (0.143) and Context Recall (0.167) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.",
+        "suggested_actions": [
+          "Focus on retrieval FIRST \u2014 generation cannot improve until context is correct",
+          "Increase top-K or add hybrid retrieval (BM25 + vector)",
+          "Re-evaluate after retrieval fix, then revisit generation"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "RETRIEVAL",
+        "title": "Hit@5 is low \u2014 coverage problem",
+        "detail": "Hit@5 = 0.667. The retrieval often fails to return any relevant chunk in top-5.",
+        "suggested_actions": [
+          "Increase top-K (try 10)",
+          "Switch to a stronger embedding model",
+          "Add hybrid retrieval (BM25 alongside vector)",
+          "Review chunking strategy"
+        ]
+      },
+      {
+        "severity": "INFO",
+        "layer": "RETRIEVAL",
+        "title": "Precision@5 is low \u2014 noise problem",
+        "detail": "Precision@5 = 0.200. Too many irrelevant chunks are in top-5, which can confuse the LLM.",
+        "suggested_actions": [
+          "Add a re-ranker to push noise down",
+          "Raise similarity threshold (filter out low-score chunks)",
+          "Reduce top-K to 3"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "GENERATION",
+        "title": "Answer Relevancy is low \u2014 answers are off-topic or unfocused",
+        "detail": "Answer Relevancy = 0.563. The LLM is producing answers that drift from the question or include tangential content.",
+        "suggested_actions": [
+          "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
+          "Lower maxOutputTokens to constrain answer length",
+          "Add few-shot examples of focused answers"
+        ]
+      }
+    ]
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "question": "What was the nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q001",
+        "faithfulness": null,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [],
+      "answer": "[QUERY FAILED]"
+    },
+    {
+      "id": "q002",
+      "question": "What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q002",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.8747150837465733,
+        "context_recall": 0.0
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [
+        "59_chunk_12",
+        "147_chunk_22",
+        "147_chunk_31",
+        "147_chunk_32",
+        "147_chunk_30"
+      ],
+      "answer": "Stanley, the car that eventually won the DARPA Grand Challenge, would commit suicide every 30 miles due to a bug where the sinking of two computer clocks occasionally caused a clock to go backwards. This negative time elapsed screwed up the entire internal logic, and it took a long time to find this bug [Source 1]."
+    },
+    {
+      "id": "q003",
+      "question": "How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q003",
+        "faithfulness": 0.2857142857142857,
+        "answer_relevancy": 0.8293526889356378,
+        "context_recall": 0.5
+      },
+      "refusal": null,
+      "retrieved_chunk_ids": [
+        "87_chunk_20",
+        "87_chunk_21",
+        "87_chunk_17",
+        "193_chunk_12",
+        "87_chunk_19"
+      ],
+      "answer": "Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. The other mode is transverse, which he compares to viral transmission, as seen when a charismatic preacher converts people [Source 1]."
+    }
+  ]
+}
