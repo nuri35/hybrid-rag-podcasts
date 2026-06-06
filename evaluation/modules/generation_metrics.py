@@ -189,6 +189,7 @@ def create_gemini_embeddings() -> LangchainEmbeddingsWrapper:
 def build_ragas_dataset(
     query_results: List[QueryResult],
     questions: List[Question],
+    use_full_chunks: bool = True,
 ) -> Dataset:
     """
     Convert our QueryResult + Question pairs into a HuggingFace Dataset
@@ -200,13 +201,16 @@ def build_ragas_dataset(
     - contexts: List[str] (retrieved chunk texts)
     - ground_truth: str (expected answer from golden dataset)
 
-    Note: contexts uses Source.excerpt (200-char snippets). If faithfulness
-    scores are unexpectedly low in baseline, consider switching to full
-    chunk text (would require API changes — out of scope for this sprint).
-
     Args:
         query_results: API responses, ordered to match questions.
         questions: Golden dataset entries.
+        use_full_chunks: if True, fetch full chunk text from Chroma instead of
+            using excerpts. Default True since excerpts are too short for Ragas
+            faithfulness evaluation (manual audit on 2026-06-06 confirmed
+            false-zero scores with excerpts — claims fully supported by the
+            chunks scored 0.000 because the judge only saw 200-char snippets).
+            Falls back to excerpts per-chunk when Chroma is unreachable or an
+            ID is missing.
 
     Returns:
         HuggingFace Dataset ready for Ragas evaluate().
@@ -219,14 +223,76 @@ def build_ragas_dataset(
             f"Length mismatch: {len(query_results)} results vs {len(questions)} questions"
         )
 
+    if use_full_chunks:
+        chunk_texts_by_id = _fetch_chunks_from_chroma(query_results)
+        contexts = [
+            [chunk_texts_by_id.get(s.chunk_id, s.excerpt) for s in r.sources]
+            for r in query_results
+        ]
+    else:
+        contexts = [[s.excerpt for s in r.sources] for r in query_results]
+
     data_dict = {
         'question': [q.question for q in questions],
         'answer': [r.answer for r in query_results],
-        'contexts': [[s.excerpt for s in r.sources] for r in query_results],
+        'contexts': contexts,
         'ground_truth': [q.ground_truth for q in questions],
     }
 
     return Dataset.from_dict(data_dict)
+
+
+def _fetch_chunks_from_chroma(query_results: List[QueryResult]) -> dict:
+    """
+    Fetch full chunk text from Chroma for all unique chunk_ids in query_results.
+    Returns dict: {chunk_id: full_text}
+
+    Fail-safe: if Chroma is unreachable or lookup fails, returns an empty
+    dict; the caller falls back to excerpts per-chunk.
+
+    Note on env cleanup: some shell environments set SSL_CERT_FILE (or
+    similar) to a file the Python process cannot read; httpx — chromadb's
+    transport — eagerly loads it in ssl.create_default_context and raises
+    PermissionError before any request is sent. Plain HTTP to localhost
+    needs no CA bundle, so those vars are cleared for the duration of the
+    lookup and restored afterwards.
+    """
+    import chromadb
+    from chromadb.config import Settings
+
+    all_chunk_ids = set()
+    for r in query_results:
+        for s in r.sources:
+            all_chunk_ids.add(s.chunk_id)
+
+    if not all_chunk_ids:
+        return {}
+
+    cleared_env = {}
+    for var in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        if var in os.environ:
+            cleared_env[var] = os.environ.pop(var)
+
+    try:
+        client = chromadb.HttpClient(
+            host="localhost",
+            port=8000,
+            settings=Settings(anonymized_telemetry=False),
+        )
+        collection = client.get_collection("podcasts")
+
+        result = collection.get(ids=list(all_chunk_ids), include=["documents"])
+
+        if not result["ids"] or not result["documents"]:
+            return {}
+
+        return dict(zip(result["ids"], result["documents"]))
+    except Exception as e:
+        print(f"  WARNING: Failed to fetch chunks from Chroma: {e}")
+        print(f"  Falling back to excerpts (may give artifact-low Faithfulness scores)")
+        return {}
+    finally:
+        os.environ.update(cleared_env)
 
 
 # ============================================================

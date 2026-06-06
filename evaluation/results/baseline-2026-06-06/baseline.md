@@ -2,7 +2,7 @@
 
 **Dataset version:** 1.0
 **Total questions:** 25
-**Generated:** 2026-06-06T17:28:52
+**Generated:** 2026-06-06T21:09:47
 
 ## Overall Verdict
 
@@ -25,8 +25,8 @@
 
 | Metric | Value |
 |---|---|
-| Faithfulness | 0.292 |
-| Answer Relevancy | 0.585 |
+| Faithfulness | 0.394 |
+| Answer Relevancy | 0.583 |
 | Context Recall | 0.407 |
 
 ### Refusal Compliance
@@ -41,7 +41,7 @@
 **Severity:** CRITICAL  
 **Layer:** BOTH
 
-Faithfulness (0.292) and Context Recall (0.407) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.
+Faithfulness (0.394) and Context Recall (0.407) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.
 
 **Suggested actions:**
 
@@ -54,7 +54,7 @@ Faithfulness (0.292) and Context Recall (0.407) are both below 0.7. This indicat
 **Severity:** WARNING  
 **Layer:** GENERATION
 
-Answer Relevancy = 0.585. The LLM is producing answers that drift from the question or include tangential content.
+Answer Relevancy = 0.583. The LLM is producing answers that drift from the question or include tangential content.
 
 **Suggested actions:**
 
@@ -87,30 +87,30 @@ Refusal compliance = 1.000 (4/4 correctly refused).
 | ID | Difficulty | MRR | Hit@K | Faithfulness | Relevancy | Refusal |
 |---|---|---|---|---|---|---|
 | q001 | easy | 0.25 | 1 | 1.00 | 0.89 | — |
-| q002 | easy | 1.00 | 1 | 0.00 | 0.87 | — |
-| q003 | medium | 1.00 | 1 | 0.43 | 0.83 | — |
-| q004 | medium | 1.00 | 1 | 0.50 | 0.86 | — |
+| q002 | easy | 1.00 | 1 | 0.00 | 0.88 | — |
+| q003 | medium | 1.00 | 1 | 0.29 | 0.83 | — |
+| q004 | medium | 1.00 | 1 | 0.58 | 0.86 | — |
 | q005 | edge | — | — | 0.00 | 0.00 | ✓ |
 | q006 | easy | 0.00 | 0 | 0.00 | 0.00 | — |
 | q007 | medium | 1.00 | 1 | 0.20 | 0.88 | — |
-| q008 | easy | 1.00 | 1 | 0.00 | 0.80 | — |
-| q009 | medium | 1.00 | 1 | 0.08 | 0.77 | — |
+| q008 | easy | 1.00 | 1 | 0.00 | 0.81 | — |
+| q009 | medium | 1.00 | 1 | 0.07 | 0.77 | — |
 | q010 | edge | — | — | 0.00 | 0.00 | ✓ |
-| q011 | easy | 1.00 | 1 | 0.00 | 0.78 | — |
+| q011 | easy | 1.00 | 1 | 0.00 | — | — |
 | q012 | medium | 0.00 | 0 | 1.00 | 0.00 | — |
 | q013 | easy | 1.00 | 1 | 0.50 | — | — |
-| q014 | medium | 0.00 | 0 | 0.45 | 0.89 | — |
-| q015 | edge | 1.00 | 1 | 0.17 | — | — |
+| q014 | medium | 0.00 | 0 | 0.55 | — | — |
+| q015 | edge | 1.00 | 1 | 0.25 | 0.88 | — |
 | q016 | easy | 1.00 | 1 | 0.20 | 0.74 | — |
 | q017 | medium | 0.00 | 0 | 0.00 | 0.00 | — |
-| q018 | easy | 1.00 | 1 | 0.40 | 0.75 | — |
-| q019 | medium | 1.00 | 1 | 0.17 | 0.75 | — |
+| q018 | easy | 1.00 | 1 | 0.50 | 0.76 | — |
+| q019 | medium | 1.00 | 1 | 0.75 | 0.76 | — |
 | q020 | edge | — | — | 0.00 | 0.00 | ✓ |
 | q021 | easy | 1.00 | 1 | 0.00 | 0.74 | — |
 | q022 | medium | 1.00 | 1 | 0.00 | 0.76 | — |
 | q023 | easy | 0.20 | 1 | 0.08 | 0.88 | — |
 | q024 | medium | 0.50 | 1 | 0.75 | 0.84 | — |
-| q025 | edge | — | — | 0.00 | — | ✓ |
+| q025 | edge | — | — | 1.00 | — | ✓ |
 
 ## Failed Questions (Detail)
 
@@ -138,7 +138,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. ...
 
-**Issues:** low faithfulness (0.43)
+**Issues:** low faithfulness (0.29)
 
 ### q004 (medium)
 
@@ -146,7 +146,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** Erik Brynjolfsson draws a parallel between free trade and technology in that both can make the overall pie bigger, creating wealth, but they can also be uneven in their benefits. Not everyone automati...
 
-**Issues:** low faithfulness (0.50)
+**Issues:** low faithfulness (0.58)
 
 ### q005 (edge)
 
@@ -186,7 +186,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** Dennis Oberg, identified as 114's lieutenant, heard a transmission on the radio saying, "Tally Ho, respond to the Vessian West to the command post and receive your orders." [Source 1] He and his crew ...
 
-**Issues:** low faithfulness (0.08)
+**Issues:** low faithfulness (0.07)
 
 ### q010 (edge)
 
@@ -226,7 +226,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** Jo Boaler advocates for a multidimensional approach to teaching math because it fosters more connections between different pathways in the brain, leading to a "great connected brain" [Source 1]. This ...
 
-**Issues:** low MRR (0.00), missed hit@5, low faithfulness (0.45)
+**Issues:** low MRR (0.00), missed hit@5, low faithfulness (0.55)
 
 ### q015 (edge)
 
@@ -234,7 +234,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** The problem with bringing in experts is that they are often too good at doing "the what" but not "the why" [Source 1]. Experts may provide post hoc explanations for how and why they do things, but the...
 
-**Issues:** low faithfulness (0.17)
+**Issues:** low faithfulness (0.25)
 
 ### q016 (easy)
 
@@ -258,15 +258,7 @@ _Questions where one or more metrics fell below thresholds._
 
 **Answer:** Steve Jobs would critique the work, not judge the person, and it wasn't bullying or demeaning [Source 1]. He would push people, relentlessly on details and challenge them for the right reasons [Source...
 
-**Issues:** low faithfulness (0.40)
-
-### q019 (medium)
-
-**Question:** What are the two reasons Tim Urban gives for why SpaceX exists?
-
-**Answer:** SpaceX exists for two reasons: first, as life insurance for the species, ensuring humanity has a backup plan by establishing multiple self-sustaining civilizations [Source 1, Source 2]. Second, it is ...
-
-**Issues:** low faithfulness (0.17)
+**Issues:** low faithfulness (0.50)
 
 ### q020 (edge)
 
@@ -299,14 +291,6 @@ _Questions where one or more metrics fell below thresholds._
 **Answer:** Lee Cronin speculates that dark energy could be a new energy field that pervades the universe, similar to electromagnetism but very different [Source 1, Source 2]. This type of energy could potentiall...
 
 **Issues:** low MRR (0.20), low faithfulness (0.08)
-
-### q025 (edge)
-
-**Question:** How do I bake chocolate chip cookies?
-
-**Answer:** I cannot answer this question from the provided sources.
-
-**Issues:** low faithfulness (0.00)
 
 ## Limitations
 

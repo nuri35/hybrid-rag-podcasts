@@ -1,7 +1,7 @@
 {
   "run_date": "2026-06-06",
   "dataset_version": "1.0",
-  "generated_at": "2026-06-06T17:28:52",
+  "generated_at": "2026-06-06T21:09:47",
   "total_questions": 25,
   "aggregate": {
     "retrieval": {
@@ -14,8 +14,8 @@
       "questions_skipped": 4
     },
     "generation": {
-      "faithfulness": 0.29153246753246753,
-      "answer_relevancy": 0.5853065307658897,
+      "faithfulness": 0.39412321012321017,
+      "answer_relevancy": 0.5834795668119961,
       "context_recall": 0.4066666666666666,
       "questions_total": 25,
       "questions_evaluated_for_context": 25,
@@ -35,7 +35,7 @@
         "severity": "CRITICAL",
         "layer": "BOTH",
         "title": "Both retrieval and generation are underperforming",
-        "detail": "Faithfulness (0.292) and Context Recall (0.407) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.",
+        "detail": "Faithfulness (0.394) and Context Recall (0.407) are both below 0.7. This indicates retrieval is missing key information AND generation is hallucinating with what it has.",
         "suggested_actions": [
           "Focus on retrieval FIRST \u2014 generation cannot improve until context is correct",
           "Increase top-K or add hybrid retrieval (BM25 + vector)",
@@ -57,7 +57,7 @@
         "severity": "WARNING",
         "layer": "GENERATION",
         "title": "Answer Relevancy is low \u2014 answers are off-topic or unfocused",
-        "detail": "Answer Relevancy = 0.585. The LLM is producing answers that drift from the question or include tangential content.",
+        "detail": "Answer Relevancy = 0.583. The LLM is producing answers that drift from the question or include tangential content.",
         "suggested_actions": [
           "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
           "Lower maxOutputTokens to constrain answer length",
@@ -90,7 +90,7 @@
       "generation": {
         "question_id": "q001",
         "faithfulness": 1.0,
-        "answer_relevancy": 0.888640709816619,
+        "answer_relevancy": 0.8928857355900505,
         "context_recall": 1.0
       },
       "refusal": {
@@ -124,7 +124,7 @@
       "generation": {
         "question_id": "q002",
         "faithfulness": 0.0,
-        "answer_relevancy": 0.8747150837465733,
+        "answer_relevancy": 0.875137683372354,
         "context_recall": 0.0
       },
       "refusal": {
@@ -157,8 +157,8 @@
       },
       "generation": {
         "question_id": "q003",
-        "faithfulness": 0.42857142857142855,
-        "answer_relevancy": 0.8294311194878037,
+        "faithfulness": 0.2857142857142857,
+        "answer_relevancy": 0.8293526889356378,
         "context_recall": 0.5
       },
       "refusal": {
@@ -191,7 +191,7 @@
       },
       "generation": {
         "question_id": "q004",
-        "faithfulness": 0.5,
+        "faithfulness": 0.5833333333333334,
         "answer_relevancy": 0.8586273080290582,
         "context_recall": 0.6666666666666666
       },
@@ -294,7 +294,7 @@
       "generation": {
         "question_id": "q007",
         "faithfulness": 0.2,
-        "answer_relevancy": 0.87840398045222,
+        "answer_relevancy": 0.8805945966848113,
         "context_recall": 0.0
       },
       "refusal": {
@@ -328,7 +328,7 @@
       "generation": {
         "question_id": "q008",
         "faithfulness": 0.0,
-        "answer_relevancy": 0.7963133532124941,
+        "answer_relevancy": 0.8105610155291397,
         "context_recall": 0.0
       },
       "refusal": {
@@ -361,7 +361,7 @@
       },
       "generation": {
         "question_id": "q009",
-        "faithfulness": 0.08333333333333333,
+        "faithfulness": 0.07142857142857142,
         "answer_relevancy": 0.770644160154387,
         "context_recall": 0.0
       },
@@ -430,7 +430,7 @@
       "generation": {
         "question_id": "q011",
         "faithfulness": 0.0,
-        "answer_relevancy": 0.7766661025471948,
+        "answer_relevancy": null,
         "context_recall": 0.0
       },
       "refusal": {
@@ -531,8 +531,8 @@
       },
       "generation": {
         "question_id": "q014",
-        "faithfulness": 0.45454545454545453,
-        "answer_relevancy": 0.8885663575935094,
+        "faithfulness": 0.5454545454545454,
+        "answer_relevancy": null,
         "context_recall": 0.5
       },
       "refusal": {
@@ -565,8 +565,8 @@
       },
       "generation": {
         "question_id": "q015",
-        "faithfulness": 0.16666666666666666,
-        "answer_relevancy": null,
+        "faithfulness": 0.25,
+        "answer_relevancy": 0.8842918495201487,
         "context_recall": 0.0
       },
       "refusal": {
@@ -667,8 +667,8 @@
       },
       "generation": {
         "question_id": "q018",
-        "faithfulness": 0.4,
-        "answer_relevancy": 0.7534197450839996,
+        "faithfulness": 0.5,
+        "answer_relevancy": 0.7582590509841171,
         "context_recall": 0.5
       },
       "refusal": {
@@ -701,8 +701,8 @@
       },
       "generation": {
         "question_id": "q019",
-        "faithfulness": 0.16666666666666666,
-        "answer_relevancy": 0.7503718639639988,
+        "faithfulness": 0.75,
+        "answer_relevancy": 0.7615921602429493,
         "context_recall": 1.0
       },
       "refusal": {
@@ -804,7 +804,7 @@
       "generation": {
         "question_id": "q022",
         "faithfulness": 0.0,
-        "answer_relevancy": 0.7592028204319575,
+        "answer_relevancy": 0.7639624956440624,
         "context_recall": 0.0
       },
       "refusal": {
@@ -838,7 +838,7 @@
       "generation": {
         "question_id": "q023",
         "faithfulness": 0.08333333333333333,
-        "answer_relevancy": 0.8800800102220555,
+        "answer_relevancy": 0.878674311841138,
         "context_recall": 0.0
       },
       "refusal": {
@@ -872,7 +872,7 @@
       "generation": {
         "question_id": "q024",
         "faithfulness": 0.75,
-        "answer_relevancy": 0.8392658709925463,
+        "answer_relevancy": 0.836259443961202,
         "context_recall": 0.5
       },
       "refusal": {
@@ -905,7 +905,7 @@
       },
       "generation": {
         "question_id": "q025",
-        "faithfulness": 0.0,
+        "faithfulness": 1.0,
         "answer_relevancy": null,
         "context_recall": 1.0
       },
