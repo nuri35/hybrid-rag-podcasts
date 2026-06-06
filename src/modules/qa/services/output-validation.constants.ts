@@ -42,7 +42,11 @@ export const VALID_NO_ANSWER_PHRASES: ReadonlyArray<RegExp> = [
   /\bcannot answer (this question|your question)\b/i,
   /\binsufficient (information|sources?|context)\b/i,
   /\bnot (mentioned|discussed|covered) in the (provided|given) sources?\b/i,
-  /\bthe sources? (do|don't|does|doesn't) (not )?contain\b/i,
+  // "(provided |given )?" mirrors pattern 3 above — Gemini paraphrases the
+  // refusal as "The provided sources do not contain ..." and the adjective
+  // between "the" and "sources" defeated the original pattern (falsely
+  // rejected in the Phase 2 baseline run, 2026-06-06, q012).
+  /\bthe (provided |given )?sources? (do|don't|does|doesn't) (not )?contain\b/i,
 ];
 
 /**

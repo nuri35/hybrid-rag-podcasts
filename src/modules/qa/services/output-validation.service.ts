@@ -62,7 +62,11 @@ export class OutputValidationService {
       return { verdict: OutputVerdict.VALID, rejectionReason: null };
     }
 
-    const hasCitation = /\[Source\s+\d+\]/i.test(answer);
+    // Accepts single ("[Source 4]") and multi-source brackets the LLM
+    // legitimately produces ("[Source 4, Source 5]", "[Source 1, 3]").
+    // The single-source-only form falsely rejected grounded answers in
+    // the Phase 2 baseline run (2026-06-06, q001).
+    const hasCitation = /\[Source\s+\d+(?:\s*,\s*(?:Source\s+)?\d+)*\s*\]/i.test(answer);
     if (!hasCitation) {
       this.logger.warn(
         `output_validation_rejected correlation_id=${correlationId} ` +

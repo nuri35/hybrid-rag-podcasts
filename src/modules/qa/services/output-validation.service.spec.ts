@@ -68,6 +68,38 @@ describe('OutputValidationService', () => {
         expect(service.validate(r, CORR).verdict).toBe(OutputVerdict.VALID);
       }
     });
+
+    // Regression — Phase 2 baseline run (2026-06-06): two well-behaved
+    // Gemini answers were falsely rejected with missing_citation.
+    it('accepts a multi-source citation bracket "[Source 4, Source 5]" (baseline q001)', () => {
+      const service = new OutputValidationService();
+      // Verbatim rejected answer from the baseline run.
+      const answer =
+        'The nickname of Niels Jorgensen\'s fire company that he heard over the radio on 9/11 was "Tally Ho" [Source 4, Source 5].';
+
+      const r = service.validate(answer, CORR);
+      expect(r.verdict).toBe(OutputVerdict.VALID);
+      expect(r.rejectionReason).toBeNull();
+    });
+
+    it('accepts compact multi-source citation "[Source 1, 3]"', () => {
+      const service = new OutputValidationService();
+      const answer =
+        'A sufficiently long substantive answer that cites two sources in compact form [Source 1, 3].';
+
+      expect(service.validate(answer, CORR).verdict).toBe(OutputVerdict.VALID);
+    });
+
+    it('accepts a refusal with an adjective before "sources" ("the provided sources do not contain", baseline q012)', () => {
+      const service = new OutputValidationService();
+      // Verbatim rejected answer from the baseline run.
+      const answer =
+        'The provided sources do not contain information on how Sebastian Thrun uses the example of human walking to explain why machine learning matters.';
+
+      const r = service.validate(answer, CORR);
+      expect(r.verdict).toBe(OutputVerdict.VALID);
+      expect(r.rejectionReason).toBeNull();
+    });
   });
 
   // -----------------------------------------------------------------
