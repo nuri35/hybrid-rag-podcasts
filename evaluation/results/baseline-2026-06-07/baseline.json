@@ -1,0 +1,924 @@
+{
+  "run_date": "2026-06-07",
+  "dataset_version": "1.0",
+  "generated_at": "2026-06-07T14:06:22",
+  "total_questions": 25,
+  "aggregate": {
+    "retrieval": {
+      "mrr": 0.7119047619047618,
+      "hit_at_k": 0.8095238095238095,
+      "precision_at_k": 0.2476190476190477,
+      "recall_at_k": 0.7857142857142857,
+      "k": 5,
+      "questions_evaluated": 21,
+      "questions_skipped": 4
+    },
+    "generation": {
+      "faithfulness": 0.7676503496503496,
+      "answer_relevancy": 0.5892335672916882,
+      "context_recall": 0.7666666666666667,
+      "questions_total": 25,
+      "questions_evaluated_for_context": 25,
+      "questions_evaluated_for_faithfulness": 25
+    },
+    "refusal": {
+      "refusal_compliance": 1.0,
+      "total_refusal_questions": 4,
+      "correctly_refused": 4,
+      "incorrectly_answered": []
+    }
+  },
+  "diagnostic": {
+    "overall_health": "WARNING",
+    "findings": [
+      {
+        "severity": "HEALTHY",
+        "layer": "SYSTEM",
+        "title": "System is healthy at the layer level",
+        "detail": "Faithfulness (0.768) and Context Recall (0.767) are both above thresholds. Both retrieval and generation layers are functioning well.",
+        "suggested_actions": []
+      },
+      {
+        "severity": "INFO",
+        "layer": "RETRIEVAL",
+        "title": "Precision@5 is low \u2014 noise problem",
+        "detail": "Precision@5 = 0.248. Too many irrelevant chunks are in top-5, which can confuse the LLM.",
+        "suggested_actions": [
+          "Add a re-ranker to push noise down",
+          "Raise similarity threshold (filter out low-score chunks)",
+          "Reduce top-K to 3"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "GENERATION",
+        "title": "Answer Relevancy is low \u2014 answers are off-topic or unfocused",
+        "detail": "Answer Relevancy = 0.589. The LLM is producing answers that drift from the question or include tangential content.",
+        "suggested_actions": [
+          "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
+          "Lower maxOutputTokens to constrain answer length",
+          "Add few-shot examples of focused answers"
+        ]
+      },
+      {
+        "severity": "HEALTHY",
+        "layer": "REFUSAL",
+        "title": "Refusal compliance is healthy",
+        "detail": "Refusal compliance = 1.000 (4/4 correctly refused).",
+        "suggested_actions": []
+      }
+    ]
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "question": "What was the nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.25,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q001",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8886407098166189,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q001",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11 was \"Tally Ho\" [Source 4, Source 5]."
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_62",
+        "220_chunk_0",
+        "220_chunk_3",
+        "220_chunk_22",
+        "220_chunk_21"
+      ],
+      "answer": "The nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11 was \"Tally Ho\" [Source 4, Source 5]."
+    },
+    {
+      "id": "q002",
+      "question": "What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q002",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8605316102352814,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q002",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Stanley, the car that eventually won the DARPA Grand Challenge, would commit suicide every 30 miles due to a bug where the sinking of two computer clocks occasionally caused a clock to go backwards. T"
+      },
+      "retrieved_chunk_ids": [
+        "59_chunk_12",
+        "147_chunk_22",
+        "147_chunk_31",
+        "147_chunk_32",
+        "147_chunk_30"
+      ],
+      "answer": "Stanley, the car that eventually won the DARPA Grand Challenge, would commit suicide every 30 miles due to a bug where the sinking of two computer clocks occasionally caused a clock to go backwards. This negative time elapsed screwed up the entire internal logic, and it took a long time to find this bug [Source 1]."
+    },
+    {
+      "id": "q003",
+      "question": "How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q003",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8293526889356378,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q003",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. "
+      },
+      "retrieved_chunk_ids": [
+        "87_chunk_20",
+        "87_chunk_21",
+        "87_chunk_17",
+        "193_chunk_12",
+        "87_chunk_19"
+      ],
+      "answer": "Richard Dawkins distinguishes between two modes of meme transmission. One mode is longitudinal, from grandparent to parent to child, which he compares to conventional genetic transmission [Source 2]. The other mode is transverse, which he compares to viral transmission, as seen when a charismatic preacher converts people [Source 1]."
+    },
+    {
+      "id": "q004",
+      "question": "What parallel does Erik Brynjolfsson draw between free trade and technology when it comes to winners and losers?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.6,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q004",
+        "faithfulness": 0.9230769230769231,
+        "answer_relevancy": 0.8586273080290582,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q004",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Erik Brynjolfsson draws a parallel between free trade and technology in that both can make the overall pie bigger, creating wealth, but they can also be uneven in their benefits. Not everyone automati"
+      },
+      "retrieved_chunk_ids": [
+        "141_chunk_122",
+        "141_chunk_121",
+        "174_chunk_91",
+        "141_chunk_123",
+        "67_chunk_21"
+      ],
+      "answer": "Erik Brynjolfsson draws a parallel between free trade and technology in that both can make the overall pie bigger, creating wealth, but they can also be uneven in their benefits. Not everyone automatically benefits, and it's possible for some people, even a majority, to be left behind while a small group benefits [Source 1]. Economists suggest that with free trade, the pie gets bigger, making it possible for everyone to be better off by compensating those who are hurt [Source 2]. Similarly, with technology, the idea is to make the pie bigger and adjust the system to compensate those who are harmed, allowing everyone to potentially be better off [Source 4]. However, in both cases, the promise of compensation for those negatively affected has not been fulfilled [Source 2, Source 4]."
+    },
+    {
+      "id": "q005",
+      "question": "What is Tony Fadell's favorite programming language?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q005",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q005",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "307_chunk_3",
+        "35_chunk_6",
+        "309_chunk_15",
+        "192_chunk_43",
+        "35_chunk_2"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q006",
+      "question": "Why does Lee Cronin say biology is not a Turing machine?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q006",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q006",
+        "expected_refusal": false,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "198_chunk_44",
+        "212_chunk_13",
+        "198_chunk_43",
+        "198_chunk_42",
+        "234_chunk_248"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q007",
+      "question": "What distinction does Tony Fadell draw between data-driven and opinion-based decisions when building the first version of a product?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.6,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q007",
+        "faithfulness": 0.95,
+        "answer_relevancy": 0.879826236128393,
+        "context_recall": 0.6666666666666666
+      },
+      "refusal": {
+        "question_id": "q007",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Tony Fadell distinguishes between data-driven and opinion-based decisions by explaining that for a V1 product, especially a consumer product, there is often a lack of data [Source 1]. In such cases, o"
+      },
+      "retrieved_chunk_ids": [
+        "294_chunk_105",
+        "294_chunk_106",
+        "294_chunk_107",
+        "294_chunk_108",
+        "294_chunk_113"
+      ],
+      "answer": "Tony Fadell distinguishes between data-driven and opinion-based decisions by explaining that for a V1 product, especially a consumer product, there is often a lack of data [Source 1]. In such cases, opinion-based decisions, or \"gut\" decisions, must be used because there is no data or previous history to inform the choices [Source 1, Source 2]. He notes that companies can become paralyzed by trying to turn opinion-based decisions into data-driven ones to avoid risk [Source 2]. Fadell emphasizes that for V1, it's crucial to articulate and own these opinion-based decisions, even if they are wrong, and then fix them and move forward [Source 3]. He uses the example of the first version of the iPhone, where many opinion-based decisions were made and some were incorrect, but data gathered from V2 allowed for adjustments [Source 3]. He also highlights that at the \"revolution stage,\" opinions are paramount, and there is no data [Source 4]. An example of an opinion-based decision on the iPhone was whether to have a physical keyboard or a virtual one [Source 4]. Fadell also mentions that an opinion-based decision can be turned into a data-driven one when data becomes available, as was the case with the SIM card slot on the iPhone [Source 5]. However, he acknowledges that for V1, you don't truly know the right answer, and even an opinion-based decision that seems wrong at the time could potentially change the course of technology [Source 5]."
+    },
+    {
+      "id": "q008",
+      "question": "Around what grade does Jo Boaler say many kids start to give up on math?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q008",
+        "faithfulness": 0.8333333333333334,
+        "answer_relevancy": 0.7857550139896695,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q008",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Many kids start to give up on themselves and math around fifth grade [Source 2]. Jo Boaler states that fifth grade can be pivotal because teachers often shift to preparing students for middle school w"
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_23",
+        "226_chunk_22",
+        "183_chunk_122",
+        "226_chunk_24",
+        "226_chunk_101"
+      ],
+      "answer": "Many kids start to give up on themselves and math around fifth grade [Source 2]. Jo Boaler states that fifth grade can be pivotal because teachers often shift to preparing students for middle school with grades and tests, which can make kids feel badly about themselves [Source 1]."
+    },
+    {
+      "id": "q009",
+      "question": "What happened to Dennis Oberg's crew when the tower began to collapse on 9/11?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q009",
+        "faithfulness": 0.8333333333333334,
+        "answer_relevancy": 0.770644160154387,
+        "context_recall": 0.5
+      },
+      "refusal": {
+        "question_id": "q009",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Dennis Oberg, identified as 114's lieutenant, heard a transmission on the radio saying, \"Tally Ho, respond to the Vessian West to the command post and receive your orders.\" [Source 1] He and his crew "
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_22",
+        "220_chunk_23",
+        "220_chunk_21",
+        "220_chunk_32",
+        "220_chunk_31"
+      ],
+      "answer": "Dennis Oberg, identified as 114's lieutenant, heard a transmission on the radio saying, \"Tally Ho, respond to the Vessian West to the command post and receive your orders.\" [Source 1] He and his crew were heading into what he believed was the second tower that had been hit. [Source 1] He then saw what he thought to be disintegration and told his guys to run, not look back or up. [Source 1] They sprinted and dove under a fire truck. [Source 1] The guys 40 feet behind them were killed under a pile 10 stories deep. [Source 2] Dennis's rookie son, who was working in Ladder 105, was further into that pile. [Source 2] Also in that pile was his childhood best friend, John Chard, and his crew from 201. [Source 2]"
+    },
+    {
+      "id": "q010",
+      "question": "What is the capital of France?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q010",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q010",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "311_chunk_135",
+        "311_chunk_134",
+        "311_chunk_140",
+        "311_chunk_139",
+        "311_chunk_132"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q011",
+      "question": "Which physicist does Richard Dawkins agree with about there being a genuine mystery to consciousness?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q011",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.7766661025471948,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q011",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Richard Dawkins agrees with Roger Penrose that there is a mystery to consciousness [Source 1]. He states, \"I agree with Roger Penrose that there is a mystery there\" [Source 1]."
+      },
+      "retrieved_chunk_ids": [
+        "87_chunk_16",
+        "87_chunk_15",
+        "85_chunk_107",
+        "232_chunk_15",
+        "2_chunk_6"
+      ],
+      "answer": "Richard Dawkins agrees with Roger Penrose that there is a mystery to consciousness [Source 1]. He states, \"I agree with Roger Penrose that there is a mystery there\" [Source 1]."
+    },
+    {
+      "id": "q012",
+      "question": "How does Sebastian Thrun use the example of human walking to explain why machine learning matters?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q012",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q012",
+        "expected_refusal": false,
+        "actually_refused": true,
+        "answer_excerpt": "The provided sources do not contain information on how Sebastian Thrun uses the example of human walking to explain why machine learning matters."
+      },
+      "retrieved_chunk_ids": [
+        "177_chunk_83",
+        "101_chunk_181",
+        "258_chunk_53",
+        "114_chunk_25",
+        "114_chunk_26"
+      ],
+      "answer": "The provided sources do not contain information on how Sebastian Thrun uses the example of human walking to explain why machine learning matters."
+    },
+    {
+      "id": "q013",
+      "question": "By what deadline does Tim Urban's bet require a human to have touched Mars?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q013",
+        "faithfulness": 0.5,
+        "answer_relevancy": 0.8598382624678812,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q013",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Tim Urban's bet requires a human to have touched Mars by January 1st, 2031 [Source 1]. The bet was made that the Neil Armstrong of Mars will set foot by the end of 2030 [Source 2]."
+      },
+      "retrieved_chunk_ids": [
+        "264_chunk_49",
+        "264_chunk_48",
+        "309_chunk_324",
+        "309_chunk_322",
+        "264_chunk_52"
+      ],
+      "answer": "Tim Urban's bet requires a human to have touched Mars by January 1st, 2031 [Source 1]. The bet was made that the Neil Armstrong of Mars will set foot by the end of 2030 [Source 2]."
+    },
+    {
+      "id": "q014",
+      "question": "Why does Jo Boaler advocate a multidimensional approach to teaching math?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q014",
+        "faithfulness": 0.8181818181818182,
+        "answer_relevancy": 0.8885663575935094,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q014",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Jo Boaler advocates for a multidimensional approach to teaching math because it fosters more connections between different pathways in the brain, leading to a \"great connected brain\" [Source 1]. This "
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_4",
+        "226_chunk_29",
+        "226_chunk_90",
+        "226_chunk_41",
+        "226_chunk_37"
+      ],
+      "answer": "Jo Boaler advocates for a multidimensional approach to teaching math because it fosters more connections between different pathways in the brain, leading to a \"great connected brain\" [Source 1]. This approach involves experiencing math in different ways, such as seeing it visually, writing about it, or building with it physically [Source 1]. She believes that the traditional education system, with its reliance on textbooks and a centuries-old classroom approach, often produces uninspiring mathematics [Source 2]. By opening up the subject and allowing people to see and solve problems in various ways, and by valuing these different approaches, the learning process can be improved [Source 2]. This multidimensional experience is crucial for children's learning [Source 1]."
+    },
+    {
+      "id": "q015",
+      "question": "What did they say about the problem with bringing in experts?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 0.5,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q015",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8842918495201487,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q015",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The problem with bringing in experts is that they are often too good at doing \"the what\" but not \"the why\" [Source 1]. Experts may provide post hoc explanations for how and why they do things, but the"
+      },
+      "retrieved_chunk_ids": [
+        "294_chunk_102",
+        "15_chunk_16",
+        "294_chunk_99",
+        "15_chunk_15",
+        "43_chunk_53"
+      ],
+      "answer": "The problem with bringing in experts is that they are often too good at doing \"the what\" but not \"the why\" [Source 1]. Experts may provide post hoc explanations for how and why they do things, but these explanations are not necessarily very good and can depend on perceptual things that they cannot define well [Source 2]. There's an assumption that people can articulate how and why they make their decisions, but humans may not have introspective access into how they perform tasks like vision [Source 2, Source 4]. Experts might also be resistant to new ideas or unable to identify major issues, instead focusing on terminology [Source 3]. Additionally, there's a temptation for experts to encode knowledge into systems, but people may not want to do the hard engineering work required for this [Source 5]."
+    },
+    {
+      "id": "q016",
+      "question": "How did the share of Americans working remotely change when the pandemic hit, according to the study Erik Brynjolfsson worked on?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q016",
+        "faithfulness": 0.8,
+        "answer_relevancy": 0.7446110598162563,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q016",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Before the pandemic, about 15% of Americans were working remotely. When the pandemic hit, this number grew to roughly 50% [Source 1]. This shift was part of a larger transformation in work, with infor"
+      },
+      "retrieved_chunk_ids": [
+        "141_chunk_113",
+        "141_chunk_112",
+        "141_chunk_114",
+        "141_chunk_116",
+        "131_chunk_160"
+      ],
+      "answer": "Before the pandemic, about 15% of Americans were working remotely. When the pandemic hit, this number grew to roughly 50% [Source 1]. This shift was part of a larger transformation in work, with information workers and professionals being much more likely to work from home compared to manufacturing workers [Source 1]. Erik Brynjolfsson conducted a study on this with colleagues at MIT and elsewhere [Source 2]."
+    },
+    {
+      "id": "q017",
+      "question": "What does Lee Cronin mean when he distinguishes constructors from abstractors?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q017",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q017",
+        "expected_refusal": false,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "48_chunk_90",
+        "48_chunk_89",
+        "48_chunk_88",
+        "48_chunk_91",
+        "48_chunk_46"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q018",
+      "question": "According to Tony Fadell, how did Steve Jobs deliver criticism?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q018",
+        "faithfulness": 0.9,
+        "answer_relevancy": 0.7564553125697474,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q018",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Steve Jobs would critique the work, not judge the person, and it wasn't bullying or demeaning [Source 1]. He would push people, relentlessly on details and challenge them for the right reasons [Source"
+      },
+      "retrieved_chunk_ids": [
+        "294_chunk_103",
+        "162_chunk_29",
+        "294_chunk_140",
+        "182_chunk_52",
+        "294_chunk_130"
+      ],
+      "answer": "Steve Jobs would critique the work, not judge the person, and it wasn't bullying or demeaning [Source 1]. He would push people, relentlessly on details and challenge them for the right reasons [Source 1]. He had very strong opinions, but they were challengeable, and if you came with the right team, data, and approach, you could modulate them [Source 5]. He would critique the work, not judge the person, at least not in front of them or a group [Source 1]."
+    },
+    {
+      "id": "q019",
+      "question": "What are the two reasons Tim Urban gives for why SpaceX exists?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q019",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7503718639639988,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q019",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "SpaceX exists for two reasons: first, as life insurance for the species, ensuring humanity has a backup plan by establishing multiple self-sustaining civilizations [Source 1, Source 2]. Second, it is "
+      },
+      "retrieved_chunk_ids": [
+        "264_chunk_56",
+        "264_chunk_57",
+        "305_chunk_70",
+        "118_chunk_63",
+        "260_chunk_205"
+      ],
+      "answer": "SpaceX exists for two reasons: first, as life insurance for the species, ensuring humanity has a backup plan by establishing multiple self-sustaining civilizations [Source 1, Source 2]. Second, it is considered the greatest adventure in history to go multi-planetary, providing people with a reason to wake up in the morning and potentially uniting everyone [Source 2]. This endeavor also has a deep humanitarian purpose of inspiring the world [Source 3]."
+    },
+    {
+      "id": "q020",
+      "question": "Which university is Richard Dawkins affiliated with?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q020",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q020",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "239_chunk_52",
+        "296_chunk_64",
+        "239_chunk_58",
+        "239_chunk_42",
+        "285_chunk_141"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q021",
+      "question": "How long were the classes at Jo Boaler's Stanford summer math camps?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q021",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7419343286521505,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q021",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The summer camp classrooms were three hours long [Source 1]."
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_21",
+        "226_chunk_90",
+        "226_chunk_22",
+        "226_chunk_23",
+        "226_chunk_56"
+      ],
+      "answer": "The summer camp classrooms were three hours long [Source 1]."
+    },
+    {
+      "id": "q022",
+      "question": "What prophetic warning did senior man Henry Miller give after the 1993 World Trade Center bombing?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q022",
+        "faithfulness": 0.8333333333333334,
+        "answer_relevancy": 0.7623759372400274,
+        "context_recall": 0.5
+      },
+      "refusal": {
+        "question_id": "q022",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "After the 1993 bombing, Henry Miller told the speaker, \"kid, it's a bad day. He said, they didn't do it right. They blew it up in the middle. If they did it in a corner, they would have dropped this b"
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_24",
+        "220_chunk_25",
+        "220_chunk_5",
+        "220_chunk_64",
+        "171_chunk_6"
+      ],
+      "answer": "After the 1993 bombing, Henry Miller told the speaker, \"kid, it's a bad day. He said, they didn't do it right. They blew it up in the middle. If they did it in a corner, they would have dropped this building half a mile down at Canal Street. But don't kid yourself. They'll be back, and they'll do it. And they'll do it right next time.\" [Source 1] Miller, who died with Dennis, was prophetic because he was there with them and knew it. [Source 1] In 1994, a training manual included a picture of the towers with a target, stating it was \"a matter of when, be prepared.\" [Source 2]"
+    },
+    {
+      "id": "q023",
+      "question": "What does Lee Cronin speculate dark energy might actually be?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.2,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q023",
+        "faithfulness": 0.5833333333333334,
+        "answer_relevancy": 0.8735671457294346,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q023",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Lee Cronin speculates that dark energy could be a new energy field that pervades the universe, similar to electromagnetism but very different [Source 1, Source 2]. This type of energy could potentiall"
+      },
+      "retrieved_chunk_ids": [
+        "137_chunk_3",
+        "137_chunk_5",
+        "257_chunk_296",
+        "124_chunk_352",
+        "269_chunk_311"
+      ],
+      "answer": "Lee Cronin speculates that dark energy could be a new energy field that pervades the universe, similar to electromagnetism but very different [Source 1, Source 2]. This type of energy could potentially change in the distant future and become gravitationally attractive [Source 1]. Another possibility is that dark energy is the vacuum zero point energy [Source 2]. He also wonders if dark energy could simply be time, suggesting that figuring out what dark energy is might provide deep clues about time and its consequences [Source 5]. He mentions that if dark energy is a new field, it could decay, allowing the universe to change [Source 3]. He also notes that dark energy is associated with negative mass produced by the absence of expected energy, leading to repulsive gravity [Source 4]."
+    },
+    {
+      "id": "q024",
+      "question": "Why did Apple choose a virtual keyboard for the iPhone despite the BlackBerry's success?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q024",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8362594439612018,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q024",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Apple chose a virtual keyboard for the iPhone because they viewed it as an entertainment device and productivity tool, aiming for full-screen videos and a full-screen web browser [Source 1, 3]. While "
+      },
+      "retrieved_chunk_ids": [
+        "294_chunk_110",
+        "294_chunk_108",
+        "294_chunk_109",
+        "294_chunk_111",
+        "264_chunk_84"
+      ],
+      "answer": "Apple chose a virtual keyboard for the iPhone because they viewed it as an entertainment device and productivity tool, aiming for full-screen videos and a full-screen web browser [Source 1, 3]. While the BlackBerry was a successful messaging and productivity device with a beloved hardware keyboard, Apple's vision for the iPhone was to be much more, including entertainment and web browsing [Source 2, 4]. This decision was opinion-based, as the data at the time indicated that the best sales were with hardware keyboards [Source 3]. The team believed that for their device, the tools needed to go away to allow for full-screen experiences [Source 4]. They questioned what a mobile device should be, and a keyboard was not necessarily an axiom of their design [Source 5]."
+    },
+    {
+      "id": "q025",
+      "question": "How do I bake chocolate chip cookies?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q025",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q025",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "144_chunk_11",
+        "294_chunk_163",
+        "260_chunk_234",
+        "201_chunk_53",
+        "91_chunk_55"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    }
+  ]
+}
