@@ -257,7 +257,7 @@ See the `langchain-js-lcel` skill for full guidance.
 
 ## Phase tracking
 
-Current phase: **Phase 4 — Hybrid Retrieval (BM25 + RRF) IN PROGRESS (started 2026-06-10), currently at sub-phase 4.1.1.** Phase 2 (Sprint Eval-RAG-Core) closed 2026-06-07 with a clean baseline at `evaluation/results/baseline-2026-06-07/`. **Sequencing change:** Phase 4 (hybrid retrieval) is being done BEFORE Phase 3 (graph layer) — the 4 zero-hit baseline questions (q006/q012/q014/q017) are a vocabulary-mismatch problem that BM25 keyword search solves directly, so it's the higher-value next step. Phase 3 (Neo4j graph) follows. **Phase 4 is redefined** from the original "vector + graph" to "vector + BM25 keyword" fusion; graph-based hybrid is deferred. See `docs/phases/phase-4.md`.
+Current phase: **Phase 4 — Hybrid Retrieval (Vector + Elasticsearch + RRF) IN PROGRESS (started 2026-06-10).** Plan revised same day from in-process BM25 to **Elasticsearch**; implementation not yet started under the revised plan (next: new 4.1.1, add ES to Docker Compose). Phase 2 (Sprint Eval-RAG-Core) closed 2026-06-07 with a clean baseline at `evaluation/results/baseline-2026-06-07/`. **Sequencing change:** Phase 4 (hybrid retrieval) is being done BEFORE Phase 3 (graph layer) — the 4 zero-hit baseline questions (q006/q012/q014/q017) are a vocabulary-mismatch problem that keyword search solves directly, so it's the higher-value next step. Phase 3 (Neo4j graph) follows. **Phase 4 is redefined** from the original "vector + graph" to "vector + Elasticsearch keyword" fusion; graph-based hybrid is deferred. See `docs/phases/phase-4.md`.
 
 | Phase | Status | Goal |
 |---|---|---|
@@ -274,7 +274,7 @@ Current phase: **Phase 4 — Hybrid Retrieval (BM25 + RRF) IN PROGRESS (started 
 | &nbsp;&nbsp;1.7 HTTP endpoint | ✅ Done (+ hardening pass `2068adc..8d60430`) | `QaController` (`POST /api/v1/questions`) + `AskQuestionDto` (class-validator min/max length, topK range, `IsInt`) + `QaResponseDto`/`QaSourceDto` (Swagger-annotated). URI versioning via `app.enableVersioning({ type: URI, prefix: 'api/v' })`. Global `ValidationPipe` with `whitelist + forbidNonWhitelisted + transform`. Swagger UI at `/api/docs`, OpenAPI JSON at `/api/docs-json`. 16 unit tests (6 controller via mocked `QaChainService`, 10 DTO via `plainToInstance + validate`). 6 live smoke probes confirmed: Swagger UI 200, OpenAPI schemas present, 3× validation 400s (too-short, extra-field, topK out-of-range), happy-path 200 in 3 s with 3 grounded sources. **Post-ship hardening (DX-first, contrast with 1.5/1.6 safety-first):** richer `@ApiProperty` descriptions across all 3 DTOs (embedding model + score formula + excerpt truncation + metadata caveat); new `ValidationErrorResponseDto` wired into `@ApiResponse(400)` to document the validation envelope explicitly (RFC 7807 migration stays Phase 1.7.5); three named `@ApiBody` examples (`philosophy` / `techQuestion` / `multiPerspective`); `DocumentBuilder` gained `.setContact() + .setLicense('MIT') + .addServer('http://localhost:3000')`; **10 KB body-size limit** enforced via custom `ExpressAdapter` + `{ bodyParser: false }` (plan's literal `app.use(json())` form is a no-op under NestJS Express because the default 100 KB parser registers ahead of the router during `init()` — verified empirically against `express 5.x`); **dev-only CORS** (`NODE_ENV !== 'production'`-gated, 3 common frontend ports, methods `GET+POST` only); first HTTP integration spec (`qa.controller.integration.spec.ts`, 6 supertest tests, skip-by-default, bootstrap mirrors `main.ts` faithfully); `supertest ^7.2.2` + `@types/supertest ^7.2.0` added as devDeps. Tests: 128 → 134 (+6 skipped), 120 passing unchanged. See ADR 0008 (original) + "Phase 1.7 hardening notes" amendment. **Sprint Rate-Limit (2-step, `0adf963..0bc7769`):** per-IP rate limiting via `@nestjs/throttler` v6 + custom `RedisThrottlerStorage` (fixed-window Lua `INCR`+`EXPIRE` counter, fail-open, seconds-based `Retry-After`). `ProxyAwareThrottlerGuard` (first `X-Forwarded-For` IP, `trust proxy` on) as global `APP_GUARD`; two env-driven named throttlers (`default` 30/60s, `stream` 5/60s) scoped per-endpoint with `@SkipThrottle` (every named throttler applies to every route by default in v6); `GET /health` fully bypassed. +22 tests (9 storage, 6 guard, 5 integration, 2 `pttl`); 312 → 334 passing. See ADR 0014. **Sprint Distributed-Breaker (2-step, `43696ad..d3cc994`, Phase 1.7.5):** `CircuitBreakerService` state migrated from in-process memory to Redis (`CircuitBreakerRedisStorage`, five `circuit:llm:` keys + atomic Lua scripts) so one shared circuit federates across instances; `SET NX` probe token = single-flight probe cluster-wide; fail-open; `getSnapshot()` async; public `execute()`/`CircuitOpenException` unchanged. +24 tests (13+4 storage unit, 5 live-Redis integration, service spec rewritten); 334 → 353 passing. See ADR 0015. |
 | 2. Evaluation | ✅ Done (2026-06-07) | **Sprint Eval-RAG-Core shipped.** Python eval harness in `evaluation/` (dev-time only): golden dataset (25 Q: 10 easy factual_lookup, 10 medium multi_source, 5 edge_case — 4 refusal-expected), custom deterministic retrieval metrics (MRR/Hit@5/Precision@5/Recall@5, chunk-ID matching), Ragas generation metrics trimmed 5→3 (Faithfulness/Answer Relevancy/Context Recall; Context Precision + Answer Correctness dropped for ~40% judge-call savings), pattern-based refusal compliance, diagnostic engine (Faithfulness×ContextRecall 2×2 layer map + drill-downs + severity verdict), orchestrator `run_eval.py` (9 stages, fail-fast setup, graceful per-question degradation), markdown+JSON reports. 115 unit tests + 1 slow smoke. **Clean baseline (25/25 coverage):** MRR 0.712, Hit@5 0.810, Precision@5 0.248, Recall@5 0.786, Faithfulness 0.768, Answer Relevancy 0.589 (refusal-deflated), Context Recall 0.767, Refusal 1.000 (4/4) — overall WARNING (relevancy deflation + precision INFO; layer level healthy). **Key sprint events:** excerpt artifact discovered via manual audit (200-char excerpts as Ragas contexts → false-zero Faithfulness 0.292; fixed by fetching full chunk text from Chroma, 0.000→0.927 on audited questions — "question the metric before fixing the system"); production output-validation citation regex fixed to accept multi-source `[Source 4, Source 5]` + adjectived refusals (q001/q012 500s, TDD); judge embeddings moved to `gemini-embedding-001`. **Operational:** `gemini-2.5-pro` judge = 1000 req/day free tier, one full run ≈ 400–600 → max one eval/day; check `questions_evaluated_for_faithfulness`≈25 in baseline.json to detect quota-gutted runs; `SSL_CERT_FILE`-family env vars auto-cleared in Chroma fetch. Known gap: q006/q012/q014/q017 = Hit@5 0 (abstract terminology, vector-only limit → Phase 4). Docs: `evaluation/README.md` + ADR 0017. |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) — now sequenced AFTER Phase 4 |
-| 4. Hybrid retrieval | 🟡 In progress (started 2026-06-10) | **Redefined: vector + BM25 keyword fusion via RRF** (was "vector + graph"). Target: the 4 zero-hit baseline questions. Sub-phases 4.1 BM25 index → 4.2 BM25 service → 4.3 RRF fusion → 4.4 pipeline integration → 4.5 eval → 4.6 closure. Currently at 4.1.1. Locked: `rank_bm25`, pickle index at `data/bm25/index.pkl`, manual build. Open: service architecture (Python-microservice option **conflicts with architectural decision 1 + the no-FastAPI DO-NOT** — needs an ADR or a TS-side alternative; decided in 4.2). See `docs/phases/phase-4.md`. |
+| 4. Hybrid retrieval | 🟡 In progress (started 2026-06-10) | **Redefined: vector + Elasticsearch keyword fusion via RRF** (was "vector + graph"). Target: the 4 zero-hit baseline questions. Sub-phases 4.1 ES setup & indexing → 4.2 ES search service → 4.3 RRF fusion → 4.4 pipeline integration → 4.5 eval → 4.6 closure. **Plan revised 2026-06-10:** switched from in-process `rank_bm25` to Elasticsearch (production-grade, standalone backing service like Chroma/Redis → architectural decision 1 honored, earlier Python-sidecar conflict resolved); `rank_bm25` removed from requirements. Locked: Elasticsearch (latest stable) + `@elastic/elasticsearch` client + ES built-in analyzers + ES-managed index + Docker Compose service. See `docs/phases/phase-4.md`. |
 | 5. Query routing | ⚪ Pending | LLM tool use for adaptive retrieval routing |
 | 6. Queue-based ingestion | ⚪ Future | Async ingestion via queue/worker pattern (optional) |
 
@@ -282,11 +282,14 @@ Current phase: **Phase 4 — Hybrid Retrieval (BM25 + RRF) IN PROGRESS (started 
 
 ---
 
-## Phase 4 — Hybrid Retrieval (BM25 + RRF) — IN PROGRESS
+## Phase 4 — Hybrid Retrieval (Vector + Elasticsearch + RRF) — IN PROGRESS
+
+### Plan revision (2026-06-10)
+After 4.1.1, the tech approach was revised from an in-process BM25 library (`rank_bm25`) to **Elasticsearch**. Rationale: production-grade, stateless backing-service architecture for portfolio value and senior-level positioning; Elasticsearch sits alongside Chroma/Redis/Neo4j as a standalone service, so the "single NestJS service / no Python sidecar" decision is **fully honored** (the earlier architectural conflict is resolved, not overridden). `rank_bm25` removed from `requirements-eval.txt`. See `docs/phases/phase-4.md` for the full updated plan.
 
 ### Status
-- Sprint started: 2026-06-10
-- Scope: BM25 keyword search + RRF fusion with the existing vector retrieval
+- Sprint started: 2026-06-10 (plan revised same day; implementation not yet started under the new plan)
+- Scope: Elasticsearch BM25 keyword search + RRF fusion with the existing vector retrieval
 - Out of scope: cross-encoder reranker (future sprint), citation-accuracy metric (future), graph RAG / agentic RAG (Agentic AI phase)
 
 ### Goal
@@ -298,21 +301,20 @@ Fix the 4 failing baseline questions (q006, q012, q014, q017) by adding keyword-
 - Context Recall: 0.767 → 0.85+
 - No regression on currently-passing questions; end-to-end latency < 1.5 s
 
-### Sub-phases
-- 4.1 BM25 Index ← currently at 4.1.1
-- 4.2 BM25 Retrieval Service
+### Sub-phases (revised — Elasticsearch flow)
+- 4.1 Elasticsearch Setup & Indexing ← next, starts at new 4.1.1 (add ES to Docker Compose)
+- 4.2 Elasticsearch Search Service (NestJS `ElasticsearchModule`)
 - 4.3 RRF Fusion
-- 4.4 Pipeline Integration
+- 4.4 Pipeline Integration (`HybridRetrievalService`, parallel Chroma + ES)
 - 4.5 Evaluation (vs `baseline-2026-06-07`)
 - 4.6 Documentation and closure (ADR 0019)
 
 ### Tech decisions locked
-- BM25 library: `rank_bm25` (Python)
-- Tokenization: lowercase, remove punctuation, English stopwords, no stemming — SAME tokenizer at index-build and query time
-- Index storage: pickle file at `data/bm25/index.pkl`, manual rebuild (no auto-rebuild on startup)
-
-### ⚠ Unresolved architectural conflict (decide in 4.2)
-The roadmap tentatively proposes a **Python FastAPI microservice** for BM25, called from NestJS over HTTP. This **contradicts two locked items in this file**: architectural decision 1 ("Single NestJS service. No Python sidecar") and the hard DO-NOT ("Suggest FastAPI, LangServe, Flask, or any Python web framework"). Resolving it in 4.2 requires EITHER an ADR that explicitly overrides decision 1 (with the trade-off argued), OR a TypeScript-side BM25 implementation that honours the existing constitution. Not yet decided — do not treat the Python sidecar as approved.
+- BM25 implementation: Elasticsearch (latest stable)
+- NPM client: `@elastic/elasticsearch` (installed in 4.2.1)
+- Tokenization: Elasticsearch built-in analyzers (`standard` + English stopwords); index/query analysis configured on the same field
+- Index storage: Elasticsearch-managed (internal Lucene segments) — no pickle file
+- Service architecture: Elasticsearch as a Docker Compose service, called by NestJS over HTTP — same backing-service pattern as Chroma/Redis; architectural decision 1 honored
 
 ---
 

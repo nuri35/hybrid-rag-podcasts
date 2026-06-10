@@ -1,9 +1,16 @@
-# Phase 4 — Hybrid Retrieval (BM25 + RRF)
+# Phase 4 — Hybrid Retrieval (Vector + Elasticsearch + RRF)
 
 **Status:** 🟡 In progress
 **Started:** 2026-06-10
-**Estimated completion:** 9–13 days (~2 weeks)
+**Estimated completion:** 9–12 days (~2 weeks)
 **Baseline to beat:** `evaluation/results/baseline-2026-06-07/`
+
+> **Plan revision (2026-06-10):** the keyword-search engine was switched from an
+> in-process BM25 library (`rank_bm25`) to **Elasticsearch**. See
+> "Rationale for Elasticsearch" below. The earlier "Open architectural question"
+> (Python sidecar vs TS in-process) is resolved: Elasticsearch is a standalone
+> backing service like Chroma/Redis/Neo4j, so the "single NestJS service / no
+> Python sidecar" decision (CLAUDE.md architectural decision 1) is fully honored.
 
 > Note on file location: this plan lives at `docs/phases/phase-4.md` to match the
 > existing `docs/phases/phase-1.md` convention (CLAUDE.md References points
@@ -22,8 +29,8 @@
 ## Scope
 
 **In scope:**
-- BM25 keyword search using `rank_bm25`
-- RRF (Reciprocal Rank Fusion) to merge vector + BM25 rankings
+- BM25 keyword search via Elasticsearch (standalone Docker Compose service)
+- RRF (Reciprocal Rank Fusion) to merge vector + Elasticsearch rankings
 - Hybrid retrieval pipeline integrated into the RAG flow
 - A new baseline evaluation after implementation
 
@@ -61,106 +68,130 @@ which is not the baseline's problem.
 
 ---
 
+## Rationale for Elasticsearch (over in-process BM25)
+
+After installing `rank_bm25` in 4.1.1, the architecture decision was revisited.
+Options considered:
+
+1. **Python microservice (FastAPI + rank_bm25)** — Rejected. Violates the
+   CLAUDE.md "single NestJS service / no Python sidecar" decision.
+2. **TypeScript in-process library (`wink-bm25-text-search`)** — Rejected.
+   Works at the current scale but signals "quick fix" rather than production
+   thinking. Not stateless, harder to scale, keeps the index inside the app
+   process.
+3. **Elasticsearch** — Selected. Industry-standard, production-grade,
+   stateless service architecture, CV keyword value, supports future scale.
+
+The 3–4 days of additional implementation cost is justified by:
+- Portfolio quality for senior-level positions
+- Distributed-systems experience
+- Recognized technology in the target job market (European remote)
+- Operational-maturity demonstration (NestJS + Chroma + Redis + Elasticsearch,
+  with Neo4j to come in Phase 3)
+
+Constitution note: Elasticsearch sits alongside Chroma, Redis, and (Phase 3)
+Neo4j as a standalone backing service that NestJS calls over HTTP — it is not a
+"Python sidecar" owning LCEL/business logic, and it is not an upstream API
+gateway. Architectural decision 1 is therefore honored, not overridden, so no
+ADR override is required (ADR 0019 will simply document the hybrid design).
+
+---
+
 ## Sub-phases
 
-### 4.1 — Build BM25 Index (2–3 days)
-Build a searchable BM25 index of all chunks, saved to disk.
-- 4.1.1 Install `rank_bm25` library ← **current step**
-- 4.1.2 Build tokenizer function (shared by index + query)
-- 4.1.3 Write index build script
-- 4.1.4 Save index to disk (`data/bm25/index.pkl`)
-- 4.1.5 Manual verification (query the 4 failing questions' terms, confirm hits)
+### Sub-Phase 4.1 — Elasticsearch Setup & Indexing (2–3 days)
+
+Set up Elasticsearch as a service, design index mapping, and ingest all chunks.
+
+- 4.1.1 Add Elasticsearch to Docker Compose
+- 4.1.2 Design index schema (mapping definition)
+- 4.1.3 Create index with proper config (analyzer, BM25 similarity settings)
+- 4.1.4 Write bulk ingestion script (read from Chroma, write to ES)
+- 4.1.5 Manual verification (test queries against ground truth chunks)
 - 4.1.6 Documentation
 
-### 4.2 — BM25 Retrieval Service (2–3 days)
-Make the BM25 index callable from the system.
-- 4.2.1 Decide service location — **see "Open architectural question" below**
-- 4.2.2 Build the service
-- 4.2.3 Add to Docker Compose (if a separate service)
-- 4.2.4 NestJS client
-- 4.2.5 Caching layer (Redis)
-- 4.2.6 Testing
+### Sub-Phase 4.2 — Elasticsearch Search Service (2 days)
 
-### 4.3 — RRF Fusion (1 day)
-Combine vector and BM25 results into one ranked list.
-- 4.3.1 Implement RRF formula (`score = Σ 1/(k + rank_i)`, default k=60)
-- 4.3.2 Configuration (k constant, per-retriever weighting if any)
-- 4.3.3 Unit testing
+Build the NestJS service that queries Elasticsearch.
+
+- 4.2.1 Install `@elastic/elasticsearch` NPM client
+- 4.2.2 Create `ElasticsearchModule` and `ElasticsearchService`
+- 4.2.3 Implement search method (query → top-K chunk_ids with scores)
+- 4.2.4 Health check and error handling
+- 4.2.5 Redis cache layer for frequent queries
+- 4.2.6 Unit and integration testing
+
+### Sub-Phase 4.3 — RRF Fusion (1 day)
+
+Merge vector and Elasticsearch ranked lists.
+
+- 4.3.1 Implement `RrfFusionService` (`score = Σ 1/(k + rank_i)`, default k=60)
+- 4.3.2 Configuration (k value, top-K input/output)
+- 4.3.3 Unit testing with hand-calculated examples
 - 4.3.4 Documentation
 
-### 4.4 — Pipeline Integration (2 days)
-Connect vector + BM25 + RRF into a single hybrid flow.
-- 4.4.1 New `HybridRetrievalService`
-- 4.4.2 Update the QA/retrieval service to use it
-- 4.4.3 Logging additions (per-retriever hit counts, fused order)
-- 4.4.4 Smoke testing
+### Sub-Phase 4.4 — Pipeline Integration (2 days)
 
-### 4.5 — Evaluation (1–2 days)
-Measure improvement against `baseline-2026-06-07`.
-- 4.5.1 Pre-run checklist (Gemini quota, services up, cache flush)
-- 4.5.2 Execute eval
-- 4.5.3 Compare results
-- 4.5.4 Investigate any regressions
-- 4.5.5 Tuning iteration if needed (RRF k, candidate-set sizes)
+Connect vector + Elasticsearch + RRF into the hybrid retrieval flow.
 
-### 4.6 — Documentation and Closure (1–2 days)
-- 4.6.1 ADR 0019 (hybrid retrieval architecture)
+- 4.4.1 Create `HybridRetrievalService`
+- 4.4.2 Parallel calls to Chroma and Elasticsearch (`Promise.all`)
+- 4.4.3 Update RAG service with hybrid mode toggle
+- 4.4.4 Logging (stage timings, debug info)
+- 4.4.5 End-to-end smoke testing
+
+### Sub-Phase 4.5 — Evaluation (1–2 days)
+
+Run new baseline and compare to `baseline-2026-06-07`.
+
+- 4.5.1 Pre-run checklist
+- 4.5.2 Execute full eval
+- 4.5.3 Save new baseline (`baseline-hybrid-YYYY-MM-DD/`)
+- 4.5.4 Side-by-side comparison report
+- 4.5.5 Analyze the 4 failing questions (q006, q012, q014, q017)
+- 4.5.6 Regression check
+- 4.5.7 Tuning iteration if needed
+
+### Sub-Phase 4.6 — Documentation & Closure (1–2 days)
+
+- 4.6.1 ADR 0019: Hybrid Retrieval with Elasticsearch
 - 4.6.2 Update `evaluation/README.md`
 - 4.6.3 Update main project `README.md`
-- 4.6.4 Update CLAUDE.md (Phase 4 closure)
+- 4.6.4 CLAUDE.md Phase 4 closure
 - 4.6.5 LinkedIn post draft
+
+**Total estimated duration: 9–12 days (about 2 weeks)**
 
 ---
 
 ## Tech Stack Decisions
 
-1. **BM25 library:** `rank_bm25==0.2.2` (Python)
-   - Reason: simple, well-tested, fits our chunk scale (~53k chunks comfortably in memory)
-   - Alternatives considered: Elasticsearch (operational overkill for a portfolio project), custom implementation (slow to deliver, easy to get TF-IDF weighting subtly wrong)
+1. **BM25 implementation:** Elasticsearch (latest stable version)
+   - Reason: industry-standard, production-grade, distributed search engine with
+     native Okapi BM25 similarity; stateless service that scales independently
+     of the app process.
+   - Alternatives considered & rejected: Python FastAPI + `rank_bm25` (violates
+     the single-NestJS-service decision); TypeScript in-process
+     `wink-bm25-text-search` (works at current scale but signals a quick fix,
+     keeps the index inside the app process). See "Rationale for Elasticsearch"
+     above.
 
-2. **Tokenization strategy:**
-   - Lowercase → remove punctuation → remove English stopwords → no stemming
-   - The SAME tokenizer must run at index-build time and query time — a mismatch silently tanks recall. This is the single most important consistency invariant in 4.1/4.2.
-   - Open detail for 4.1.2: source of the stopword list (small hardcoded set vs a library) — to avoid pulling in a heavy NLP dependency for one list.
+2. **NPM client:** `@elastic/elasticsearch` (installed in 4.2.1, not before)
 
-3. **Index storage:**
-   - Pickle file at `data/bm25/index.pkl`
-   - Manual rebuild via script; no auto-rebuild on startup
-   - `data/bm25/` should be gitignored like other generated data
+3. **Tokenization:** Elasticsearch built-in analyzers — the `standard` analyzer
+   with English stopwords. Index-time and query-time analysis are configured on
+   the same field, so the build-vs-query tokenizer-consistency risk that the
+   in-process approach carried is handled by ES itself.
 
-4. **Service architecture (UNRESOLVED — see below):**
-   - Tentatively proposed: Python FastAPI microservice, called by NestJS over HTTP
-   - To be confirmed in Sub-Phase 4.2
+4. **Index storage:** Elasticsearch manages persistence internally (its own
+   on-disk Lucene segments inside the ES container's volume). No pickle file,
+   no `data/bm25/` directory.
 
-### ⚠ Open architectural question (4.2.1) — constitution conflict
-
-The tentative "Python FastAPI microservice" **conflicts with two locked items
-in CLAUDE.md**:
-
-- **Architectural decision 1:** "Single NestJS service. No Python sidecar, no
-  upstream API gateway… A Python service would dilute the AI engineering
-  narrative and add operational complexity for no learning gain."
-- **Hard constraint (DO NOT):** "Suggest FastAPI, LangServe, Flask, or any
-  Python web framework."
-
-These were deliberate, ADR-worthy decisions. Two honest resolutions exist, to
-be chosen in 4.2:
-
-1. **Honour the constitution:** implement BM25 in TypeScript (e.g. an
-   in-process Node BM25 such as `wink-bm25-text-search`, or a hand-rolled
-   Okapi BM25 over the chunk corpus). Keeps "single NestJS service" intact;
-   the index could still be built by a one-off Python/TS script. **Note:** the
-   `rank_bm25`/pickle decisions in section 1–3 are themselves part of the
-   Python-path assumption; choosing the TS path revisits them.
-2. **Override the constitution:** write an ADR that explicitly supersedes
-   decision 1 for this case, arguing the trade-off (reuse of the mature
-   `rank_bm25`, the index build already being Python-side via the eval/data
-   tooling). Only then is the Python sidecar sanctioned.
-
-Until 4.2 decides, the Python sidecar is **not approved**, and the
-`rank_bm25` install in 4.1.1 is justified for **dev-time index building and
-experimentation** (the same dev-time Python carve-out as `scripts/` and
-`evaluation/`), not as a committed production-runtime dependency.
+5. **Service architecture:** Elasticsearch runs as a Docker Compose service
+   alongside Chroma and Redis; NestJS calls it over HTTP via the official
+   client. This is the same backing-service pattern the project already uses —
+   CLAUDE.md architectural decision 1 ("single NestJS service / no Python
+   sidecar") is honored, not overridden.
 
 ---
 
@@ -179,7 +210,7 @@ experimentation** (the same dev-time Python carve-out as `scripts/` and
 
 - ADR 0003 — Vector store module and retrieval (the vector half of the hybrid)
 - ADR 0017 — RAG Evaluation Framework (Phase 2 closure; defines the baseline)
-- ADR 0019 — Hybrid Retrieval Architecture (to be written in 4.6.1)
+- ADR 0019 — Hybrid Retrieval with Elasticsearch (to be written in 4.6.1)
 
 ## Documentation Touchpoints (at closure)
 
