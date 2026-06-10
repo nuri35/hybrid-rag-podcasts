@@ -20,3 +20,10 @@ ragas==0.2.6
 langchain-google-genai==2.0.11
 datasets==2.18.0
 python-dotenv==1.0.0
+
+# Phase 4 (Hybrid Retrieval) — BM25 keyword search. Used to build the on-disk
+# BM25 index over all chunks (data/bm25/index.pkl) and for retrieval
+# experiments. Dev-time only at this stage: whether BM25 runs in a Python
+# service or is reimplemented TypeScript-side is an open architectural question
+# decided in sub-phase 4.2 (see docs/phases/phase-4.md). Pure-Python, no deps.
+rank_bm25==0.2.2
