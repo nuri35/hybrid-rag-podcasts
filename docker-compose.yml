@@ -50,6 +50,33 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------
+  # Elasticsearch — Phase 4 (Hybrid Retrieval). BM25 keyword search engine,
+  # fused with Chroma vector results via RRF. Single-node dev cluster with
+  # security disabled (DEV ONLY — never ship security disabled to production;
+  # enable xpack.security + TLS + credentials there). 512 MB JVM heap is plenty
+  # for ~53k podcast chunks. Named volume for persistence, same Windows-perf
+  # rationale as Chroma/Redis. See docs/phases/phase-4.md.
+  # ---------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: hybrid-rag-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------
   # Neo4j entity graph — Phase 3+ (kept here so the topology is visible).
   # Enable by removing the comment markers below and `docker compose up -d neo4j`.
   # ---------------------------------------------------------------
@@ -75,4 +102,5 @@ services:
 volumes:
   chroma-data:
   redis-data:
+  elasticsearch-data:
   # neo4j-data:  # uncomment with the neo4j service above

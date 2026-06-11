@@ -20,3 +20,10 @@ ragas==0.2.6
 langchain-google-genai==2.0.11
 datasets==2.18.0
 python-dotenv==1.0.0
+
+# Phase 4 (Hybrid Retrieval) — Elasticsearch Python client. Used by the
+# dev-time scripts under scripts/elasticsearch/ to create the podcast_chunks
+# index and (4.1.4) bulk-ingest chunk text from Chroma. Client major version
+# MUST match the ES cluster (8.13.0 in docker-compose). Production keyword
+# search is called from NestJS via @elastic/elasticsearch (Phase 4.2), not this.
+elasticsearch==8.13.0

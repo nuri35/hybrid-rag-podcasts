@@ -1,0 +1,51 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "default": {
+          "type": "english"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "chunk_id": {
+        "type": "keyword"
+      },
+      "text": {
+        "type": "text",
+        "analyzer": "english"
+      },
+      "episode_id": {
+        "type": "keyword"
+      },
+      "chunk_index": {
+        "type": "integer"
+      },
+      "total_chunks": {
+        "type": "integer"
+      },
+      "title": {
+        "type": "keyword"
+      },
+      "guest_name": {
+        "type": "keyword"
+      },
+      "guest_affiliation": {
+        "type": "keyword"
+      },
+      "guest_role": {
+        "type": "keyword"
+      },
+      "date": {
+        "type": "keyword"
+      },
+      "duration_min": {
+        "type": "integer"
+      }
+    }
+  }
+}
