@@ -31,7 +31,15 @@ Files in this directory:
 
 The index uses Elasticsearch's built-in **`english` analyzer** (lowercasing,
 English stopword removal, Porter stemming). `text` is the only analyzed field;
-all metadata fields are `keyword` (exact) or `integer`.
+all metadata fields are `keyword` (exact) or `integer`. A full sync indexes
+**53,427 chunks** (~73 MB on disk).
+
+**Transform note (integer coercion).** Chroma stores *all* metadata as strings —
+including numerics (`chunk_index`, `total_chunks`, `duration_min` come back as
+`"0"`, `"106"`, `"60"`). The ES mapping declares those three as `integer`, so
+`ingest-chunks.py` coerces them with `int()`. An **empty string is dropped, not
+sent** (e.g. a missing `duration_min` is `""` in Chroma) — writing `""` to an
+`integer` field would trigger ES `mapper_parsing_exception` and fail that document.
 
 ## 2. Quick start
 
@@ -44,7 +52,10 @@ python scripts/elasticsearch/ingest-chunks.py           # 3. fill it from Chroma
 python scripts/elasticsearch/smoke-test.py              # 4. verify
 ```
 
-On Windows use `.\.venv\Scripts\python.exe` instead of `python`.
+On Windows use `.\.venv\Scripts\python.exe` instead of `python`. `smoke-test.py`
+prints `✓`/`✗` glyphs in its ground-truth table; it reconfigures stdout to UTF-8
+at startup so the default cp1252 Windows console does not raise
+`UnicodeEncodeError`. No action needed — just noting why the reconfigure is there.
 
 Prerequisites: Chroma must already be ingested (`docker-compose up -d chroma` +
 the NestJS ingestion CLI). ES ingestion reads from Chroma, so an empty Chroma
@@ -115,3 +126,23 @@ just re-run create-index + ingest.
   static dataset. **Future option:** event-driven sync (re-index a chunk on Chroma
   write) if the dataset ever becomes live-updating.
 - **512 MB JVM heap.** Sized for ~53k chunks. Scale `ES_JAVA_OPTS` for larger corpora.
+
+## 8. BM25-alone baseline results (measured in 4.1.5)
+
+`smoke-test.py` Check 8 runs each of the 4 zero-hit baseline questions as a raw
+`match` query against `text` and reports where the golden ground-truth chunk lands
+in the BM25 top-10. This is **measurement only** — no tuning was done based on it.
+
+| Question | Ground-truth chunk | BM25 rank | In top-5? | Why |
+|----------|--------------------|-----------|-----------|-----|
+| q006 | `269_chunk_305` | **#3** | ✓ | "Turing machine" — distinctive term, BM25 nails it |
+| q017 | `269_chunk_306/307` | **#1** | ✓ | "constructors abstractors" — coined terms, exact match |
+| q014 | `226_chunk_14/15` | **#8** | ✗ | in top-10 but not top-5; RRF fusion should lift it |
+| q012 | `59_chunk_4/5` | **not in top-10** | ✗ | "human walking" / "machine learning" — common words, no rare term; the vector side owns this one |
+
+**Reading:** BM25 alone strongly fixes 2/4 (q006, q017), partially helps 1/4
+(q014), and misses 1/4 (q012). That is the textbook case *for* fusion rather than
+either retriever alone — keyword search rescues the rare-terminology questions
+that embeddings miss, while the vector side keeps the semantically-phrased ones.
+**The actual fused-vs-baseline numbers are produced in sub-phase 4.5** (evaluation
+against `baseline-2026-06-07`); this table is just the keyword-side starting point.
