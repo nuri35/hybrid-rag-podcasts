@@ -308,6 +308,23 @@ The cosine score on returned chunks is `1 − L²/2` of the L2 distance reported
 | `npm run format` | Prettier write |
 | `npm test` | Jest unit tests |
 
+### Elasticsearch keyword search (Phase 4 — Hybrid Retrieval, in progress)
+
+The BM25 keyword side of hybrid retrieval is backed by Elasticsearch (alongside
+Chroma, which stays the vector side and source of truth). Its index is filled by
+**manually-run, dev-time Python scripts** under `scripts/elasticsearch/` — nothing
+is auto-triggered by the app. Fill Chroma first (Step 1 above), then sync ES by hand:
+
+```bash
+docker-compose up -d elasticsearch                      # start the cluster (port 9200)
+python scripts/elasticsearch/create-index.py            # create the podcast_chunks index
+python scripts/elasticsearch/ingest-chunks.py           # copy chunks Chroma → ES (~15 s, idempotent)
+python scripts/elasticsearch/smoke-test.py              # verify (count + search checks)
+```
+
+The NestJS app does not yet call Elasticsearch — that integration lands in Phase 4.2.
+Full operational docs (sync strategy, recovery, troubleshooting): **[`scripts/elasticsearch/README.md`](scripts/elasticsearch/README.md)**.
+
 ## Production deployment
 
 The codebase is designed to run unchanged in any deployment topology. Only env variables change.

@@ -8,6 +8,12 @@ Data preparation tools for hybrid-rag-podcasts. **Dev-time only — not part of 
 |---|---|
 | `prepare_dataset.py` | One-time download of the `nmac/lex_fridman_podcast` HuggingFace dataset, aggregates segment rows into per-episode transcripts, and writes `data/podcasts.csv` in this project's schema (`episode_id`, `title`, `date`, `duration_min`, `guest_name`, `guest_affiliation`, `guest_role`, `transcript_text`). |
 | `requirements.txt` | Python deps for the script: `datasets`, `pandas` (plus transitive `huggingface_hub`, `pyarrow`, etc.). |
+| `elasticsearch/` | **Phase 4 (Hybrid Retrieval) keyword-search tooling.** Manually-run, dev-time Python scripts that create the `podcast_chunks` Elasticsearch index and copy chunks into it from Chroma for BM25 search. These are operational tools, **not** part of the NestJS runtime (production keyword search is called from NestJS via `@elastic/elasticsearch` in Phase 4.2). Run order and full ops docs: **[`elasticsearch/README.md`](elasticsearch/README.md)**. |
+
+> **All scripts in this directory are run manually.** Nothing here is auto-triggered
+> by the app — they are one-time / on-demand dev-time tools. The Elasticsearch index
+> is rebuildable derived data: fill Chroma first (via the NestJS ingestion CLI), then
+> run the `elasticsearch/` scripts by hand to sync. See `elasticsearch/README.md` § "Sync strategy".
 
 ## Prerequisites
 
