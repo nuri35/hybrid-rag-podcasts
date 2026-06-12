@@ -130,15 +130,14 @@ Merge vector and Elasticsearch ranked lists.
 - 4.3.3 ✅ 11 unit tests incl. hand-calculated exactness (`[A,B,X,C]`, scores to 1e-6) + q014 dual-list-agreement scenario. Full suite 404→415, 0 regressions.
 - 4.3.4 ✅ ADR 0019 (rank-based fusion over score normalization). **Dormant until 4.4 wiring.**
 
-### Sub-Phase 4.4 — Pipeline Integration (2 days)
+### Sub-Phase 4.4 — Pipeline Integration (2 days) — ✅ DONE (2026-06-12, commit `31c5d8e`)
 
 Connect vector + Elasticsearch + RRF into the hybrid retrieval flow.
 
-- 4.4.1 Create `HybridRetrievalService`
-- 4.4.2 Parallel calls to Chroma and Elasticsearch (`Promise.all`)
-- 4.4.3 Update RAG service with hybrid mode toggle
-- 4.4.4 Logging (stage timings, debug info)
-- 4.4.5 End-to-end smoke testing
+- 4.4.1/4.4.2 ✅ `HybridRetrievalService` (`src/modules/retrieval/`) — `Promise.allSettled` parallel vector+ES (defense-in-depth on top of each service's catch), RRF fusion, symmetric degradation. `SOURCE_TOP_K=10`. Implements `IRetriever`.
+- 4.4.3 ✅ `HYBRID_RETRIEVAL_ENABLED` toggle (default true), ONE seam: `RETRIEVER` token bound by `selectRetriever` factory in `QaModule`; `QaChainService` call site unchanged. env uses enum+transform (`z.coerce.boolean` maps "false"→true).
+- 4.4.4 ✅ `hybrid_retrieval` structured log: `vector_hits es_hits fused_unique overlap vector_ms es_ms fusion_ms degraded`.
+- 4.4.5 ✅ E2E smoke (cache flushed). **Key findings:** toggle verified (off→pure-vector, no ES log; on→hybrid). **q017/q006 ground-truth now RETRIEVED via the ES side** (overlap=0 = the vocab-mismatch signature) — but **end-to-end answers did NOT flip**: q017 retrieves `269_chunk_306` but not `307`, LLM still refuses; q006's `269_chunk_305` (ES rank #3) is squeezed out of the fused top-5 by overlap=0 + `FUSION_OUTPUT_TOP_K=5`. q002 regression answers correctly (`59_chunk_12`); q010 still refuses. **→ 4.5 must decide whether the squeeze is a topK/k tuning issue or a generation-side limit.** +9 unit tests, full suite 415→424, 0 regressions.
 
 ### Sub-Phase 4.5 — Evaluation (1–2 days)
 
