@@ -13,7 +13,7 @@ import {
   QueryTooLongException,
   QueryTooShortException,
 } from '../retrieval/exceptions';
-import { VectorRetrieverService } from '../retrieval/vector-retriever.service';
+import { RETRIEVER } from '../retrieval/retrieval.constants';
 import type { RetrievedChunk } from '../retrieval/retrieval.types';
 import { ChromaRepository } from '../vector-store/chroma.repository';
 import { CircuitOpenException } from './exceptions/circuit-open.exception';
@@ -303,7 +303,7 @@ async function buildService(
   const moduleRef = await Test.createTestingModule({
     providers: [
       QaChainService,
-      { provide: VectorRetrieverService, useValue: retriever },
+      { provide: RETRIEVER, useValue: retriever },
       { provide: DistributedLockService, useValue: lockService },
       { provide: RedisService, useValue: redisService },
       { provide: ChromaRepository, useValue: chromaRepository },

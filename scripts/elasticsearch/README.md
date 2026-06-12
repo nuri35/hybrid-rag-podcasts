@@ -113,6 +113,7 @@ just re-run create-index + ingest.
 | `Cannot connect to Elasticsearch` | Cluster down | `docker-compose up -d elasticsearch` |
 | Count mismatch at end of ingestion | Some chunks rejected, or Chroma changed mid-run | Full rebuild (§5); inspect the listed failed `chunk_id`s |
 | Chroma count is 0 | Chroma not ingested | Run the NestJS ingestion CLI first |
+| Hybrid retrieval seems to have no effect on answers | **Stale answer cache** — the `qa:v1:*` Redis cache still holds vector-era answers keyed before hybrid was enabled | Flush it: `docker exec hybrid-rag-redis redis-cli --scan --pattern "qa:v1:*" \| xargs docker exec hybrid-rag-redis redis-cli DEL` (no-op if empty). Always flush after first enabling `HYBRID_RETRIEVAL_ENABLED` or changing `SOURCE_TOP_K`/`RRF_K`. NB: the cache key already includes the chunk-id set, so genuinely different retrievals self-invalidate — but identical-retrieval / pre-hybrid entries can mask a behaviour change during A/B testing. |
 
 ## 7. Known limitations
 

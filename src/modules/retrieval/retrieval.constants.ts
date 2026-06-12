@@ -53,3 +53,13 @@ export const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set(Object.values(ME
  * recall + leak-via-enumeration risk all in scope).
  */
 export const ALLOWED_FILTER_OPERATORS: ReadonlySet<string> = new Set(['$eq', '$in']);
+
+/**
+ * DI token for "the active retriever the QA chain consumes" (Phase 4.4). Bound
+ * by a single factory provider in `QaModule` to either `VectorRetrieverService`
+ * (legacy) or `HybridRetrievalService` (hybrid) based on
+ * `HYBRID_RETRIEVAL_ENABLED`. Typed as `IRetriever` so the swap is clean — the
+ * call site (`retriever.retrieve(query, { topK })`) never changes. This token is
+ * the ONE toggle seam (decision 5); there are no scattered hybrid/legacy ifs.
+ */
+export const RETRIEVER = 'RETRIEVER';

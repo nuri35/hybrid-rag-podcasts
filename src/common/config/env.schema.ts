@@ -46,6 +46,16 @@ export const envSchema = z.object({
   RETRIEVAL_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).max(100).default(3),
   RETRIEVAL_MAX_QUERY_LENGTH: z.coerce.number().int().min(10).max(10_000).default(1000),
 
+  // Hybrid retrieval toggle (Phase 4.4). true (default) → vector + Elasticsearch
+  // fused via RRF; false → legacy vector-only path (byte-identical to Phase 2).
+  // NB: `z.coerce.boolean()` is NOT used here — it maps the string "false" to
+  // `true` (Boolean("false") === true), which would make the off-switch silently
+  // a no-op. enum+transform parses "true"/"false" correctly and rejects typos.
+  HYBRID_RETRIEVAL_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
   // LLM (Phase 1.6) — chat model for QA chain. Reuses GOOGLE_API_KEY above.
   LLM_MODEL: z.string().min(1).default('gemini-2.0-flash'),
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0),

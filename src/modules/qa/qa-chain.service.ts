@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -17,8 +17,8 @@ import {
   QueryTooShortException,
   RetrievalFailedException,
 } from '../retrieval/exceptions';
-import { VectorRetrieverService } from '../retrieval/vector-retriever.service';
-import type { RetrievedChunk } from '../retrieval/retrieval.types';
+import { RETRIEVER } from '../retrieval/retrieval.constants';
+import type { IRetriever, RetrievedChunk } from '../retrieval/retrieval.types';
 import { ChromaUnreachableException, ChromaWriteFailedException } from '../vector-store/exceptions';
 import { ChromaRepository } from '../vector-store/chroma.repository';
 import { CircuitOpenException } from './exceptions/circuit-open.exception';
@@ -99,7 +99,11 @@ export class QaChainService implements OnModuleInit {
   private integrityState: IntegrityState = { healthy: true, reason: null };
 
   constructor(
-    private readonly retriever: VectorRetrieverService,
+    // Phase 4.4 — injected via the RETRIEVER token (one toggle seam): either
+    // HybridRetrievalService (default) or VectorRetrieverService (legacy),
+    // decided by HYBRID_RETRIEVAL_ENABLED in `retriever.provider.ts`. Both
+    // satisfy IRetriever, so this call site is unchanged across the toggle.
+    @Inject(RETRIEVER) private readonly retriever: IRetriever,
     private readonly lockService: DistributedLockService,
     private readonly redisService: RedisService,
     private readonly chromaRepository: ChromaRepository,

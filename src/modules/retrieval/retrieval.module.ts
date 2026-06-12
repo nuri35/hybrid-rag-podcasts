@@ -1,19 +1,24 @@
 import { Module } from '@nestjs/common';
+import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
+import { FusionModule } from '../fusion/fusion.module';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { VectorStoreModule } from '../vector-store/vector-store.module';
+import { HybridRetrievalService } from './hybrid-retrieval.service';
 import { VectorRetrieverService } from './vector-retriever.service';
 
 /**
- * Retrieval layer over the vector store.
+ * Retrieval layer.
  *
- * Pulls `EmbedderService` from `IngestionModule` (which re-exports it) and
- * `ChromaRepository` from `VectorStoreModule`. The future
- * `HybridRetrieverService` (Phase 4) will live alongside
- * `VectorRetrieverService` and share both upstream modules.
+ * Pulls `EmbedderService` from `IngestionModule` (re-exported) and
+ * `ChromaRepository` from `VectorStoreModule` for the vector path. Phase 4.4
+ * adds `HybridRetrievalService`, which orchestrates `VectorRetrieverService` +
+ * `ElasticsearchService` (from `ElasticsearchModule`) + `RrfFusionService` (from
+ * `FusionModule`). Both retrievers are exported; `QaModule` binds the active one
+ * behind the `RETRIEVER` token via `HYBRID_RETRIEVAL_ENABLED`.
  */
 @Module({
-  imports: [IngestionModule, VectorStoreModule],
-  providers: [VectorRetrieverService],
-  exports: [VectorRetrieverService],
+  imports: [IngestionModule, VectorStoreModule, ElasticsearchModule, FusionModule],
+  providers: [VectorRetrieverService, HybridRetrievalService],
+  exports: [VectorRetrieverService, HybridRetrievalService],
 })
 export class RetrievalModule {}
