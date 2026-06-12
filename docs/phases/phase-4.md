@@ -121,14 +121,14 @@ Build the NestJS service that queries Elasticsearch.
 - 4.2.5 ~~Redis cache layer for frequent queries~~ **CANCELLED (2026-06-12)** — YAGNI: the answer-level cache (`qa:v1:*`) already fronts the whole QA path, ES queries are ~10-50 ms, and the corpus is static, so a separate retrieval cache adds invalidation surface for no measurable win.
 - 4.2.6 Unit and integration testing
 
-### Sub-Phase 4.3 — RRF Fusion (1 day)
+### Sub-Phase 4.3 — RRF Fusion (1 day) — ✅ DONE (2026-06-12, commit `d543d0e`→see 4.3 commit)
 
 Merge vector and Elasticsearch ranked lists.
 
-- 4.3.1 Implement `RrfFusionService` (`score = Σ 1/(k + rank_i)`, default k=60)
-- 4.3.2 Configuration (k value, top-K input/output)
-- 4.3.3 Unit testing with hand-calculated examples
-- 4.3.4 Documentation
+- 4.3.1 ✅ `RrfFusionService` (`src/modules/fusion/`) — pure `fuse(vectorHits, keywordHits, topK=5)`, `Σ 1/(k + rank)`, dedup by `id`, deterministic tie-break (more-lists-first, then ascending id), empty-list degradation, input-immutable.
+- 4.3.2 ✅ `rrf-fusion.constants.ts` — `RRF_K=60` (Cormack et al. 2009; do not tune without eval evidence), `FUSION_OUTPUT_TOP_K=5`. No env vars (algorithm constants).
+- 4.3.3 ✅ 11 unit tests incl. hand-calculated exactness (`[A,B,X,C]`, scores to 1e-6) + q014 dual-list-agreement scenario. Full suite 404→415, 0 regressions.
+- 4.3.4 ✅ ADR 0019 (rank-based fusion over score normalization). **Dormant until 4.4 wiring.**
 
 ### Sub-Phase 4.4 — Pipeline Integration (2 days)
 
