@@ -118,7 +118,7 @@ Build the NestJS service that queries Elasticsearch.
 - 4.2.2 Create `ElasticsearchModule` and `ElasticsearchService`
 - 4.2.3 Implement search method (query → top-K chunk_ids with scores)
 - 4.2.4 Health check and error handling
-- 4.2.5 Redis cache layer for frequent queries
+- 4.2.5 ~~Redis cache layer for frequent queries~~ **CANCELLED (2026-06-12)** — YAGNI: the answer-level cache (`qa:v1:*`) already fronts the whole QA path, ES queries are ~10-50 ms, and the corpus is static, so a separate retrieval cache adds invalidation surface for no measurable win.
 - 4.2.6 Unit and integration testing
 
 ### Sub-Phase 4.3 — RRF Fusion (1 day)

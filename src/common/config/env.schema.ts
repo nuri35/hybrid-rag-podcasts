@@ -29,6 +29,12 @@ export const envSchema = z.object({
   CHROMA_API_KEY: z.string().optional(),
   CHROMA_API_KEY_HEADER: z.string().default('X-Chroma-Token'),
 
+  // Elasticsearch (Phase 4 — Hybrid Retrieval) — BM25 keyword side. Same var
+  // name the dev-time scripts/elasticsearch/*.py use, so app and tooling point
+  // at one cluster. Default matches docker-compose (single-node, port 9200).
+  // Client major.minor must match the cluster (8.13.x). See ADR 0018.
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+
   CLEANING_REMOVE_INTRO: z.coerce.boolean().default(true),
   CLEANING_REMOVE_OUTRO: z.coerce.boolean().default(true),
   CLEANING_REMOVE_SPONSORS: z.coerce.boolean().default(false),

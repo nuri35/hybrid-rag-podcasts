@@ -1,5 +1,6 @@
 export class HealthServicesDto {
   redis!: 'up' | 'down';
+  elasticsearch!: 'up' | 'down';
 }
 
 export class HealthIngestionDto {

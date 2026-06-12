@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from './common/config/config.module';
 import { HealthModule } from './common/health/health.module';
+import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { QaModule } from './modules/qa/qa.module';
@@ -16,6 +17,7 @@ import { ThrottlerModule } from './modules/throttler/throttler.module';
     ThrottlerModule,
     IngestionModule,
     RetrievalModule,
+    ElasticsearchModule,
     LlmModule,
     QaModule,
   ],

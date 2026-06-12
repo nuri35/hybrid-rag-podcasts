@@ -20,6 +20,7 @@
     "test:cov": "jest --coverage"
   },
   "dependencies": {
+    "@elastic/elasticsearch": "8.13",
     "@google/generative-ai": "^0.24.1",
     "@langchain/community": "^0.3.0",
     "@langchain/core": "^0.3.0",

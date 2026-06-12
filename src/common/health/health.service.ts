@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ElasticsearchService } from '../../modules/elasticsearch/elasticsearch.service';
 import { DistributedLockService } from '../../modules/redis/distributed-lock.service';
 import { REDIS_KEYS } from '../../modules/redis/redis.constants';
 import { RedisService } from '../../modules/redis/redis.service';
@@ -9,6 +10,7 @@ export class HealthService {
   constructor(
     private readonly redisService: RedisService,
     private readonly lockService: DistributedLockService,
+    private readonly elasticsearchService: ElasticsearchService,
   ) {}
 
   /**
@@ -20,7 +22,15 @@ export class HealthService {
    * process itself is still considered alive.
    */
   async check(): Promise<HealthResponseDto> {
-    const redisHealthy = await this.redisService.isHealthy();
+    // Probe Redis and Elasticsearch in parallel — both are independent and
+    // never throw (each returns false on failure), so a down dependency is
+    // reflected in the body, not surfaced as a 5xx. The lock check only runs
+    // when Redis is up. ES is the Phase 4 keyword side; `down` here means the
+    // hybrid pipeline will degrade to vector-only, not that the app is unhealthy.
+    const [redisHealthy, esHealthy] = await Promise.all([
+      this.redisService.isHealthy(),
+      this.elasticsearchService.isHealthy().catch(() => false),
+    ]);
     const lockActive = redisHealthy
       ? await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK).catch(() => false)
       : false;
@@ -30,6 +40,7 @@ export class HealthService {
       timestamp: new Date().toISOString(),
       services: {
         redis: redisHealthy ? 'up' : 'down',
+        elasticsearch: esHealthy ? 'up' : 'down',
       },
       ingestion: {
         active: lockActive,
