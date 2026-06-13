@@ -1,0 +1,1083 @@
+{
+  "run_date": "2026-06-13",
+  "dataset_version": "1.0",
+  "generated_at": "2026-06-13T21:48:37",
+  "total_questions": 25,
+  "aggregate": {
+    "retrieval": {
+      "mrr": 0.38888888888888895,
+      "hit_at_k": 0.7619047619047619,
+      "precision_at_k": 0.22857142857142865,
+      "recall_at_k": 0.7380952380952381,
+      "k": 5,
+      "questions_evaluated": 21,
+      "questions_skipped": 4
+    },
+    "generation": {
+      "faithfulness": 0.6238095238095238,
+      "answer_relevancy": 0.5645850802416765,
+      "context_recall": 0.8,
+      "questions_total": 25,
+      "questions_evaluated_for_context": 25,
+      "questions_evaluated_for_faithfulness": 23
+    },
+    "refusal": {
+      "refusal_compliance": 1.0,
+      "total_refusal_questions": 4,
+      "correctly_refused": 4,
+      "incorrectly_answered": []
+    }
+  },
+  "diagnostic": {
+    "overall_health": "WARNING",
+    "findings": [
+      {
+        "severity": "WARNING",
+        "layer": "GENERATION",
+        "title": "Generation problem \u2014 LLM is hallucinating",
+        "detail": "Faithfulness (0.624) is low while Context Recall (0.800) is healthy. The information is there, but the LLM isn't using it faithfully.",
+        "suggested_actions": [
+          "Tighten the prompt: 'ONLY use information from sources'",
+          "Enforce citation: every claim MUST have [Source N] marker",
+          "Add output validation layer (reject answers without citations)",
+          "Lower maxOutputTokens \u2014 longer answers correlate with more hallucination",
+          "Consider switching to a model that is better at instruction-following"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "RETRIEVAL",
+        "title": "MRR is low \u2014 ranking problem",
+        "detail": "MRR = 0.389. Relevant chunks are being retrieved but not ranked at the top, so the LLM sees the important context too late.",
+        "suggested_actions": [
+          "Add a cross-encoder re-ranker on top-K results",
+          "Tune similarity threshold"
+        ]
+      },
+      {
+        "severity": "INFO",
+        "layer": "RETRIEVAL",
+        "title": "Precision@5 is low \u2014 noise problem",
+        "detail": "Precision@5 = 0.229. Too many irrelevant chunks are in top-5, which can confuse the LLM.",
+        "suggested_actions": [
+          "Add a re-ranker to push noise down",
+          "Raise similarity threshold (filter out low-score chunks)",
+          "Reduce top-K to 3"
+        ]
+      },
+      {
+        "severity": "WARNING",
+        "layer": "GENERATION",
+        "title": "Answer Relevancy is low \u2014 answers are off-topic or unfocused",
+        "detail": "Answer Relevancy = 0.565. The LLM is producing answers that drift from the question or include tangential content.",
+        "suggested_actions": [
+          "Add explicit prompt instruction: 'Answer ONLY the question asked, no tangents'",
+          "Lower maxOutputTokens to constrain answer length",
+          "Add few-shot examples of focused answers"
+        ]
+      },
+      {
+        "severity": "HEALTHY",
+        "layer": "REFUSAL",
+        "title": "Refusal compliance is healthy",
+        "detail": "Refusal compliance = 1.000 (4/4 correctly refused).",
+        "suggested_actions": []
+      }
+    ]
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "question": "What was the nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.1,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q001",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8928857355900505,
+        "context_recall": 0.5
+      },
+      "refusal": {
+        "question_id": "q001",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11 was \"Tally Ho\" [Source 9, Source 10]."
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_0",
+        "220_chunk_1",
+        "220_chunk_61",
+        "220_chunk_62",
+        "220_chunk_63",
+        "220_chunk_2",
+        "220_chunk_3",
+        "220_chunk_4",
+        "220_chunk_21",
+        "220_chunk_22",
+        "220_chunk_23",
+        "220_chunk_20"
+      ],
+      "answer": "The nickname of Niels Jorgensen's fire company that he heard over the radio on 9/11 was \"Tally Ho\" [Source 9, Source 10]."
+    },
+    {
+      "id": "q002",
+      "question": "What bug caused Stanley, the Stanford autonomous car, to fail every 30 miles during DARPA Grand Challenge development?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q002",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7757090085699203,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q002",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The bug that caused Stanley to commit suicide every 30 miles was due to a synchronization issue between two computer clocks. Occasionally, a clock would go backward, resulting in negative time elapsed"
+      },
+      "retrieved_chunk_ids": [
+        "59_chunk_11",
+        "59_chunk_12",
+        "59_chunk_13",
+        "59_chunk_10",
+        "59_chunk_16",
+        "59_chunk_17",
+        "59_chunk_18",
+        "147_chunk_21",
+        "147_chunk_22",
+        "147_chunk_23",
+        "147_chunk_16",
+        "147_chunk_17"
+      ],
+      "answer": "The bug that caused Stanley to commit suicide every 30 miles was due to a synchronization issue between two computer clocks. Occasionally, a clock would go backward, resulting in negative time elapsed, which corrupted the entire internal logic [Source 2]."
+    },
+    {
+      "id": "q003",
+      "question": "How does Richard Dawkins distinguish between the two modes of meme transmission, and what does he compare each one to?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q003",
+        "faithfulness": 0.8,
+        "answer_relevancy": 0.8433566552739382,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q003",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Richard Dawkins distinguishes between two modes of meme transmission. The longitudinal transmission, from grandparent to parent to child, is compared to conventional genetic transmission. The transver"
+      },
+      "retrieved_chunk_ids": [
+        "87_chunk_20",
+        "87_chunk_21",
+        "87_chunk_22",
+        "193_chunk_11",
+        "193_chunk_12",
+        "193_chunk_13",
+        "142_chunk_104",
+        "142_chunk_105",
+        "142_chunk_106",
+        "257_chunk_48",
+        "257_chunk_49",
+        "257_chunk_50"
+      ],
+      "answer": "Richard Dawkins distinguishes between two modes of meme transmission. The longitudinal transmission, from grandparent to parent to child, is compared to conventional genetic transmission. The transverse transmission, such as a charismatic preacher converting people, resembles viral transmission [Source 1]."
+    },
+    {
+      "id": "q004",
+      "question": "What parallel does Erik Brynjolfsson draw between free trade and technology when it comes to winners and losers?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.6,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q004",
+        "faithfulness": 0.7272727272727273,
+        "answer_relevancy": 0.8586273080290582,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q004",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Erik Brynjolfsson draws a parallel between free trade and technology in that both can make the overall \"pie bigger,\" creating wealth, but can also lead to uneven effects with winners and losers [Sourc"
+      },
+      "retrieved_chunk_ids": [
+        "141_chunk_120",
+        "141_chunk_121",
+        "141_chunk_122",
+        "141_chunk_123",
+        "141_chunk_119",
+        "174_chunk_90",
+        "174_chunk_91",
+        "174_chunk_92",
+        "324_chunk_219",
+        "324_chunk_220",
+        "324_chunk_221"
+      ],
+      "answer": "Erik Brynjolfsson draws a parallel between free trade and technology in that both can make the overall \"pie bigger,\" creating wealth, but can also lead to uneven effects with winners and losers [Source 1, Source 3, Source 4]. He notes that while economists generally believe free trade is beneficial, it can shift prices in ways that negatively affect some individuals [Source 1]. Similarly, technology can benefit everyone, but it's possible for some people to be left behind while a small group benefits [Source 3, Source 4]. The proposed solution in both cases, according to economists, is to compensate those who are hurt by these advancements, ensuring that everyone can potentially be better off [Source 2, Source 4]. However, Brynjolfsson observes that this compensation has not always been fulfilled, leading to a feeling among some that the system is not working for them [Source 2, Source 4, Source 5]."
+    },
+    {
+      "id": "q005",
+      "question": "What is Tony Fadell's favorite programming language?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q005",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q005",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "35_chunk_1",
+        "35_chunk_2",
+        "35_chunk_3",
+        "309_chunk_14",
+        "309_chunk_15",
+        "309_chunk_16",
+        "35_chunk_7",
+        "35_chunk_8",
+        "35_chunk_9",
+        "109_chunk_56",
+        "109_chunk_57",
+        "109_chunk_58"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q006",
+      "question": "Why does Lee Cronin say biology is not a Turing machine?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q006",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7869223153275721,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q006",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Lee Cronin suggests that the universe might not be a computer and that there are constructors that build computers, implying a distinction between the fundamental nature of the universe and computatio"
+      },
+      "retrieved_chunk_ids": [
+        "198_chunk_43",
+        "198_chunk_44",
+        "198_chunk_45",
+        "269_chunk_301",
+        "269_chunk_302",
+        "269_chunk_303",
+        "212_chunk_12",
+        "212_chunk_13",
+        "212_chunk_14",
+        "269_chunk_300",
+        "198_chunk_42"
+      ],
+      "answer": "Lee Cronin suggests that the universe might not be a computer and that there are constructors that build computers, implying a distinction between the fundamental nature of the universe and computational models [Source 6]. He also believes there is something below the Church-Turing thesis [Source 6]. Furthermore, Cronin argues that the framework of initial conditions and laws of physics, which is analogous to how cellular automata work, is not the right one for biology [Source 11]. He points out that in biology, the genome has self-referential information [Source 11]. He also notes that in biology, the rules or laws appear to depend on the state, and the state and the law change together as a function of time, which is not a typical paradigm in physics [Source 2]. This contrasts with the hope in physics that laws are static [Source 3]."
+    },
+    {
+      "id": "q007",
+      "question": "What distinction does Tony Fadell draw between data-driven and opinion-based decisions when building the first version of a product?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q007",
+        "faithfulness": null,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q007",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "[QUERY FAILED]"
+      },
+      "retrieved_chunk_ids": [],
+      "answer": "[QUERY FAILED]"
+    },
+    {
+      "id": "q008",
+      "question": "Around what grade does Jo Boaler say many kids start to give up on math?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q008",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7626627803960812,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q008",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Many kids start to give up on themselves and math around fifth grade [Source 1]. Fifth grade can be a pivotal time because while early elementary grades allow for exploration, fifth grade teachers oft"
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_22",
+        "226_chunk_23",
+        "226_chunk_24",
+        "226_chunk_21",
+        "226_chunk_14",
+        "226_chunk_15",
+        "226_chunk_16",
+        "101_chunk_8",
+        "101_chunk_9",
+        "101_chunk_10",
+        "183_chunk_121",
+        "183_chunk_122"
+      ],
+      "answer": "Many kids start to give up on themselves and math around fifth grade [Source 1]. Fifth grade can be a pivotal time because while early elementary grades allow for exploration, fifth grade teachers often shift to preparing students for middle school with grades and tests, which can cause students to feel badly about themselves [Source 2]."
+    },
+    {
+      "id": "q009",
+      "question": "What happened to Dennis Oberg's crew when the tower began to collapse on 9/11?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.3333333333333333,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q009",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8326460601816595,
+        "context_recall": 0.5
+      },
+      "refusal": {
+        "question_id": "q009",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "When the second tower hit and began to collapse, Dennis Oberg saw what he thought to be disintegration. He turned his crew around and told them to run, not to look back or up, and to go. They sprinted"
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_20",
+        "220_chunk_21",
+        "220_chunk_22",
+        "220_chunk_23",
+        "156_chunk_112",
+        "156_chunk_113",
+        "156_chunk_114",
+        "220_chunk_24",
+        "310_chunk_176",
+        "310_chunk_177",
+        "310_chunk_178"
+      ],
+      "answer": "When the second tower hit and began to collapse, Dennis Oberg saw what he thought to be disintegration. He turned his crew around and told them to run, not to look back or up, and to go. They sprinted as fast as they could and dove under a fire truck. Those who were sprinting 40 feet behind him were caught underneath a pile that was 10 stories deep and were killed [Source 3, Source 4]."
+    },
+    {
+      "id": "q010",
+      "question": "What is the capital of France?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q010",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q010",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "311_chunk_139",
+        "311_chunk_140",
+        "311_chunk_141",
+        "311_chunk_137",
+        "311_chunk_138",
+        "295_chunk_18",
+        "295_chunk_19",
+        "295_chunk_20",
+        "311_chunk_134",
+        "311_chunk_135",
+        "311_chunk_136",
+        "295_chunk_123"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q011",
+      "question": "Which physicist does Richard Dawkins agree with about there being a genuine mystery to consciousness?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q011",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q011",
+        "expected_refusal": false,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "87_chunk_15",
+        "87_chunk_16",
+        "87_chunk_17",
+        "85_chunk_73",
+        "85_chunk_74",
+        "85_chunk_75",
+        "87_chunk_14",
+        "194_chunk_187",
+        "194_chunk_188",
+        "194_chunk_189",
+        "85_chunk_106",
+        "85_chunk_107"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q012",
+      "question": "How does Sebastian Thrun use the example of human walking to explain why machine learning matters?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q012",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q012",
+        "expected_refusal": false,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "177_chunk_82",
+        "177_chunk_83",
+        "177_chunk_84",
+        "44_chunk_141",
+        "44_chunk_142",
+        "44_chunk_143",
+        "101_chunk_180",
+        "101_chunk_181",
+        "101_chunk_182",
+        "239_chunk_22",
+        "239_chunk_23",
+        "239_chunk_24"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q013",
+      "question": "By what deadline does Tim Urban's bet require a human to have touched Mars?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.3333333333333333,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q013",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.8614917280688913,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q013",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Tim Urban's bet requires a human to have touched Mars by the end of 2030, or by January 1st, 2031 [Source 2, Source 3]."
+      },
+      "retrieved_chunk_ids": [
+        "264_chunk_47",
+        "264_chunk_48",
+        "264_chunk_49",
+        "264_chunk_50",
+        "309_chunk_323",
+        "309_chunk_324",
+        "309_chunk_325",
+        "309_chunk_326",
+        "264_chunk_51",
+        "264_chunk_52",
+        "264_chunk_53"
+      ],
+      "answer": "Tim Urban's bet requires a human to have touched Mars by the end of 2030, or by January 1st, 2031 [Source 2, Source 3]."
+    },
+    {
+      "id": "q014",
+      "question": "Why does Jo Boaler advocate a multidimensional approach to teaching math?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.2,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 0.5,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q014",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8885663575935094,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q014",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Jo Boaler advocates for a multidimensional approach to teaching math because it allows more children to access the subject [Source 5, Source 6]. This approach involves experiencing math in different w"
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_40",
+        "226_chunk_41",
+        "226_chunk_42",
+        "226_chunk_13",
+        "226_chunk_14",
+        "226_chunk_15",
+        "226_chunk_0",
+        "226_chunk_1",
+        "226_chunk_3",
+        "226_chunk_4",
+        "226_chunk_5",
+        "226_chunk_28"
+      ],
+      "answer": "Jo Boaler advocates for a multidimensional approach to teaching math because it allows more children to access the subject [Source 5, Source 6]. This approach involves experiencing math in different ways, such as visually, with numbers, or with words, which helps create connections between different brain pathways [Source 6, Source 9, Source 10]. Neuroscience suggests that high-achieving individuals have more connections between these pathways [Source 9]. By offering math in multiple dimensions, educators can accommodate different ways of thinking and learning, which is particularly important for students who may have different brain wirings or learn in non-standard ways [Source 5, Source 6, Source 12]. This contrasts with traditional methods that often present math in a single way, leading some students to do well while others do not [Source 5, Source 6]."
+    },
+    {
+      "id": "q015",
+      "question": "What did they say about the problem with bringing in experts?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 1.0,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q015",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8275418962092366,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q015",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Bringing in experts can sometimes be detrimental to the \"why\" because they are too good at the \"what\" [Source 1]. Experts may focus on specifications, features, and numbers rather than understanding t"
+      },
+      "retrieved_chunk_ids": [
+        "294_chunk_101",
+        "294_chunk_102",
+        "294_chunk_103",
+        "43_chunk_64",
+        "43_chunk_65",
+        "43_chunk_66",
+        "294_chunk_100",
+        "294_chunk_94",
+        "294_chunk_95",
+        "294_chunk_96",
+        "294_chunk_184",
+        "294_chunk_185"
+      ],
+      "answer": "Bringing in experts can sometimes be detrimental to the \"why\" because they are too good at the \"what\" [Source 1]. Experts may focus on specifications, features, and numbers rather than understanding the overall goal [Source 2]. When working on something new and revolutionary, if someone comes with an expert mindset, they might not be the right person for the team because no one is an expert in something that has never existed before [Source 9]. The speaker prefers not to hire someone who claims to be an expert, especially when working on something new, as the team itself is not yet an expert [Source 12]."
+    },
+    {
+      "id": "q016",
+      "question": "How did the share of Americans working remotely change when the pandemic hit, according to the study Erik Brynjolfsson worked on?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q016",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7443993816495557,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q016",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Before the pandemic, about 15% of Americans were working remotely. When the pandemic hit, this number grew to roughly 50% [Source 2]."
+      },
+      "retrieved_chunk_ids": [
+        "141_chunk_112",
+        "141_chunk_113",
+        "141_chunk_114",
+        "141_chunk_111",
+        "141_chunk_116",
+        "141_chunk_117",
+        "141_chunk_118",
+        "298_chunk_19",
+        "298_chunk_20",
+        "298_chunk_21",
+        "141_chunk_115"
+      ],
+      "answer": "Before the pandemic, about 15% of Americans were working remotely. When the pandemic hit, this number grew to roughly 50% [Source 2]."
+    },
+    {
+      "id": "q017",
+      "question": "What does Lee Cronin mean when he distinguishes constructors from abstractors?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q017",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.9291088880556645,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q017",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Lee Cronin distinguishes constructors from abstractors by defining abstractors as the ability to think about the mathematical universe and label things, from which axioms can be derived. He questions "
+      },
+      "retrieved_chunk_ids": [
+        "269_chunk_305",
+        "269_chunk_306",
+        "269_chunk_307",
+        "48_chunk_89",
+        "48_chunk_90",
+        "48_chunk_91",
+        "269_chunk_301",
+        "269_chunk_302",
+        "269_chunk_303",
+        "48_chunk_88",
+        "269_chunk_300"
+      ],
+      "answer": "Lee Cronin distinguishes constructors from abstractors by defining abstractors as the ability to think about the mathematical universe and label things, from which axioms can be derived. He questions the origin of the \"labeler\" and the prime labeler. Constructors, on the other hand, are described in the context of C++ as entities that can establish the environment for the use of a type for an object, and are paired with destructors that clean up at the end [Source 2, Source 4]. Cronin also posits that constructors existed before abstractors, questioning how the universe abstracted itself into existence [Source 2]."
+    },
+    {
+      "id": "q018",
+      "question": "According to Tony Fadell, how did Steve Jobs deliver criticism?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.2,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q018",
+        "faithfulness": 0.4,
+        "answer_relevancy": 0.8717667843430966,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q018",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "According to Tony Fadell, Steve Jobs would critique the work, not judge the person, and this was not done in a demeaning or bullying way, at least not in front of others [Source 5]. He was relentless "
+      },
+      "retrieved_chunk_ids": [
+        "182_chunk_51",
+        "182_chunk_52",
+        "182_chunk_53",
+        "294_chunk_102",
+        "294_chunk_103",
+        "294_chunk_104",
+        "162_chunk_23",
+        "162_chunk_24",
+        "162_chunk_25",
+        "162_chunk_28",
+        "162_chunk_29",
+        "162_chunk_30"
+      ],
+      "answer": "According to Tony Fadell, Steve Jobs would critique the work, not judge the person, and this was not done in a demeaning or bullying way, at least not in front of others [Source 5]. He was relentless on the details and challenged people for the right reasons [Source 5]."
+    },
+    {
+      "id": "q019",
+      "question": "What are the two reasons Tim Urban gives for why SpaceX exists?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q019",
+        "faithfulness": 0.75,
+        "answer_relevancy": 0.8847764583157479,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q019",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Tim Urban states that SpaceX exists for two reasons: first, as \"life insurance for the species\" by having humanity's eggs in more than one basket, and second, because going multi-planetary is \"the gre"
+      },
+      "retrieved_chunk_ids": [
+        "264_chunk_55",
+        "264_chunk_56",
+        "264_chunk_57",
+        "209_chunk_221",
+        "209_chunk_222",
+        "209_chunk_223",
+        "264_chunk_58",
+        "277_chunk_242",
+        "277_chunk_243",
+        "277_chunk_244",
+        "305_chunk_69",
+        "305_chunk_70"
+      ],
+      "answer": "Tim Urban states that SpaceX exists for two reasons: first, as \"life insurance for the species\" by having humanity's eggs in more than one basket, and second, because going multi-planetary is \"the greatest adventure in history\" and provides people with a reason to wake up in the morning [Source 2, Source 3]."
+    },
+    {
+      "id": "q020",
+      "question": "Which university is Richard Dawkins affiliated with?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q020",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q020",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "194_chunk_187",
+        "194_chunk_188",
+        "194_chunk_189",
+        "239_chunk_51",
+        "239_chunk_52",
+        "239_chunk_53",
+        "176_chunk_47",
+        "176_chunk_48",
+        "176_chunk_49",
+        "296_chunk_63",
+        "296_chunk_64",
+        "296_chunk_65"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    },
+    {
+      "id": "q021",
+      "question": "How long were the classes at Jo Boaler's Stanford summer math camps?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q021",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.7419343286521505,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q021",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "The summer camp classrooms were three hours long [Source 2]."
+      },
+      "retrieved_chunk_ids": [
+        "226_chunk_20",
+        "226_chunk_21",
+        "226_chunk_22",
+        "226_chunk_89",
+        "226_chunk_90",
+        "226_chunk_91",
+        "226_chunk_68",
+        "226_chunk_69",
+        "226_chunk_70",
+        "226_chunk_54",
+        "226_chunk_55",
+        "226_chunk_56"
+      ],
+      "answer": "The summer camp classrooms were three hours long [Source 2]."
+    },
+    {
+      "id": "q022",
+      "question": "What prophetic warning did senior man Henry Miller give after the 1993 World Trade Center bombing?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.4,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q022",
+        "faithfulness": 1.0,
+        "answer_relevancy": 0.8115291891313382,
+        "context_recall": 0.5
+      },
+      "refusal": {
+        "question_id": "q022",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "After the 1993 bombing, senior man Henry Miller told the speaker, \"kid, it's a bad day. He said, they didn't do it right. They blew it up in the middle. If they did it in a corner, they would have dro"
+      },
+      "retrieved_chunk_ids": [
+        "220_chunk_23",
+        "220_chunk_24",
+        "220_chunk_25",
+        "171_chunk_8",
+        "171_chunk_9",
+        "171_chunk_10",
+        "220_chunk_36",
+        "220_chunk_37",
+        "220_chunk_38",
+        "220_chunk_26",
+        "244_chunk_20",
+        "244_chunk_21"
+      ],
+      "answer": "After the 1993 bombing, senior man Henry Miller told the speaker, \"kid, it's a bad day. He said, they didn't do it right. They blew it up in the middle. If they did it in a corner, they would have dropped this building half a mile down at Canal Street. But don't kid yourself. They'll be back, and they'll do it. And they'll do it right next time.\" [Source 2]"
+    },
+    {
+      "id": "q023",
+      "question": "What does Lee Cronin speculate dark energy might actually be?",
+      "difficulty": "easy",
+      "category": "factual_lookup",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.5,
+        "hit_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "recall_at_k": 1.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q023",
+        "faithfulness": 0.7142857142857143,
+        "answer_relevancy": 0.8675950753525788,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q023",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "Lee Cronin speculates that dark energy could potentially be time itself [Source 2]. He also suggests that it could be a scalar field, similar to the Higgs boson, which later becomes dark energy and dr"
+      },
+      "retrieved_chunk_ids": [
+        "269_chunk_310",
+        "269_chunk_311",
+        "269_chunk_312",
+        "257_chunk_295",
+        "257_chunk_296",
+        "257_chunk_297",
+        "232_chunk_89",
+        "232_chunk_90",
+        "232_chunk_91",
+        "137_chunk_2",
+        "137_chunk_3",
+        "137_chunk_4"
+      ],
+      "answer": "Lee Cronin speculates that dark energy could potentially be time itself [Source 2]. He also suggests that it could be a scalar field, similar to the Higgs boson, which later becomes dark energy and drives the accelerating expansion of the universe [Source 5]. This field could change over time and potentially become gravitationally attractive in the future [Source 11]."
+    },
+    {
+      "id": "q024",
+      "question": "Why did Apple choose a virtual keyboard for the iPhone despite the BlackBerry's success?",
+      "difficulty": "medium",
+      "category": "multi_source",
+      "is_refusal_expected": false,
+      "retrieval": {
+        "mrr": 0.0,
+        "hit_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q024",
+        "faithfulness": null,
+        "answer_relevancy": 0.0,
+        "context_recall": 0.0
+      },
+      "refusal": {
+        "question_id": "q024",
+        "expected_refusal": false,
+        "actually_refused": false,
+        "answer_excerpt": "[QUERY FAILED]"
+      },
+      "retrieved_chunk_ids": [],
+      "answer": "[QUERY FAILED]"
+    },
+    {
+      "id": "q025",
+      "question": "How do I bake chocolate chip cookies?",
+      "difficulty": "edge",
+      "category": "edge_case",
+      "is_refusal_expected": true,
+      "retrieval": {
+        "mrr": null,
+        "hit_at_k": null,
+        "precision_at_k": null,
+        "recall_at_k": null,
+        "k": 5
+      },
+      "generation": {
+        "question_id": "q025",
+        "faithfulness": 0.0,
+        "answer_relevancy": 0.0,
+        "context_recall": 1.0
+      },
+      "refusal": {
+        "question_id": "q025",
+        "expected_refusal": true,
+        "actually_refused": true,
+        "answer_excerpt": "I cannot answer this question from the provided sources."
+      },
+      "retrieved_chunk_ids": [
+        "144_chunk_10",
+        "144_chunk_11",
+        "144_chunk_12",
+        "223_chunk_60",
+        "223_chunk_61",
+        "223_chunk_62",
+        "105_chunk_75",
+        "105_chunk_76",
+        "105_chunk_77",
+        "294_chunk_162",
+        "294_chunk_163",
+        "294_chunk_164"
+      ],
+      "answer": "I cannot answer this question from the provided sources."
+    }
+  ]
+}
