@@ -18,12 +18,21 @@ interface VectorMock {
 interface EsMock {
   search: jest.Mock;
 }
+interface ExpansionMock {
+  expand: jest.Mock;
+}
+
+/** Config mock toggling NEIGHBOR_EXPANSION_ENABLED. */
+function cfg(expansionEnabled: boolean): never {
+  return { get: jest.fn().mockReturnValue(expansionEnabled) } as never;
+}
 
 describe('HybridRetrievalService', () => {
   let service: HybridRetrievalService;
   let vector: VectorMock;
   let es: EsMock;
   let fusion: RrfFusionService;
+  let neighborExpansion: ExpansionMock;
   let logSpy: jest.SpyInstance;
   let warnSpy: jest.SpyInstance;
 
@@ -31,7 +40,16 @@ describe('HybridRetrievalService', () => {
     vector = { retrieve: jest.fn() };
     es = { search: jest.fn() };
     fusion = new RrfFusionService();
-    service = new HybridRetrievalService(vector as never, es as never, fusion);
+    neighborExpansion = { expand: jest.fn() };
+    // Existing fusion/degradation tests assert the RAW fused output, so build
+    // with expansion DISABLED here; the expansion wiring has its own describe.
+    service = new HybridRetrievalService(
+      vector as never,
+      es as never,
+      fusion,
+      neighborExpansion as never,
+      cfg(false),
+    );
     logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   });
@@ -127,13 +145,61 @@ describe('HybridRetrievalService', () => {
     expect(fuseSpy).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
     expect(out).toHaveLength(3);
   });
+
+  describe('neighbor expansion wiring (Phase 4 enhancement)', () => {
+    function build(expansionEnabled: boolean): HybridRetrievalService {
+      return new HybridRetrievalService(
+        vector as never,
+        es as never,
+        fusion,
+        neighborExpansion as never,
+        cfg(expansionEnabled),
+      );
+    }
+
+    it('9. toggle OFF → expand NOT called, fused top-5 returned as-is', async () => {
+      const svc = build(false);
+      vector.retrieve.mockResolvedValue(list('v', 10));
+      es.search.mockResolvedValue(list('e', 10));
+
+      const out = await svc.retrieve('q');
+
+      expect(neighborExpansion.expand).not.toHaveBeenCalled();
+      expect(out).toHaveLength(5);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('expanded=false'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('neighbors_added=0'));
+    });
+
+    it('toggle ON → expand called with the fused list, its result is returned', async () => {
+      const svc = build(true);
+      const vHits = list('v', 10);
+      const eHits = list('e', 10);
+      vector.retrieve.mockResolvedValue(vHits);
+      es.search.mockResolvedValue(eHits);
+      const fuseSpy = jest.spyOn(fusion, 'fuse');
+      // expansion injects two neighbor chunks (ids NOT in the fused set)
+      neighborExpansion.expand.mockImplementation((fused: RetrievedChunk[]) =>
+        Promise.resolve([...fused, chunk('neighborA', 0), chunk('neighborB', 0)]),
+      );
+
+      const out = await svc.retrieve('q');
+
+      const fusedArg = fuseSpy.mock.results[0].value as RetrievedChunk[];
+      expect(neighborExpansion.expand).toHaveBeenCalledWith(fusedArg);
+      expect(out.map((c) => c.id)).toContain('neighborA');
+      expect(out).toHaveLength(7); // 5 fused + 2 neighbors
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('expanded=true'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('chunks_before=5'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('chunks_after=7'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('neighbors_added=2'));
+    });
+  });
 });
 
 describe('selectRetriever (toggle seam)', () => {
   const vector = { id: 'vector' } as never;
   const hybrid = { id: 'hybrid' } as never;
-  const cfg = (enabled: boolean) =>
-    ({ get: jest.fn().mockReturnValue(enabled) }) as never;
+  const cfg = (enabled: boolean) => ({ get: jest.fn().mockReturnValue(enabled) }) as never;
 
   it('flag true → HybridRetrievalService', () => {
     expect(selectRetriever(cfg(true), vector, hybrid)).toBe(hybrid);

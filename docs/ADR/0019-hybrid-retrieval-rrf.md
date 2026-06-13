@@ -91,3 +91,104 @@ These are the actual numbers asserted in the unit tests.
   to 1e-6), the q014 dual-list-agreement scenario, both degradation paths, dedup,
   topK, deterministic tie-break, RRF-score output, input immutability.
 - **Dormant:** nothing calls `fuse()` until the pipeline wiring in 4.4.
+
+---
+
+## Neighbor-Chunk Expansion (post-fusion context completion)
+
+### Problem
+
+The 4.4 smoke test and the follow-up q017 investigation (read-only) found a
+failure mode that **no fusion tuning can fix**. For q017 ("What does Lee Cronin
+mean when he distinguishes constructors from abstractors?"), RRF correctly
+surfaces the on-topic chunk `269_chunk_306` at the top of the fused list — but
+the chunk that *completes the answer* never enters the pipeline:
+
+- `269_chunk_306` ends mid-sentence: "…the abstractor is the ability of Alan
+  Turing and Gödel and Church… to come up with **a set of axioms**" — and stops.
+- `269_chunk_307` finishes it ("…to basically understand the universe
+  mathematically… **Where is the prime labeler?**") — the exact payoff the
+  ground-truth answer needs.
+- `307` is retrieved by **neither** source: it carries none of the query's
+  literal terms ("constructor"/"abstractor"), so BM25 ranks it nowhere in its
+  top-10; and the vector side locked onto the C++ "constructor/destructor"
+  homonym (episode 48, Stroustrup), so it never surfaces episode 269 at all.
+
+A chunk that is in **neither source's top-10** cannot be recovered by raising
+`FUSION_OUTPUT_TOP_K`, raising `SOURCE_TOP_K`, or changing `RRF_K` — those knobs
+only reorder or deepen lists that already contain the chunk. The LLM, handed one
+partial chunk (`306`) plus four distractors (two of them the C++ homonym),
+correctly refused: *"I cannot answer this question from the provided sources."*
+This is an **incomplete-retrieval** problem, not a fusion or generation defect.
+
+### Decision
+
+After fusion, expand each surviving chunk with its **±1 neighbors** by
+deterministic id (`{episode_id}_chunk_{index}`) and place them **adjacent to
+their parent in `chunk_index` order**, so a sentence split across a chunk
+boundary (`306|307`) is reassembled contiguously for the LLM. Implemented as
+`NeighborExpansionService` (`src/modules/retrieval/`), called inside
+`HybridRetrievalService.retrieve()` after `RrfFusionService.fuse()` and before
+returning.
+
+- **Window ±1** (`NEIGHBOR_WINDOW = 1`), not ±2 — the split is always between
+  immediate neighbors; ±2 doubles context noise for marginal gain.
+- **Applied to all fused chunks** — we don't know in advance which parent owns
+  the boundary.
+- **Single batched Chroma fetch** — all needed neighbor ids are computed up
+  front, deduped, and the *missing* ones (parents are already in hand) are
+  fetched in ONE `ChromaRepository.getByIds()` call (new method), never per
+  chunk. Non-existent ids (episode boundary, gaps) are silently omitted by
+  Chroma and skipped.
+- **id parsing is right-anchored** (`/^(.+)_chunk_(\d+)$/`) so episode ids that
+  themselves contain underscores — including the `_0`/`_1`
+  collision-disambiguation suffixes from `prepare_dataset.py` (`14_0_chunk_5`) —
+  parse correctly; neighbors are computed within one episode only, never across
+  an `episode_id` boundary.
+- **Cap `MAX_EXPANDED_CHUNKS = 12`** — truncated from the end (highest-rank
+  groups survive) so context size stays bounded (worst case 5×3 = 15 → 12).
+- **Neighbor score = 0 sentinel** — neighbors are *context*, not ranked hits;
+  0 (vs. inheriting the parent's RRF score) makes that unambiguous. Downstream
+  `formatContext` orders by array position, not score, so the sentinel is inert
+  in the prompt.
+
+### Ordering guarantee
+
+Fusion rank is the primary order. Each parent emits a group
+`[prev?, parent, next?]` in `chunk_index` order; groups are concatenated in
+fusion-rank order; the sequence is deduped by id (first occurrence wins) then
+capped. This guarantees **306 is immediately followed by 307** in the final
+context — proven by the `NeighborExpansionService` "split-sentence ordering"
+unit test (`expect(i307).toBe(i306 + 1)`).
+
+### Toggle (A/B eval seam)
+
+`NEIGHBOR_EXPANSION_ENABLED` (env, enum+transform boolean — same `z.coerce`
+footgun avoidance as `HYBRID_RETRIEVAL_ENABLED`, default **true**). False → the
+fused top-K passes through byte-identical, so 4.5 can measure the expansion's
+isolated effect. The `hybrid_retrieval` log line gains
+`expanded=<bool> chunks_before=<n> chunks_after=<n> neighbors_added=<n>`.
+
+### Resilience
+
+A Chroma fetch error inside expansion degrades to the **un-expanded fused list**
+(WARN `neighbor_fetch_failed`) — an auxiliary context layer must never fail a
+request.
+
+### Consequences
+
+- **Positive:** recovers boundary-split answers (q017's `307`) that are
+  unreachable by any retriever tuning; deterministic; one extra batched Chroma
+  read (~exact-id `get`, cheap); fully behind a default-on toggle for clean A/B.
+- **Negative / accepted:** adds up to 7 context chunks (12 vs. 5) → larger
+  prompt; a real eval (4.5) will confirm the faithfulness/recall gain outweighs
+  the added context. Expansion adds a Chroma dependency to the hybrid path even
+  when the vector side itself failed — mitigated by the fail-open degrade.
+- **Tested:** 12 `NeighborExpansionService` unit tests (basic ±1, split-sentence
+  adjacency proof, dedup first-wins, max-12 cap truncate-from-end, first/last
+  chunk boundaries, absent-neighbor skip, cross-episode safety, underscore
+  episode-id parsing, single-batched-fetch, graceful Chroma-error degrade, empty
+  input) + 2 `HybridRetrievalService` wiring tests (toggle off → not called /
+  returned as-is; toggle on → called, result returned, log fields). Full suite
+  424 → 438, 0 regressions.
+- **Smoke test:** deferred to a separate follow-up (not part of this change).

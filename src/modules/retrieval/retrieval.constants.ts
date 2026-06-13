@@ -63,3 +63,25 @@ export const ALLOWED_FILTER_OPERATORS: ReadonlySet<string> = new Set(['$eq', '$i
  * the ONE toggle seam (decision 5); there are no scattered hybrid/legacy ifs.
  */
 export const RETRIEVER = 'RETRIEVER';
+
+/**
+ * Neighbor-chunk expansion (Phase 4 enhancement — post-fusion context
+ * completion). Algorithm constants, NOT env vars — changing them changes
+ * retrieval behaviour and must be backed by 4.5 evaluation evidence.
+ *
+ * `NEIGHBOR_WINDOW = 1`: pull each fused chunk's immediate ±1 neighbors
+ * (previous + next by `chunk_index`). The q017 investigation showed the
+ * abstractor definition is split across `269_chunk_306` (ends mid-sentence at
+ * "...a set of axioms") and `269_chunk_307` (completes it + the "prime labeler"
+ * payoff), yet 307 is unreachable by either retriever (BM25 lacks its literal
+ * terms, the vector side locked onto the C++ "constructor" homonym). Pulling
+ * 306's +1 neighbor reassembles the split sentence. ±2 was rejected — it
+ * doubles context noise for marginal recall gain.
+ *
+ * `MAX_EXPANDED_CHUNKS = 12`: hard cap on the expanded set so context size
+ * stays bounded. With FUSION_OUTPUT_TOP_K=5 parents and ±1 neighbors, the
+ * worst case is 15 chunks (5 × 3); 12 keeps the highest-rank groups whole while
+ * protecting the prompt from oversized context.
+ */
+export const NEIGHBOR_WINDOW = 1;
+export const MAX_EXPANDED_CHUNKS = 12;

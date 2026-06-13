@@ -56,6 +56,17 @@ export const envSchema = z.object({
     .default('true')
     .transform((value) => value === 'true'),
 
+  // Neighbor-chunk expansion toggle (Phase 4 enhancement — post-fusion context
+  // completion). true (default) → each fused chunk's ±1 neighbors are pulled and
+  // placed adjacent so sentences split across chunk boundaries (q017: 306→307)
+  // are reassembled; false → fused top-K passes through unchanged (A/B eval).
+  // Same enum+transform pattern as HYBRID_RETRIEVAL_ENABLED — `z.coerce.boolean()`
+  // would map "false" → true and silently disable the off-switch.
+  NEIGHBOR_EXPANSION_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
   // LLM (Phase 1.6) — chat model for QA chain. Reuses GOOGLE_API_KEY above.
   LLM_MODEL: z.string().min(1).default('gemini-2.0-flash'),
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0),

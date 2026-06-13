@@ -35,6 +35,17 @@ export interface SimilarityResult {
   document: string;
 }
 
+/**
+ * A document fetched by exact id (no similarity score — `get` carries no
+ * distance). Used by `NeighborExpansionService` (Phase 4 enhancement) to pull
+ * adjacent chunks for context completion.
+ */
+export interface ChromaDocument {
+  id: string;
+  document: string;
+  metadata: Record<string, unknown>;
+}
+
 interface ChromaBatch {
   ids: string[];
   embeddings: number[][];
@@ -361,5 +372,33 @@ export class ChromaRepository implements OnModuleInit, OnModuleDestroy {
   async count(): Promise<number> {
     const collection = await this.getOrCreateCollection();
     return withTimeout(collection.count(), this.timeoutMs, 'chroma count');
+  }
+
+  /**
+   * Batched exact-id fetch. One `collection.get({ ids })` round trip — never
+   * per-id calls. Chroma returns ONLY the ids that exist (non-existent ids are
+   * silently omitted), and not necessarily in request order, so callers must
+   * index the result by `id` rather than assume positional alignment.
+   *
+   * An empty input short-circuits to `[]` with no round trip. Used by
+   * `NeighborExpansionService` to pull ±1 adjacent chunks for context
+   * completion (Phase 4 enhancement).
+   */
+  async getByIds(ids: string[]): Promise<ChromaDocument[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const collection = await this.getOrCreateCollection();
+    const response = await withTimeout(collection.get({ ids }), this.timeoutMs, 'chroma get');
+
+    const responseIds = response.ids ?? [];
+    const documents = response.documents ?? [];
+    const metadatas = response.metadatas ?? [];
+
+    return responseIds.map((id, idx) => ({
+      id,
+      document: documents[idx] ?? '',
+      metadata: metadatas[idx] ?? {},
+    }));
   }
 }
