@@ -168,17 +168,66 @@ reorders lists that already contain the chunk — it cannot recover `307`.
 - ⏸️ **Smoke test deferred** to a separate follow-up prompt — NOT yet run end-to-end
   against the live LLM. 4.5 eval will measure the expansion's isolated effect via the toggle.
 
-### Sub-Phase 4.5 — Evaluation (1–2 days)
+### Sub-Phase 4.5 — Evaluation — ✅ DONE (2026-06-13)
 
-Run new baseline and compare to `baseline-2026-06-07`.
+Single run, hybrid + ±1 expansion ON, vs `baseline-2026-06-07`. Output:
+`evaluation/results/baseline-hybrid-2026-06-13/`. Pre-run checklist all green
+(services healthy, ES 53,427, toggles default-on, cache flushed, full pro-judge
+quota intact). 23/25 questions succeeded; 2 failed at the output-validation guard.
 
-- 4.5.1 Pre-run checklist
-- 4.5.2 Execute full eval
-- 4.5.3 Save new baseline (`baseline-hybrid-YYYY-MM-DD/`)
-- 4.5.4 Side-by-side comparison report
-- 4.5.5 Analyze the 4 failing questions (q006, q012, q014, q017)
-- 4.5.6 Regression check
-- 4.5.7 Tuning iteration if needed
+**Metrics delta (raw aggregates):**
+
+| Metric | Baseline (vec) | Hybrid+Exp | Δ | note |
+|---|---|---|---|---|
+| Context Recall | 0.767 | **0.800** | **+0.033** | ↑ real — more relevant context reaches the LLM |
+| Faithfulness | 0.768 | 0.624 | −0.144 | **artifact** — substantive-only is flat (0.841→0.847); drop = refusal-scoring noise + 2 failures |
+| Answer Relevancy | 0.589 | 0.565 | −0.024 | refusal-deflated both runs |
+| MRR | 0.712 | 0.389 | −0.323 | **artifact** — rank computed over expansion-reordered output |
+| Hit@5 | 0.810 | 0.762 | −0.048 | **artifact + 2 failures** — no GT actually dropped |
+| Precision@5 | 0.248 | 0.229 | −0.019 | artifact (neighbors dilute top-5) |
+| Recall@5 | 0.786 | 0.738 | −0.048 | artifact |
+| Refusal | 1.000 | 1.000 | = | healthy |
+
+**Key interpretation — the rank-metric drops are a MEASUREMENT ARTIFACT.** The API
+returns the expansion-reordered list (±1 neighbors, score=0, prepended to their
+parent for sentence-adjacency). The eval computes MRR/Hit@5/Precision@5 over that
+returned order, so a GT chunk that was rank-1 in vector-only now sits at rank-2
+behind its own prepended neighbor (q002 MRR 1.0→0.5). **Rank-independent GT
+coverage held at 17/21 confirmed (q014/q017 GT newly present; no GT actually
+dropped from the retrieved set).** Substantive-answer faithfulness (excluding
+refusals + failures) is **flat: 0.841 → 0.847**.
+
+**Methodology fix for future runs:** compute rank-based retrieval metrics over the
+**fused top-5 (pre-expansion)**, not the expanded order — otherwise expansion
+always reads as a regression.
+
+**4.5.5 — four failing questions (matches smoke predictions):**
+
+| qid | base Hit@5 | hybrid Hit@5 | answered? | GT retrieved? | verdict |
+|---|---|---|---|---|---|
+| q014 | 0 | **1** | yes | yes | **FIXED** (RRF overlap=2 lift + expansion completes the pair) |
+| q017 | 0 | **1** | yes | yes (306+307 adjacent) | **FIXED** (expansion pulls neighbor 307) |
+| q006 | 0 | 0 | yes (faith 1.0) | no (305 = ES#3→fused#6, +3 beyond ±1, cap-truncated) | still miss; answers faithfully from adjacent chunks |
+| q012 | 0 | 0 | refuses | no | still miss — vector-embedding limitation (GT invisible to both retrievers) |
+
+**4.5.6 — regression check:** No question lost its GT at the retrieval level.
+Apparent Hit@5 regressions: q001 (GT 220_chunk_22 reordered rank 4→10, still
+retrieved, answered correctly — pure artifact); q007 + q024 (both ep 294) returned
+HTTP 500 `OutputRejectedException reason=missing_citation` — the LLM produced long
+uncited answers under the 11-12-chunk expanded context. The 2 citation failures are
+the only genuine generation regression (plausibly expansion-aggravated; LLM
+nondeterminism not excluded from a single run). Substantive faithfulness: q018
+0.90→0.40 and q013 0.50→0.00 down, but q011 0.0→1.0 and q023 0.58→0.71 up → net wash.
+
+**4.5.7 — reranker decision:** eval does NOT strongly support adding a cross-encoder
+reranker now: q006 already yields a faithful answer (just not the exact GT chunk),
+and the urgent signals are the rank-metric confound + the 2 missing-citation 500s —
+neither fixed by a reranker (which adds latency and MORE reordering). Reranker
+remains a documented future option, not a Phase-4 necessity.
+
+**Overall verdict:** retrieval REACH improved (Context Recall ↑, q014/q017 fixed, no
+GT dropped); headline rank metrics regressed as a measurement artifact of expansion;
+2 citation-validation failures are the one real concern to weigh before closure.
 
 ### Sub-Phase 4.6 — Documentation & Closure (1–2 days)
 
