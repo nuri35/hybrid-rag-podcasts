@@ -139,6 +139,35 @@ Connect vector + Elasticsearch + RRF into the hybrid retrieval flow.
 - 4.4.4 ✅ `hybrid_retrieval` structured log: `vector_hits es_hits fused_unique overlap vector_ms es_ms fusion_ms degraded`.
 - 4.4.5 ✅ E2E smoke (cache flushed). **Key findings:** toggle verified (off→pure-vector, no ES log; on→hybrid). **q017/q006 ground-truth now RETRIEVED via the ES side** (overlap=0 = the vocab-mismatch signature) — but **end-to-end answers did NOT flip**: q017 retrieves `269_chunk_306` but not `307`, LLM still refuses; q006's `269_chunk_305` (ES rank #3) is squeezed out of the fused top-5 by overlap=0 + `FUSION_OUTPUT_TOP_K=5`. q002 regression answers correctly (`59_chunk_12`); q010 still refuses. **→ 4.5 must decide whether the squeeze is a topK/k tuning issue or a generation-side limit.** +9 unit tests, full suite 415→424, 0 regressions.
 
+### Sub-Phase 4.4-E — Neighbor-Chunk Expansion (Phase 4 enhancement) — ✅ DONE (post-4.4)
+
+Deliberate, documented scope addition driven by the **q017 read-only investigation**,
+which proved the 4.4.5 "answers didn't flip" finding is an **incomplete-retrieval**
+problem, not a fusion-tuning or generation problem: the answer-completing chunk
+`269_chunk_307` is in NEITHER source's top-10 (no literal query terms → BM25 skips it;
+vector locked onto the C++ "constructor" homonym → never surfaces ep 269), and `306`
+alone ends mid-sentence. Raising `FUSION_OUTPUT_TOP_K`/`SOURCE_TOP_K`/`RRF_K` only
+reorders lists that already contain the chunk — it cannot recover `307`.
+
+- ✅ `NeighborExpansionService` (`src/modules/retrieval/neighbor-expansion.service.ts`):
+  `expand(fusedChunks)` pulls each fused chunk's **±1 neighbors** by deterministic id,
+  places them **adjacent to the parent in `chunk_index` order** (306→307 contiguous),
+  dedup first-wins, cap `MAX_EXPANDED_CHUNKS=12` (truncate from end).
+- ✅ `ChromaRepository.getByIds(ids)` — new batched exact-id fetch; ONE `get` round trip
+  for all missing neighbor ids; non-existent ids silently omitted (boundary case).
+- ✅ id parsing right-anchored (`/^(.+)_chunk_(\d+)$/`) — underscore/`_0`-disambiguated
+  episode ids parse; neighbors never cross `episode_id`.
+- ✅ Wired into `HybridRetrievalService.retrieve()` AFTER fusion; `NEIGHBOR_EXPANSION_ENABLED`
+  toggle (env enum+transform bool, default true; false → fused top-K byte-identical for A/B).
+  Log line extended: `expanded= chunks_before= chunks_after= neighbors_added=`.
+- ✅ Neighbor `score=0` sentinel (context, not ranked). Chroma-error → degrade to
+  un-expanded list (WARN `neighbor_fetch_failed`).
+- ✅ +12 `NeighborExpansionService` tests (incl. the 306→307 adjacency proof) + 2
+  `HybridRetrievalService` wiring tests. Full suite **424 → 438, 0 regressions**, build clean.
+- ✅ ADR 0019 — "Neighbor-Chunk Expansion" section; architectural decision 23 in CLAUDE.md.
+- ⏸️ **Smoke test deferred** to a separate follow-up prompt — NOT yet run end-to-end
+  against the live LLM. 4.5 eval will measure the expansion's isolated effect via the toggle.
+
 ### Sub-Phase 4.5 — Evaluation (1–2 days)
 
 Run new baseline and compare to `baseline-2026-06-07`.
