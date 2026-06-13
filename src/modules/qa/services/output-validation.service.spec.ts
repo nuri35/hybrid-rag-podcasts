@@ -90,6 +90,42 @@ describe('OutputValidationService', () => {
       expect(service.validate(answer, CORR).verdict).toBe(OutputVerdict.VALID);
     });
 
+    // Phase 4 (2026-06-13): under the expanded multi-source context the LLM
+    // abbreviates "[Source N]" to bare "[N]". The answers are still grounded
+    // and cite the numbered sources — the validator must accept this form
+    // (deterministic 20-run investigation; q007/q024 500s).
+    it('accepts a bare single-number citation "[2]"', () => {
+      const service = new OutputValidationService();
+      const answer =
+        'A sufficiently long substantive answer that cites a source in the bare form [2].';
+      expect(service.validate(answer, CORR).verdict).toBe(OutputVerdict.VALID);
+    });
+
+    it('accepts bare multi-number citations "[3, 4]" and the q007 form "[5, 9]"', () => {
+      const service = new OutputValidationService();
+      const variants = [
+        'A sufficiently long substantive answer citing two sources in bare form [3, 4].',
+        'A sufficiently long substantive answer citing two sources in bare form [5, 9].',
+      ];
+      for (const a of variants) {
+        expect(service.validate(a, CORR).verdict).toBe(OutputVerdict.VALID);
+      }
+    });
+
+    it('accepts a realistic q007-style answer with bare [N] citations mid-text', () => {
+      const service = new OutputValidationService();
+      // Verbatim-shaped excerpt of the q007 answer the old regex rejected.
+      const answer =
+        'Tony Fadell distinguishes data-driven from opinion-based decisions; for a V1 product, ' +
+        'gut decisions are necessary when there is no data to fall back on [2, 3]. These decisions ' +
+        'are crucial for moving a product forward [5], and the team must understand the why [1]. ' +
+        'He cites the iPhone virtual keyboard versus a hardware keyboard as such a decision [5, 9].';
+
+      const r = service.validate(answer, CORR);
+      expect(r.verdict).toBe(OutputVerdict.VALID);
+      expect(r.rejectionReason).toBeNull();
+    });
+
     it('accepts a refusal with an adjective before "sources" ("the provided sources do not contain", baseline q012)', () => {
       const service = new OutputValidationService();
       // Verbatim rejected answer from the baseline run.
@@ -173,6 +209,22 @@ describe('OutputValidationService', () => {
       const r = service.validate(ungrounded, CORR);
       expect(r.verdict).toBe(OutputVerdict.REJECTED);
       expect(r.rejectionReason).toBe('missing_citation');
+    });
+
+    // The loosened bare-[N] regex must still require a DIGIT — brackets with no
+    // number are not citations (Phase 4 fix guard).
+    it('rejects digitless brackets ("[Source]", "[]", "[abc]")', () => {
+      const service = new OutputValidationService();
+      const digitless = [
+        'A long substantive answer that contains an empty source bracket like [Source] only.',
+        'A long substantive answer that contains an empty pair of brackets like [] only.',
+        'A long substantive answer that contains a non-numeric bracket like [abc] only.',
+      ];
+      for (const a of digitless) {
+        const r = service.validate(a, CORR);
+        expect(r.verdict).toBe(OutputVerdict.REJECTED);
+        expect(r.rejectionReason).toBe('missing_citation');
+      }
     });
   });
 

@@ -62,11 +62,20 @@ export class OutputValidationService {
       return { verdict: OutputVerdict.VALID, rejectionReason: null };
     }
 
-    // Accepts single ("[Source 4]") and multi-source brackets the LLM
-    // legitimately produces ("[Source 4, Source 5]", "[Source 1, 3]").
-    // The single-source-only form falsely rejected grounded answers in
-    // the Phase 2 baseline run (2026-06-06, q001).
-    const hasCitation = /\[Source\s+\d+(?:\s*,\s*(?:Source\s+)?\d+)*\s*\]/i.test(answer);
+    // Accepts the full form ("[Source 4]", "[Source 4, Source 5]",
+    // "[Source 1, 3]") AND the bare bracketed-number form ("[2]", "[3, 4]",
+    // "[5, 9]"). The "Source" token is OPTIONAL on every number.
+    //
+    // Why bare [N] is accepted (Phase 4, 2026-06-13): under the larger
+    // expanded multi-source context (9-11 chunks, neighbor expansion), the LLM
+    // deterministically abbreviates citations from "[Source N]" to "[N]". The
+    // answers are still fully grounded and DO cite the numbered sources — only
+    // the marker format differs — yet the old "Source"-mandatory regex rejected
+    // them as missing_citation → HTTP 500 (q007/q024 in the 4.5 eval; confirmed
+    // by a deterministic 20-run investigation). Accepting [N] is a superset of
+    // the old pattern: existing "[Source N]" answers still pass. Brackets with
+    // no digit ("[]", "[Source]", "[abc]") still fail — they are not citations.
+    const hasCitation = /\[\s*(?:Source\s+)?\d+(?:\s*,\s*(?:Source\s+)?\d+)*\s*\]/i.test(answer);
     if (!hasCitation) {
       this.logger.warn(
         `output_validation_rejected correlation_id=${correlationId} ` +
