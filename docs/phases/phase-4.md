@@ -229,6 +229,26 @@ remains a documented future option, not a Phase-4 necessity.
 GT dropped); headline rank metrics regressed as a measurement artifact of expansion;
 2 citation-validation failures are the one real concern to weigh before closure.
 
+#### 4.5 follow-up fixes (2026-06-13/14)
+
+1. **Citation-500 fix** (commit `601c32d`): output validator now accepts bare `[N]`
+   citations (the LLM abbreviates `[Source N]`→`[N]` under expanded context). q007/q024
+   now 200. See CLAUDE.md citation-500 note.
+2. **Eval methodology fix** (this change): rank metrics (MRR/Hit@5/Precision@5/Recall@5)
+   now scored over the **pre-expansion fused top-5** (`retrievalMetadata.fusedTopK`,
+   newly exposed in the API via a `captureFusedTopK` observer callback), NOT the
+   expansion-reordered list. Generation metrics still read the expanded `sources`.
+   Generation aggregates gained a **substantive vs refusal split** so Ragas's erratic
+   refusal scoring stops deflating the headline. Smoke-verified end-to-end: q002 GT back
+   at **fused rank-1** (the false MRR 0.5 artifact is gone); q014 (14@rank2) / q017
+   (306@rank1) GT present in fused top-5; q006 (305 = fused rank 6) / q012 (vector-limit)
+   honestly absent. No retrieval/expansion/prompt logic changed; `baseline-2026-06-07`
+   untouched. +2 backend + 5 python tests, 0 regressions.
+
+**Remaining before Phase 4 closure:** a clean full 25-question re-eval (quota-gated,
+separate step) to capture the TRUE corrected numbers now that both the citation guard
+and the rank-metric methodology are fixed.
+
 ### Sub-Phase 4.6 — Documentation & Closure (1–2 days)
 
 - 4.6.1 ADR 0019: Hybrid Retrieval with Elasticsearch
