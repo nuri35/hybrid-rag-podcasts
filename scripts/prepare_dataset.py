@@ -138,7 +138,8 @@ result = pd.DataFrame({
 duplicate_mask = result.duplicated(subset='episode_id', keep=False)
 if duplicate_mask.any():
     n_dupes = int(duplicate_mask.sum())
-    print(f"Found {n_dupes} rows with duplicate episode_ids; disambiguating with numeric suffix...")
+    print(
+        f"Found {n_dupes} rows with duplicate episode_ids; disambiguating with numeric suffix...")
 
     result.loc[duplicate_mask, 'episode_id'] = (
         result.loc[duplicate_mask, 'episode_id'].astype(str)
@@ -149,7 +150,8 @@ if duplicate_mask.any():
     renamed = result.loc[duplicate_mask, ['episode_id', 'title', 'guest_name']]
     print("Disambiguated rows:")
     for _, row in renamed.iterrows():
-        print(f"  {str(row['episode_id']):20s} — {str(row['guest_name']):30s} — {row['title']}")
+        print(
+            f"  {str(row['episode_id']):20s} — {str(row['guest_name']):30s} — {row['title']}")
 
 output = Path('data/podcasts.csv')
 output.parent.mkdir(parents=True, exist_ok=True)
