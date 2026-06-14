@@ -245,9 +245,45 @@ GT dropped); headline rank metrics regressed as a measurement artifact of expans
    honestly absent. No retrieval/expansion/prompt logic changed; `baseline-2026-06-07`
    untouched. +2 backend + 5 python tests, 0 regressions.
 
-**Remaining before Phase 4 closure:** a clean full 25-question re-eval (quota-gated,
-separate step) to capture the TRUE corrected numbers now that both the citation guard
-and the rank-metric methodology are fixed.
+#### 4.5 FINAL clean eval — DONE (2026-06-14)
+
+Single run, hybrid+expansion ON, corrected harness (rank over fused top-5, generation
+over expanded, substantive/refusal split). **25/25 successful, 0 failures.** Output:
+`evaluation/results/baseline-hybrid-final-2026-06-14/`. Pre-run: services healthy,
+ES 53,427, toggles default-on, cache flushed, both flash-lite + pro-judge credit probes OK.
+
+**3-way metrics (baseline-vec / 4.5-raw-flawed / final-corrected):**
+
+| Metric | Baseline | 4.5-raw | Final | Δ vs baseline |
+|---|---|---|---|---|
+| MRR | 0.712 | 0.389 | **0.774** | **+0.062** |
+| Hit@5 | 0.810 | 0.762 | **0.905** | **+0.095** |
+| Precision@5 | 0.248 | 0.229 | **0.267** | +0.019 |
+| Recall@5 | 0.786 | 0.738 | **0.841** | +0.055 |
+| Faithfulness (raw) | 0.768 | 0.624 | 0.728 | −0.040 (refusal-deflated) |
+| Faithfulness (substantive) | ~0.841 | ~0.847 | **0.905** | **+0.064** |
+| Answer Relevancy (raw) | 0.589 | 0.565 | 0.631 | +0.042 |
+| Answer Relevancy (substantive) | — | — | 0.831 | — |
+| Context Recall | 0.767 | 0.800 | **0.900** | **+0.133** |
+| Refusal Compliance | 1.000 | 1.000 | 1.000 | = |
+
+**4.5→final movement = the artifact quantified:** MRR 0.389→0.774 (+0.385) is almost
+entirely the removal of the neighbor-prepend measurement flaw; Hit@5 0.762→0.905
+(+0.143) is that artifact plus the 2 citation-fix restorations (q007/q024).
+
+**Four failing questions (all predictions held):** q014 ✅ (GT 226_chunk_14 @ fused rank 2)
+and q017 ✅ (269_chunk_306 @ rank 1) FIXED; q006 (305 @ fused rank 6 — answers faithfully
+from adjacent chunks, faith 0.91) and q012 (GT invisible to both retrievers — vector
+limitation, correctly refuses) remain documented misses.
+
+**Regression check: 2 improved (q014/q017) / 19 unchanged / 0 regressed — no GT dropped at
+retrieval.** q007/q024 confirmed answered (citation fix held). The few per-question
+substantive faithfulness dips (q004 0.92→0.73, q013, q018) are offset by larger gains
+(q008/q009/q011/q016/q022 → 1.0), netting the substantive aggregate UP to 0.905.
+
+**Verdict:** Phase 4 retrieval goal achieved and defensible. Of the 4 originals, 2 fixed,
+2 documented misses with understood root causes (q006 coverage-gap, q012 vector-limitation).
+Nothing blocks closure — **ready for 4.6** (ADR 0019 finalization, README, CLAUDE.md closure).
 
 ### Sub-Phase 4.6 — Documentation & Closure (1–2 days)
 
