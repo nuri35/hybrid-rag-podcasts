@@ -39,7 +39,7 @@ import { QuestionRejectedException } from './exceptions/question-rejected.except
 import { OutputVerdict } from './types/output-validation.types';
 import { SanitizationVerdict } from './types/sanitization.types';
 import type { TokenUsage } from './types/token-usage.types';
-import type { QaOptions, QaResult, QaSource } from './qa.types';
+import type { QaOptions, QaResult, QaSource, RetrievalMetadata } from './qa.types';
 import type { StreamEvent } from './dto/stream-event.types';
 import type { IngestionMarker } from '../ingestion/types/ingestion-marker.types';
 import type { Env } from '../../common/config/env.schema';
@@ -239,7 +239,16 @@ export class QaChainService implements OnModuleInit {
     try {
       // 1. Retrieve relevant chunks. Query-level validation lives in the
       //    retriever — it throws Empty/TooShort/TooLong before we get here.
-      const chunks = await this.retriever.retrieve(cleanedQuestion, { topK });
+      //    `captureFusedTopK` (Phase 4 eval methodology) snapshots the
+      //    pre-expansion RRF ranked list as a side-channel — it does not change
+      //    `chunks` (the expanded LLM context).
+      let fusedTopK: RetrievedChunk[] = [];
+      const chunks = await this.retriever.retrieve(cleanedQuestion, {
+        topK,
+        captureFusedTopK: (fused) => {
+          fusedTopK = fused;
+        },
+      });
 
       // 2. Empty retrieval → canned fallback, NO LLM call. Runs BEFORE the
       //    cache so the "I cannot answer" path is never cached (it's cheap
@@ -322,6 +331,9 @@ export class QaChainService implements OnModuleInit {
 
       // 5. Map chunks to caller-facing source citations.
       const sources = this.mapChunksToSources(chunks);
+      // Phase 4 eval methodology: attach the pre-expansion fused top-K so the
+      // eval harness can score rank metrics on the true ranked list.
+      const retrievalMetadata = this.buildRetrievalMetadata(fusedTopK);
 
       // 5b. Phase 1.7.5 Sprint Cache — store the freshly generated answer.
       //     Runs AFTER output validation so a rejected answer never reaches
@@ -369,7 +381,7 @@ export class QaChainService implements OnModuleInit {
           this.formatTokenFields(tokenUsage),
       );
 
-      return { answer, sources };
+      return { answer, sources, retrievalMetadata };
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorClass = error instanceof Error ? error.constructor.name : 'Unknown';
@@ -422,6 +434,21 @@ export class QaChainService implements OnModuleInit {
 
   private formatContext(chunks: RetrievedChunk[]): string {
     return chunks.map((chunk, idx) => `[Source ${idx + 1}]\n${chunk.document}`).join('\n\n');
+  }
+
+  /**
+   * Phase 4 eval methodology — map the pre-expansion fused ranked list to the
+   * lightweight `{ chunkId, rrfScore, rank }` shape surfaced in the response.
+   * `rank` is 1-based and follows the fused order (already sorted best-first).
+   */
+  private buildRetrievalMetadata(fusedTopK: RetrievedChunk[]): RetrievalMetadata {
+    return {
+      fusedTopK: fusedTopK.map((chunk, idx) => ({
+        chunkId: chunk.id,
+        rrfScore: chunk.score,
+        rank: idx + 1,
+      })),
+    };
   }
 
   private mapChunksToSources(chunks: RetrievedChunk[]): QaSource[] {

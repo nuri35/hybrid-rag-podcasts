@@ -49,6 +49,75 @@ def _make_result(answer: str, num_sources: int = 2) -> QueryResult:
 
 
 # ============================================================
+# Phase 4 — substantive (non-refusal) split + generation reads expanded sources
+# ============================================================
+
+def _mock_ragas(faith, rel, ctx):
+    """A mock Ragas result whose to_pandas().to_dict(orient='list') yields the
+    given per-row score lists."""
+    df = MagicMock()
+    df.to_dict.return_value = {
+        'faithfulness': faith,
+        'answer_relevancy': rel,
+        'context_recall': ctx,
+    }
+    result = MagicMock()
+    result.to_pandas.return_value = df
+    return result
+
+
+def test_substantive_split_excludes_refusals():
+    """2 refusals + 3 substantive → substantive means exclude the refusals;
+    refusal_count=2; raw mean still spans all rows."""
+    nan = float('nan')
+    # rows 0-2 substantive, rows 3-4 refusals (by ANSWER text)
+    query_results = [
+        _make_result("Answer A [Source 1]."),
+        _make_result("Answer B [Source 2]."),
+        _make_result("Answer C [Source 1]."),
+        _make_result("I cannot answer this question from the provided sources."),
+        _make_result("The sources do not contain information about that."),
+    ]
+    questions = [
+        _make_question("q001"), _make_question("q002"), _make_question("q003"),
+        _make_question("q004", is_refusal=True), _make_question("q005", is_refusal=True),
+    ]
+    mock_result = _mock_ragas(
+        faith=[1.0, 0.8, 0.9, 0.0, 1.0],          # refusals scored 0.0/1.0 erratically
+        rel=[0.9, 0.85, 0.8, 0.0, 0.0],
+        ctx=[0.9, 0.8, 0.85, nan, nan],
+    )
+
+    with patch('evaluation.modules.generation_metrics.evaluate', return_value=mock_result), \
+         patch('evaluation.modules.generation_metrics._fetch_chunks_from_chroma', return_value={}):
+        scores = calculate_generation_metrics(
+            query_results, questions, judge_llm=MagicMock(), embeddings=MagicMock())
+
+    assert scores.refusal_count == 2
+    assert set(scores.refusal_question_ids) == {"q004", "q005"}
+    # substantive = mean of the 3 non-refusal rows
+    assert scores.substantive_faithfulness == pytest.approx((1.0 + 0.8 + 0.9) / 3)
+    assert scores.substantive_answer_relevancy == pytest.approx((0.9 + 0.85 + 0.8) / 3)
+    # raw still spans all 5 rows (refusal deflation visible)
+    assert scores.faithfulness == pytest.approx((1.0 + 0.8 + 0.9 + 0.0 + 1.0) / 5)
+
+
+def test_build_ragas_dataset_reads_expanded_sources_not_fused():
+    """Generation context comes from `sources` (expanded), unaffected by the
+    fused_top_k_ids field (which is only for rank metrics)."""
+    qr = QueryResult(
+        question="q?", answer="a",
+        sources=[Source(chunk_id="c1", score=0.9, excerpt="EXPANDED EXCERPT", metadata={})],
+        fused_top_k_ids=["c1", "c2", "c3"],   # different/larger — must be ignored here
+    )
+    q = _make_question("q001")
+    with patch('evaluation.modules.generation_metrics._fetch_chunks_from_chroma', return_value={}):
+        ds = build_ragas_dataset([qr], [q])
+    # one context, sourced from the expanded list's excerpt
+    assert ds['contexts'][0] == ["EXPANDED EXCERPT"]
+
+
+# ============================================================
 # Gemini config tests
 # ============================================================
 

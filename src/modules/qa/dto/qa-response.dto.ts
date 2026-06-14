@@ -43,6 +43,40 @@ export class QaSourceDto {
   metadata!: Record<string, unknown>;
 }
 
+export class FusedChunkRefDto {
+  @ApiProperty({
+    description: 'Chunk identifier (<episode_id>_chunk_<chunk_index>).',
+    example: '59_chunk_12',
+  })
+  chunkId!: string;
+
+  @ApiProperty({
+    description:
+      'Retrieval ranking score. RRF score when hybrid retrieval is on (rank-based ' +
+      'reciprocal-rank-fusion), cosine score on the legacy vector-only path.',
+    example: 0.0312,
+  })
+  rrfScore!: number;
+
+  @ApiProperty({
+    description: '1-based rank within the fused (pre-expansion) ranked list.',
+    example: 1,
+  })
+  rank!: number;
+}
+
+export class RetrievalMetadataDto {
+  @ApiProperty({
+    description:
+      "The retrieval system's final RANKED list BEFORE neighbor-chunk expansion " +
+      '(Phase 4). This is the correct source for rank metrics (MRR/Hit@K/Precision@K) — ' +
+      'NOT the LLM context. The LLM context is `sources` (the expanded list). Provided ' +
+      'for evaluation/observability; absent on cache hits and the empty-retrieval path.',
+    type: [FusedChunkRefDto],
+  })
+  fusedTopK!: FusedChunkRefDto[];
+}
+
 export class QaResponseDto {
   @ApiProperty({
     description:
@@ -57,8 +91,18 @@ export class QaResponseDto {
     description:
       'Array of source chunks cited by the answer. Empty when retrieval returned no chunks ' +
       'or when the fast-path no-info response fires. Order reflects retrieval ranking ' +
-      '(highest score first).',
+      '(highest score first). When neighbor expansion is on, this is the EXPANDED context ' +
+      '(parents + ±1 neighbors) the LLM actually saw.',
     type: [QaSourceDto],
   })
   sources!: QaSourceDto[];
+
+  @ApiProperty({
+    description:
+      'Retrieval metadata for evaluation: the pre-expansion fused top-K ranked list. ' +
+      'Optional — omitted on cache hits and the empty-retrieval fast path.',
+    type: RetrievalMetadataDto,
+    required: false,
+  })
+  retrievalMetadata?: RetrievalMetadataDto;
 }

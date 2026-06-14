@@ -337,8 +337,13 @@ def main():
     print("\n[5/9] Computing retrieval metrics...")
     per_question_retrieval = []
     for q, result in zip(questions, query_results):
+        # Phase 4 eval methodology: rank metrics are scored over the
+        # pre-expansion fused top-K (`rank_chunk_ids`), NOT the expanded LLM
+        # context (`retrieved_chunk_ids`). Neighbor expansion prepends ±1
+        # neighbors adjacent to their parent, which would push a ground-truth
+        # chunk down a rank and produce false MRR/Hit@5 regressions.
         scores = compute_per_question_scores(
-            retrieved_ids=result.retrieved_chunk_ids,
+            retrieved_ids=result.rank_chunk_ids,
             ground_truth_ids=q.ground_truth_chunk_ids,
             k=5,
         )
@@ -389,9 +394,13 @@ def main():
         gen_elapsed = time.time() - gen_start
 
         print(f"  ✓ Generation metrics computed in {gen_elapsed/60:.1f} min:")
-        print(f"     Faithfulness={_fmt(generation_scores.faithfulness)}")
-        print(f"     Answer Relevancy={_fmt(generation_scores.answer_relevancy)}")
+        print(f"     Faithfulness (raw)={_fmt(generation_scores.faithfulness)}  "
+              f"| substantive={_fmt(generation_scores.substantive_faithfulness)}")
+        print(f"     Answer Relevancy (raw)={_fmt(generation_scores.answer_relevancy)}  "
+              f"| substantive={_fmt(generation_scores.substantive_answer_relevancy)}")
         print(f"     Context Recall={_fmt(generation_scores.context_recall)}")
+        print(f"     Refusals excluded from substantive: {generation_scores.refusal_count} "
+              f"({', '.join(generation_scores.refusal_question_ids) or 'none'})")
     except Exception as e:
         print(f"  ✗ Generation metrics FAILED: {type(e).__name__}: {e}")
         print(f"  Cannot continue without generation metrics.")

@@ -84,6 +84,12 @@ export class HybridRetrievalService implements IRetriever {
     const fused = this.rrfFusion.fuse(vectorHits, esHits, outputTopK);
     const fusionMs = Date.now() - fusionStart;
 
+    // Phase 4 eval methodology: surface the RRF-fused top-K BEFORE expansion so
+    // rank metrics are measured on the true ranked list. The internal vector
+    // sub-call above used `{ topK: SOURCE_TOP_K }` only — it never received this
+    // callback — so this fires exactly once, with the fused (pre-expansion) list.
+    options.captureFusedTopK?.(fused);
+
     // Phase 4 enhancement — post-fusion neighbor-chunk expansion. Pulls each
     // fused chunk's ±1 neighbors and glues them adjacent so a sentence split
     // across a chunk boundary (q017: 306→307) is reassembled for the LLM.

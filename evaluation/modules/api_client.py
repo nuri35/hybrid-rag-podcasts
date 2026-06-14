@@ -5,7 +5,7 @@ Retry-After, backs off on 503 (ingestion lock / circuit open), and retries
 timeouts before giving up.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 import time
 
@@ -30,11 +30,24 @@ class QueryResult:
     question: str
     answer: str
     sources: List[Source]
+    # Phase 4 eval methodology: the pre-expansion RRF-fused ranked list
+    # (retrievalMetadata.fusedTopK), in rank order. RANK metrics
+    # (MRR/Hit@K/Precision@K) are scored over THIS list, not `sources` (the
+    # expanded LLM context). Falls back to the expanded ids when the API omits
+    # the metadata (cache hit / older API), so older runs still score.
+    fused_top_k_ids: List[str] = field(default_factory=list)
 
     @property
     def retrieved_chunk_ids(self) -> List[str]:
-        """Convenience: just the IDs in order."""
+        """The EXPANDED context ids in order (what the LLM saw). Used for
+        generation metrics; NOT for rank metrics — see `rank_chunk_ids`."""
         return [s.chunk_id for s in self.sources]
+
+    @property
+    def rank_chunk_ids(self) -> List[str]:
+        """The list to score RANK metrics over: the pre-expansion fused top-K
+        when present, else the expanded context (backward-compatible)."""
+        return self.fused_top_k_ids if self.fused_top_k_ids else self.retrieved_chunk_ids
 
 
 class ApiClient:
@@ -115,8 +128,19 @@ class ApiClient:
                 metadata=s.get('metadata', {}),
             ))
 
+        # Phase 4: pre-expansion fused top-K for rank metrics. Optional —
+        # absent on cache hits / empty-retrieval / older API → empty list.
+        fused_top_k_ids = []
+        meta = data.get('retrievalMetadata')
+        if isinstance(meta, dict):
+            for entry in meta.get('fusedTopK', []):
+                cid = entry.get('chunkId')
+                if cid is not None:
+                    fused_top_k_ids.append(cid)
+
         return QueryResult(
             question=question,
             answer=data['answer'],
             sources=sources,
+            fused_top_k_ids=fused_top_k_ids,
         )

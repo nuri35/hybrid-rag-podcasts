@@ -39,6 +39,7 @@ from langchain_google_genai import (
 
 from evaluation.modules.api_client import QueryResult
 from evaluation.modules.dataset import Question
+from evaluation.modules.refusal_metric import is_refusal_response
 
 
 GEMINI_JUDGE_MODEL = "gemini-2.5-pro"
@@ -93,6 +94,16 @@ class GenerationScores:
     questions_total: int
     questions_evaluated_for_context: int  # excludes refusal questions
     questions_evaluated_for_faithfulness: int  # all with non-empty answers
+
+    # Phase 4 eval methodology — substantive (non-refusal) split. Ragas scores
+    # refusal-shaped answers erratically (a refusal's faithfulness lands at 0 or
+    # 1 by construction), which deflates the raw aggregate. These exclude any
+    # answer matching the refusal-phrase family, so the substantive numbers
+    # reflect real answer quality. Defaults keep older construction sites valid.
+    substantive_faithfulness: Optional[float] = None
+    substantive_answer_relevancy: Optional[float] = None
+    refusal_count: int = 0
+    refusal_question_ids: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -344,13 +355,36 @@ def calculate_generation_metrics(
     # Aggregate via NaN-aware mean.
     result_dict = result.to_pandas().to_dict(orient='list')
 
+    faithfulness_list = result_dict.get('faithfulness', [])
+    answer_relevancy_list = result_dict.get('answer_relevancy', [])
+
+    # Phase 4 — substantive (non-refusal) split. A row is a refusal if its
+    # answer matches the refusal-phrase family (same detector the safety metric
+    # uses). Refusal rows are excluded from the substantive means so Ragas's
+    # erratic refusal scoring does not deflate the real answer-quality signal.
+    # query_results, questions and the Ragas rows are all in the same order.
+    refused = [is_refusal_response(r.answer) for r in query_results]
+    refusal_ids = tuple(
+        questions[i].id for i in range(len(questions)) if i < len(refused) and refused[i]
+    )
+    substantive_faithfulness = _safe_mean(
+        [v for v, r in zip(faithfulness_list, refused) if not r]
+    )
+    substantive_answer_relevancy = _safe_mean(
+        [v for v, r in zip(answer_relevancy_list, refused) if not r]
+    )
+
     return GenerationScores(
-        faithfulness=_safe_mean(result_dict.get('faithfulness', [])),
-        answer_relevancy=_safe_mean(result_dict.get('answer_relevancy', [])),
+        faithfulness=_safe_mean(faithfulness_list),
+        answer_relevancy=_safe_mean(answer_relevancy_list),
         context_recall=_safe_mean(result_dict.get('context_recall', [])),
         questions_total=len(questions),
         questions_evaluated_for_context=_count_valid(result_dict.get('context_recall', [])),
-        questions_evaluated_for_faithfulness=_count_valid(result_dict.get('faithfulness', [])),
+        questions_evaluated_for_faithfulness=_count_valid(faithfulness_list),
+        substantive_faithfulness=substantive_faithfulness,
+        substantive_answer_relevancy=substantive_answer_relevancy,
+        refusal_count=sum(1 for r in refused if r),
+        refusal_question_ids=refusal_ids,
     )
 
 

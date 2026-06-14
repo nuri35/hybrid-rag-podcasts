@@ -170,6 +170,28 @@ describe('HybridRetrievalService', () => {
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('neighbors_added=0'));
     });
 
+    it('captureFusedTopK reports the PRE-expansion fused list, not the expanded output', async () => {
+      const svc = build(true); // expansion on
+      vector.retrieve.mockResolvedValue(list('v', 10));
+      es.search.mockResolvedValue(list('e', 10));
+      neighborExpansion.expand.mockImplementation((fused: RetrievedChunk[]) =>
+        Promise.resolve([...fused, chunk('neighborA', 0)]),
+      );
+
+      let captured: RetrievedChunk[] = [];
+      const out = await svc.retrieve('q', {
+        topK: 5,
+        captureFusedTopK: (f) => {
+          captured = f;
+        },
+      });
+
+      // captured = fused top-5 (no injected neighbor); out = expanded (has it)
+      expect(captured).toHaveLength(5);
+      expect(captured.map((c) => c.id)).not.toContain('neighborA');
+      expect(out.map((c) => c.id)).toContain('neighborA');
+    });
+
     it('toggle ON → expand called with the fused list, its result is returned', async () => {
       const svc = build(true);
       const vHits = list('v', 10);

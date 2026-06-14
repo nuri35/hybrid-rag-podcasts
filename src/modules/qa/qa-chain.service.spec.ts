@@ -14,7 +14,7 @@ import {
   QueryTooShortException,
 } from '../retrieval/exceptions';
 import { RETRIEVER } from '../retrieval/retrieval.constants';
-import type { RetrievedChunk } from '../retrieval/retrieval.types';
+import type { RetrievalOptions, RetrievedChunk } from '../retrieval/retrieval.types';
 import { ChromaRepository } from '../vector-store/chroma.repository';
 import { CircuitOpenException } from './exceptions/circuit-open.exception';
 import { RetryExhaustedException } from './exceptions/retry-exhausted.exception';
@@ -59,12 +59,12 @@ function makeConfig(overrides: ConfigOverrides = {}): ConfigService {
 }
 
 interface MockRetriever {
-  retrieve: jest.Mock<Promise<RetrievedChunk[]>, [string, { topK?: number } | undefined]>;
+  retrieve: jest.Mock<Promise<RetrievedChunk[]>, [string, RetrievalOptions | undefined]>;
 }
 
 function makeMockRetriever(): MockRetriever {
   return {
-    retrieve: jest.fn<Promise<RetrievedChunk[]>, [string, { topK?: number } | undefined]>(),
+    retrieve: jest.fn<Promise<RetrievedChunk[]>, [string, RetrievalOptions | undefined]>(),
   };
 }
 
@@ -382,6 +382,37 @@ describe('QaChainService', () => {
     logSpy.mockRestore();
   });
 
+  it('surfaces retrievalMetadata.fusedTopK from the captureFusedTopK callback (pre-expansion ranked list)', async () => {
+    const retriever = makeMockRetriever();
+    // The retriever reports a 2-item fused (pre-expansion) list via the
+    // callback, then returns a 4-item EXPANDED list (parents + neighbors) as
+    // the LLM context. The two must be surfaced independently.
+    const fused = [
+      makeFakeChunk('ep_001_chunk_12', 'parent A', 0.031),
+      makeFakeChunk('ep_001_chunk_40', 'parent B', 0.016),
+    ];
+    retriever.retrieve.mockImplementation((_q: string, opts?: RetrievalOptions) => {
+      opts?.captureFusedTopK?.(fused);
+      return Promise.resolve([
+        makeFakeChunk('ep_001_chunk_11', 'neighbor of A', 0),
+        makeFakeChunk('ep_001_chunk_12', 'parent A', 0.031),
+        makeFakeChunk('ep_001_chunk_13', 'neighbor of A', 0),
+        makeFakeChunk('ep_001_chunk_40', 'parent B', 0.016),
+      ]);
+    });
+
+    const { service } = await buildService(['Answer [Source 1].'], {}, { retriever });
+    const result = await service.ask('a valid question');
+
+    // sources = expanded context (4 chunks the LLM saw)
+    expect(result.sources).toHaveLength(4);
+    // retrievalMetadata.fusedTopK = the pre-expansion ranked list (2 entries)
+    expect(result.retrievalMetadata?.fusedTopK).toEqual([
+      { chunkId: 'ep_001_chunk_12', rrfScore: 0.031, rank: 1 },
+      { chunkId: 'ep_001_chunk_40', rrfScore: 0.016, rank: 2 },
+    ]);
+  });
+
   it('returns canned no-info answer when retriever returns no chunks (LLM not called)', async () => {
     const retriever = makeMockRetriever();
     retriever.retrieve.mockResolvedValue([]);
@@ -403,7 +434,10 @@ describe('QaChainService', () => {
 
     await service.ask('a valid question');
 
-    expect(retriever.retrieve).toHaveBeenCalledWith('a valid question', { topK: 7 });
+    expect(retriever.retrieve).toHaveBeenCalledWith(
+      'a valid question',
+      expect.objectContaining({ topK: 7 }),
+    );
   });
 
   it('uses provided topK when options.topK is set', async () => {
@@ -413,7 +447,10 @@ describe('QaChainService', () => {
 
     await service.ask('a valid question', { topK: 12 });
 
-    expect(retriever.retrieve).toHaveBeenCalledWith('a valid question', { topK: 12 });
+    expect(retriever.retrieve).toHaveBeenCalledWith(
+      'a valid question',
+      expect.objectContaining({ topK: 12 }),
+    );
   });
 
   it('truncates source excerpts to QA_SOURCE_EXCERPT_LENGTH and appends "..."', async () => {
@@ -1374,7 +1411,10 @@ describe('QaChainService', () => {
         await service.ask('  raw  question  ');
 
         // Retrieval receives the sanitised text.
-        expect(retriever.retrieve).toHaveBeenCalledWith('normalised question', { topK: 5 });
+        expect(retriever.retrieve).toHaveBeenCalledWith(
+          'normalised question',
+          expect.objectContaining({ topK: 5 }),
+        );
         // The chain input's `question` field is the sanitised text.
         const callArgs = resilientLlmService.invokeChain.mock.calls[0] as [
           unknown,
@@ -1529,7 +1569,10 @@ describe('QaChainService', () => {
           // consume
         }
 
-        expect(retriever.retrieve).toHaveBeenCalledWith('normalised question', { topK: 5 });
+        expect(retriever.retrieve).toHaveBeenCalledWith(
+          'normalised question',
+          expect.objectContaining({ topK: 5 }),
+        );
       });
 
       it('yields an SSE error event (not throws) when accumulated answer fails validation', async () => {

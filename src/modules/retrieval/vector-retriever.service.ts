@@ -97,6 +97,11 @@ export class VectorRetrieverService implements IRetriever {
         );
       }
 
+      // Phase 4 eval methodology: the vector retriever applies no neighbor
+      // expansion, so its returned list IS the final ranked list. Report it so
+      // the legacy (hybrid-off) path still surfaces fused-top-K metadata.
+      options.captureFusedTopK?.(chunks);
+
       const totalDuration = Date.now() - startTime;
       this.logger.log(
         `retrieve_complete returned=${chunks.length} embed_ms=${embedDuration} search_ms=${searchDuration} total_ms=${totalDuration}`,

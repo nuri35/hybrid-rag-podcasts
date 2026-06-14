@@ -86,12 +86,19 @@ def write_markdown_report(
     lines.append(f"\n*Evaluated on {retrieval.questions_evaluated} questions ({retrieval.questions_skipped} refusal questions skipped)*\n")
 
     lines.append("### Generation Metrics (Ragas)\n")
-    lines.append("| Metric | Value |")
-    lines.append("|---|---|")
-    lines.append(f"| Faithfulness | {_fmt(generation.faithfulness)} |")
-    lines.append(f"| Answer Relevancy | {_fmt(generation.answer_relevancy)} |")
-    lines.append(f"| Context Recall | {_fmt(generation.context_recall)} |")
+    lines.append("Substantive = non-refusal answers only (Phase 4); refusals are scored "
+                 "erratically by Ragas and reported separately under Refusal Compliance.\n")
+    lines.append("| Metric | Raw (all) | Substantive (non-refusal) |")
+    lines.append("|---|---|---|")
+    lines.append(f"| Faithfulness | {_fmt(generation.faithfulness)} | "
+                 f"{_fmt(generation.substantive_faithfulness)} |")
+    lines.append(f"| Answer Relevancy | {_fmt(generation.answer_relevancy)} | "
+                 f"{_fmt(generation.substantive_answer_relevancy)} |")
+    lines.append(f"| Context Recall | {_fmt(generation.context_recall)} | — |")
     lines.append("")
+    if generation.refusal_count:
+        lines.append(f"*Excluded {generation.refusal_count} refusal answer(s) from the "
+                     f"substantive aggregate: {', '.join(generation.refusal_question_ids)}.*\n")
 
     if refusal is not None:
         lines.append("### Refusal Compliance\n")
@@ -265,6 +272,8 @@ def write_json_report(
             "generation": asdict(per_question_generation[i]) if i < len(per_question_generation) else None,
             "refusal": asdict(per_question_refusal[i]) if i < len(per_question_refusal) else None,
             "retrieved_chunk_ids": query_results[i].retrieved_chunk_ids if i < len(query_results) else [],
+            # Phase 4: the pre-expansion fused top-K that rank metrics are scored over.
+            "fused_top_k_ids": query_results[i].fused_top_k_ids if i < len(query_results) else [],
             "answer": query_results[i].answer if i < len(query_results) else "",
         })
 
