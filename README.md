@@ -1,6 +1,10 @@
 # hybrid-rag-podcasts
 
-A hybrid RAG (vector + graph) Q&A system over podcast transcripts. Users ask natural-language questions about podcast content; the system returns grounded answers with mandatory source attribution. Built as a portfolio artifact demonstrating AI-augmented backend engineering — combining NestJS, LangChain.js (LCEL), Chroma (vector store), and Neo4j (entity graph) in a single TypeScript service.
+A hybrid RAG Q&A system over podcast transcripts. Users ask natural-language questions about podcast content; the system returns grounded answers with mandatory source attribution. Built as a portfolio artifact demonstrating AI-augmented backend engineering — combining NestJS, LangChain.js (LCEL), and a **hybrid retrieval pipeline** in a single TypeScript service.
+
+**Retrieval pipeline (Phase 4, live):** dense vector search (Chroma) **+** BM25 keyword search (Elasticsearch), merged by **Reciprocal Rank Fusion (RRF)**, then **±1 neighbor-chunk expansion** that reassembles answers split across chunk boundaries — before the LLM generates a cited answer. An entity-graph retrieval layer (Neo4j) is a planned future phase.
+
+**Phase 4 results** (hybrid+expansion vs. vector-only baseline, 25-question golden set): **Hit@5 0.810 → 0.905**, **Context Recall 0.767 → 0.900**, **MRR 0.712 → 0.774**, **Recall@5 0.786 → 0.841**, substantive Faithfulness ~0.841 → **0.905**, 0 regressions. Two of four vocabulary-mismatch questions fixed; the other two are documented out-of-scope misses (see [ADR 0019](./docs/ADR/0019-hybrid-retrieval-rrf.md)).
 
 > The full project constitution — architectural decisions, hard constraints, conventions, and phase roadmap — lives in [`CLAUDE.md`](./CLAUDE.md). Read it first.
 
@@ -21,36 +25,40 @@ flowchart LR
         Embedder[EmbedderService]
         ChromaRepo[ChromaRepository]
         Chroma[(Chroma<br/>vector store)]
+        ES[(Elasticsearch<br/>BM25 keyword)]
     end
 
-    subgraph QRY["Query — per request"]
+    subgraph QRY["Query — per request (hybrid)"]
         API["POST /api/v1/questions"]
         VR[VectorRetriever]
+        ESvc[ElasticsearchService]
+        RRF[RRF fusion]
+        NE["NeighborExpansion ±1"]
         QA[QaChain<br/>prompt + LLM]
         Ans[Answer + citations]
         GR[GraphRetriever]
-        Merge[Hybrid merge]
     end
 
     Neo4j[(Neo4j<br/>entity graph)]
 
     HF --> Script --> CSV --> Loader
     Loader --> Cleaner --> Chunker --> Embedder --> ChromaRepo --> Chroma
-    ChromaRepo -.->|heartbeat| Chroma
-    Chroma --> VR
-    API --> VR --> QA --> Ans
+    Chunker -.->|ingest-chunks.py| ES
+
+    API --> VR
+    API --> ESvc
+    Chroma --> VR --> RRF
+    ES --> ESvc --> RRF
+    RRF --> NE --> QA --> Ans
 
     Chunker -.-> Neo4j
-    Neo4j -.-> GR
-    GR -.-> Merge
-    VR -.-> Merge
-    Merge -.-> QA
+    Neo4j -.-> GR -.-> QA
 
     classDef future stroke-dasharray: 5 5,fill:#f8f8f8,stroke:#999,color:#666
-    class Neo4j,GR,Merge future
+    class Neo4j,GR future
 ```
 
-Data Prep and Ingestion run once at setup time while Query runs per user request, and the dashed nodes/edges (Neo4j entity graph, GraphRetriever, hybrid merge) are Phase 3+ additions not yet implemented — see [`docs/architecture.md`](./docs/architecture.md) for detailed sequence diagrams.
+Data Prep and Ingestion run once at setup time while Query runs per user request. The live query path is **hybrid**: VectorRetriever (Chroma) and ElasticsearchService (BM25) run in parallel, their ranked lists are fused by RRF, then ±1 neighbor chunks are pulled to complete split passages before the QA chain generates a cited answer. The dashed nodes (Neo4j entity graph, GraphRetriever) are a planned future phase, not yet implemented — see [`docs/architecture.md`](./docs/architecture.md) for detailed sequence diagrams.
 
 ## Prerequisites
 
@@ -308,7 +316,7 @@ The cosine score on returned chunks is `1 − L²/2` of the L2 distance reported
 | `npm run format` | Prettier write |
 | `npm test` | Jest unit tests |
 
-### Elasticsearch keyword search (Phase 4 — Hybrid Retrieval, in progress)
+### Elasticsearch keyword search (Phase 4 — Hybrid Retrieval, live)
 
 The BM25 keyword side of hybrid retrieval is backed by Elasticsearch (alongside
 Chroma, which stays the vector side and source of truth). Its index is filled by
@@ -322,8 +330,11 @@ python scripts/elasticsearch/ingest-chunks.py           # copy chunks Chroma →
 python scripts/elasticsearch/smoke-test.py              # verify (count + search checks)
 ```
 
-The NestJS app does not yet call Elasticsearch — that integration lands in Phase 4.2.
-Full operational docs (sync strategy, recovery, troubleshooting): **[`scripts/elasticsearch/README.md`](scripts/elasticsearch/README.md)**.
+At query time the NestJS app runs Chroma (vector) and Elasticsearch (BM25) in
+parallel, fuses the two ranked lists with RRF, and applies ±1 neighbor expansion —
+the live default path (toggle `HYBRID_RETRIEVAL_ENABLED` / `NEIGHBOR_EXPANSION_ENABLED`,
+both default `true`). Full operational docs (sync strategy, recovery,
+troubleshooting): **[`scripts/elasticsearch/README.md`](scripts/elasticsearch/README.md)**.
 
 ## Production deployment
 
@@ -380,11 +391,12 @@ Adaptive retry (default 10 attempts × 200ms → 2000ms backoff × 1.5 growth) h
 
 See [`CLAUDE.md`](./CLAUDE.md) for the authoritative architecture, foundation reasoning, hard constraints, and phase tracking. In short:
 
-- **Single NestJS service** owns HTTP, CLI, and all LangChain orchestration. No Python sidecar.
+- **Single NestJS service** owns HTTP, CLI, and all LangChain orchestration. No Python sidecar (Elasticsearch, Chroma, and Redis are backing services, not sidecars).
 - **LCEL composition** is mandatory for every retriever and chain.
-- **Vector store (Chroma)** holds transcript chunks + metadata.
-- **Graph store (Neo4j, Phase 3+)** holds the entity graph (Episode / Person / Company).
-- **Bridge** between stores is shared identifiers (`episode_id`, `guest_name`).
+- **Hybrid retrieval (Phase 4, live):** Chroma (dense vector) + Elasticsearch (BM25 keyword) fused by Reciprocal Rank Fusion, then ±1 neighbor-chunk expansion — see [ADR 0019](./docs/ADR/0019-hybrid-retrieval-rrf.md).
+- **Vector store (Chroma)** holds transcript chunks + metadata (the fusion bridge key and the source of truth).
+- **Graph store (Neo4j, Phase 3 — planned)** will hold the entity graph (Episode / Person / Company).
+- **Bridge** between stores is shared identifiers (`episode_id`, `guest_name`, deterministic `chunk_id`).
 - **Repository pattern** wraps every external client.
 
 Skills under `.claude/skills/` enforce NestJS and LangChain.js conventions when working with Claude Code.

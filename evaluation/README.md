@@ -255,10 +255,11 @@ baselines accumulate.
 
 ## Known Limitations
 
-1. **Vector-only retrieval.** 4 questions (q006, q012, q014, q017) retrieve
-   zero relevant chunks — abstract/technical phrasing ("Turing machine",
-   "constructors vs abstractors") doesn't embed close to the conversational
-   transcript text. Planned fix: Phase 4 hybrid retrieval.
+1. ~~**Vector-only retrieval.** 4 questions retrieve zero relevant chunks…~~
+   **Resolved in Phase 4 (2026-06-14):** hybrid retrieval (vector + Elasticsearch
+   BM25 + RRF + ±1 neighbor expansion) fixed q014 and q017 (Hit@5 0.810→0.905).
+   q006 and q012 remain documented misses by deliberate scope decision (coverage
+   gap / vector-embedding limitation) — see ADR 0019, "Intentionally out of scope".
 2. **Precision@5 is mathematically constrained.** Most questions have 1–2
    ground-truth chunks, so even perfect retrieval caps Precision@5 at 0.2–0.4.
    Treat it as a relative signal between runs, not an absolute score.
@@ -273,42 +274,63 @@ baselines accumulate.
 
 ## Baseline Results
 
-### Current baseline (2026-06-07, clean — full coverage 25/25)
+### Current baseline — hybrid + neighbor expansion (2026-06-14, `results/baseline-hybrid-final-2026-06-14/`)
 
-| Layer | Metric | Score |
-|---|---|---|
-| Retrieval | MRR | 0.712 |
-| Retrieval | Hit@5 | 0.810 |
-| Retrieval | Precision@5 | 0.248 |
-| Retrieval | Recall@5 | 0.786 |
-| Generation | Faithfulness | 0.768 |
-| Generation | Answer Relevancy | 0.589 |
-| Generation | Context Recall | 0.767 |
-| Safety | Refusal Compliance | 1.000 (4/4) |
+Phase 4 final clean run: vector (Chroma) + Elasticsearch BM25 + RRF + ±1 neighbor
+expansion, with the corrected harness (see "Reading the metrics" below). 25/25
+successful.
 
-**Overall: WARNING** — layer level is healthy (Faithfulness and Context Recall
-both above 0.7); the WARNING comes from Answer Relevancy (refusal-deflated,
-limitation 3) and the INFO-level Precision@5 signal (limitation 2).
+| Layer | Metric | Vector baseline (2026-06-07) | Hybrid final | Δ |
+|---|---|---|---|---|
+| Retrieval | Hit@5 | 0.810 | **0.905** | +0.095 |
+| Retrieval | MRR | 0.712 | **0.774** | +0.062 |
+| Retrieval | Precision@5 | 0.248 | **0.267** | +0.019 |
+| Retrieval | Recall@5 | 0.786 | **0.841** | +0.055 |
+| Generation | Context Recall | 0.767 | **0.900** | +0.133 |
+| Generation | Faithfulness (substantive) | ~0.841 | **0.905** | +0.064 |
+| Generation | Faithfulness (raw) | 0.768 | 0.728 | −0.040 (refusal-deflated) |
+| Generation | Answer Relevancy (substantive) | — | 0.831 | — |
+| Safety | Refusal Compliance | 1.000 | 1.000 (4/4) | = |
 
-### Historical baselines
+**Overall: WARNING** — healthy at the layer level (Faithfulness substantive and
+Context Recall both well above 0.7); the WARNING is only the refusal-deflated
+Answer Relevancy (limitation 3) and the mathematically-capped Precision@5
+(limitation 2) — the same two known limitations as the vector baseline.
 
-- `results/baseline-2026-06-06/` — **superseded.** Produced during the excerpt
-  artifact period (Faithfulness falsely ~0.29; see ADR 0017, "Excerpt Artifact
-  Discovery") and partially quota-gutted. Kept for the process record.
+**Four originally-failing questions:** q014 + q017 **fixed** (Hit@5 0→1); q006 +
+q012 remain **documented misses** (q006 = coverage gap, ground truth at fused
+rank 6, beyond the ±1 window; q012 = vector-embedding limitation, ground truth
+invisible to both retrievers). Both are deliberate scope decisions with measured
+root causes — see ADR 0019, "Intentionally out of scope". Regression check:
+2 improved, 19 unchanged, **0 regressed**.
+
+### Reading the metrics (corrected methodology, Phase 4)
+
+The pipeline returns an **expanded** context (fused top-5 + their ±1 neighbors,
+for sentence completion), so two rules keep the numbers honest:
+
+1. **Rank metrics** (MRR/Hit@5/Precision@5/Recall@5) are scored over the
+   **pre-expansion fused top-5** (`retrievalMetadata.fusedTopK` in the API
+   response), NOT the expanded list — otherwise prepended neighbors push a
+   ground-truth chunk down a rank and read as a false regression.
+2. **Generation metrics** are scored over the **expanded context** (`sources`) —
+   what the LLM actually saw.
+3. **Faithfulness raw vs substantive:** Ragas scores refusal-shaped answers
+   erratically (0 or 1 by construction), deflating the raw mean. The
+   **substantive** figure (non-refusal answers only) is the honest signal;
+   `refusal_count` + `refusal_question_ids` are reported alongside.
+
+### Historical baselines (kept as process record — do not overwrite)
+
+- `results/baseline-2026-06-07/` — **vector-only baseline.** The comparison point
+  for Phase 4; full coverage 25/25 (MRR 0.712, Hit@5 0.810, Faithfulness 0.768).
+- `results/baseline-hybrid-2026-06-13/` — **superseded.** First hybrid+expansion
+  run, BEFORE the citation + methodology fixes. Its rank metrics (MRR 0.389,
+  Hit@5 0.762) are a measurement artifact (neighbor-prepend) and 2 questions
+  500'd on a citation-format false-negative; both fixed for the 2026-06-14 run.
+- `results/baseline-2026-06-06/` — superseded (excerpt-artifact period,
+  Faithfulness falsely ~0.29; see ADR 0017).
 - `results/smoke-*` — 3-question pipeline smoke tests, not baselines.
-
-## Phase 4 Projections (rough)
-
-After hybrid retrieval targets the 4 zero-hit questions:
-
-- Hit@5: 0.81 → ~0.95+ (the 4 failures are vocabulary-mismatch cases)
-- Recall@5 / Context Recall: proportional lift
-- Answer Relevancy: rises as unexpected refusals (q006/q017-style) become
-  real answers
-- Faithfulness: expected stable (~0.77+) — it measures generation honesty,
-  not retrieval reach
-
-These are directional estimates, not commitments.
 
 ## Troubleshooting
 

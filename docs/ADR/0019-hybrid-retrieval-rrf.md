@@ -1,9 +1,9 @@
-# ADR 0019 — Hybrid retrieval fusion via Reciprocal Rank Fusion (RRF)
+# ADR 0019 — Hybrid retrieval: vector + Elasticsearch BM25 + RRF fusion + ±1 neighbor expansion
 
-- **Status:** Accepted
-- **Date:** 2026-06-12
-- **Phase:** 4 — Hybrid Retrieval, Sub-Phase 4.3
-- **Related:** ADR 0018 (Elasticsearch keyword service — the source of the keyword list and the BM25-vs-cosine score-scale finding), ADR 0003 (vector retrieval — the source of the vector list and the `RetrievedChunk` type), ADR 0017 (evaluation — the baseline the fused pipeline will be measured against in 4.5)
+- **Status:** Accepted (Phase 4 complete, 2026-06-14)
+- **Date:** 2026-06-12 (RRF); extended through 2026-06-14 (neighbor expansion, citation fix, eval methodology, final results, closure)
+- **Phase:** 4 — Hybrid Retrieval (sub-phases 4.3 RRF → 4.4 integration → 4.4-E neighbor expansion → 4.5 evaluation → 4.6 closure)
+- **Related:** ADR 0018 (Elasticsearch keyword service — the source of the keyword list and the BM25-vs-cosine score-scale finding), ADR 0003 (vector retrieval — the source of the vector list and the `RetrievedChunk` type), ADR 0017 (evaluation — the baseline the fused pipeline is measured against)
 
 ---
 
@@ -192,3 +192,109 @@ request.
   returned as-is; toggle on → called, result returned, log fields). Full suite
   424 → 438, 0 regressions.
 - **Smoke test:** deferred to a separate follow-up (not part of this change).
+
+---
+
+## Citation-validator loosening (post-4.4 fix)
+
+The smoke + 4.5 eval surfaced two HTTP 500s (q007, q024) under the expanded
+context. A **deterministic 20-run investigation** (expansion ON: 0/10 pass; OFF:
+10/10 pass; byte-identical at temperature 0) found the cause: under a larger
+multi-source context (9–11 chunks) the LLM **abbreviates its citations** from
+`[Source N]` to bare `[N]` (e.g. `[2, 3]`, `[5, 9]`). The answers are fully
+grounded and DO cite — only the marker format differs — but the output-validation
+regex required the literal `Source` token, so it rejected them as
+`missing_citation` → 500.
+
+**Decision:** loosen the citation regex to accept both forms —
+`/\[\s*(?:Source\s+)?\d+(?:\s*,\s*(?:Source\s+)?\d+)*\s*\]/i`. It is a superset
+of the old pattern (existing `[Source N]` answers still pass; digitless brackets
+`[]`/`[Source]`/`[abc]` still fail), so it carries **zero risk to the fixed
+questions** (q014/q017 emit `[Source N]`). Hypothesis: expansion-induced format
+abbreviation; LLM nondeterminism ruled out (temp-0 determinism); episode-294
+structural cause ruled out (same chunks cite correctly with 5 chunks). See the
+`OutputValidationService` comment for the regex rationale.
+
+## Eval methodology — rank metrics over the fused list, generation over expanded
+
+Neighbor expansion prepends ±1 neighbors (score 0) **adjacent to their parent**
+for sentence-completion, which deliberately reorders the returned list. The 4.5
+eval scored rank metrics over that reordered list, so a ground-truth chunk that
+was rank-1 in the fused list read as rank-2 behind its own prepended neighbor —
+producing **false** MRR/Hit@5 "regressions" (MRR 0.712→0.389) even though no
+ground-truth chunk was actually lost.
+
+**Decision — measure each metric where it belongs:**
+- **Rank metrics** (MRR/Hit@5/Precision@5/Recall@5) → the **fused top-5
+  BEFORE expansion** (the retrieval system's true ranked list), surfaced as
+  `retrievalMetadata.fusedTopK` in the QA response via an optional
+  `captureFusedTopK` observer callback on `RetrievalOptions` (no change to
+  `retrieve()`'s return type or the LLM context).
+- **Generation metrics** (Faithfulness/Context Recall/Answer Relevancy) → the
+  **expanded context** (`sources`), i.e. what the LLM actually saw.
+- **Generation aggregates split substantive vs refusal** — Ragas scores
+  refusal-shaped answers erratically (0 or 1 by construction), which deflates
+  the raw mean; the substantive (non-refusal) figure is the honest signal.
+
+`baseline-2026-06-07` is untouched; the comparison stays apples-to-apples (both
+the old and new rank metrics measure "retrieval's final ranked list").
+
+## Final results (2026-06-14, `evaluation/results/baseline-hybrid-final-2026-06-14/`)
+
+Single clean run, hybrid + ±1 expansion ON, corrected harness, 25/25 successful.
+
+| Metric | Baseline (vector-only) | Final (hybrid+expansion) | Δ |
+|---|---|---|---|
+| Hit@5 | 0.810 | **0.905** | +0.095 |
+| MRR | 0.712 | **0.774** | +0.062 |
+| Precision@5 | 0.248 | **0.267** | +0.019 |
+| Recall@5 | 0.786 | **0.841** | +0.055 |
+| Context Recall | 0.767 | **0.900** | +0.133 |
+| Faithfulness (substantive) | ~0.841 | **0.905** | +0.064 |
+| Faithfulness (raw) | 0.768 | 0.728 | −0.040 (refusal-deflated, documented) |
+| Answer Relevancy (substantive) | — | 0.831 | — |
+| Refusal Compliance | 1.000 | 1.000 | = |
+
+Regression check: **2 improved (q014, q017), 19 unchanged, 0 regressed** — no
+ground-truth chunk dropped at retrieval. The 4.5 raw "regressions" (MRR 0.389,
+Hit@5 0.762) were confirmed as the measurement artifact above and are fully
+recovered.
+
+## Intentionally out of scope (documented misses, not gaps)
+
+Of the 4 original zero-hit questions, **2 were fixed** (q014 via RRF dual-list
+lift + expansion completing the 14/15 pair; q017 via expansion pulling 307
+adjacent to 306). The remaining **2 are deliberate scope decisions**, each with a
+measured root cause:
+
+- **q006** — *coverage gap.* Ground truth `269_chunk_305` sits at **fused rank 6**
+  (just below the top-5 cut, losing a lexicographic tie) and is **+3 from the
+  nearest surviving fused chunk**, beyond the ±1 expansion window. Root cause:
+  BM25's rare-name IDF ranks the name-rich setup chunks (`301`/`302`, which
+  mention "Lee Cronin" 3×) above the actual answer chunk `305` (where Cronin is
+  the speaker and never names himself), while the vector side misses episode 269
+  entirely. The minimal fix (`FUSION_OUTPUT_TOP_K 5→6` **and**
+  `MAX_EXPANDED_CHUNKS 12→≥13`, a coordinated two-knob change) carries a
+  measurable faithfulness risk to q017 (it admits more episode-48 C++-homonym
+  context) — **not worth it for one question.** q006 already produces a faithful
+  answer (0.91) from adjacent chunks.
+- **q012** — *vector-embedding limitation.* Ground truth `59_chunk_4/5` is
+  **invisible to both retrievers**: the question's terms ("human walking",
+  "machine learning") are common, giving BM25 no rare anchor, and the vector side
+  never places episode 59 near the query. No fusion or ±1 expansion can recover a
+  chunk neither retriever surfaces; the system correctly **refuses** rather than
+  hallucinating.
+
+**Deferred future options** (a separate enhancement sprint, not Phase 4): a
+cross-encoder **reranker** over a wider candidate pool (could lift q006's `305`),
+**query rewriting / HyDE** (could give q012 a better embedding match), or
+**stronger embeddings**. All add latency/cost and were judged out of scope for
+the Phase 4 deliverable, whose goal — keyword retrieval to fix vocabulary-mismatch
+failures — is met.
+
+## Status — Phase 4 closed
+
+Hybrid retrieval (vector + Elasticsearch BM25 + RRF + ±1 neighbor expansion) is
+the live default path. No reranker (deferred). Phase 4 is complete; see
+`evaluation/README.md` for the full eval breakdown and CLAUDE.md decisions 20–23
+for the architectural record.
