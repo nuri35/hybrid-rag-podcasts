@@ -42,6 +42,7 @@ docker-compose.override.yml
 .venv/
 .venv*/
 venv/
+kpi/
 __pycache__/
 *.py[cod]
 *$py.class
