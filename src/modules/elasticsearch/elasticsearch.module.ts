@@ -17,8 +17,9 @@ import { ElasticsearchService } from './elasticsearch.service';
  * before that degradation kicks in. ConfigModule is global, so it need not be
  * imported here.
  *
- * Exported for: HealthModule (health probe) now, and the future
- * HybridRetrievalService (4.4) that fuses this with the vector side.
+ * Exported for: HealthModule (health probe), HybridRetrievalService (4.4) that
+ * fuses this with the vector side, and `MetadataModule` (5.1) which shares the
+ * singleton client via the `ELASTICSEARCH_CLIENT` token for aggregations.
  */
 @Module({
   providers: [
@@ -32,6 +33,8 @@ import { ElasticsearchService } from './elasticsearch.service';
     },
     ElasticsearchService,
   ],
-  exports: [ElasticsearchService],
+  // ELASTICSEARCH_CLIENT is exported so MetadataModule can share the singleton
+  // client by DI rather than constructing a second one (Phase 5.1).
+  exports: [ElasticsearchService, ELASTICSEARCH_CLIENT],
 })
 export class ElasticsearchModule {}

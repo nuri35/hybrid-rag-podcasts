@@ -5,6 +5,7 @@ import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.modul
 import { FusionModule } from './modules/fusion/fusion.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { LlmModule } from './modules/llm/llm.module';
+import { MetadataModule } from './modules/metadata/metadata.module';
 import { QaModule } from './modules/qa/qa.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RetrievalModule } from './modules/retrieval/retrieval.module';
@@ -21,6 +22,7 @@ import { ThrottlerModule } from './modules/throttler/throttler.module';
     ElasticsearchModule,
     FusionModule,
     LlmModule,
+    MetadataModule,
     QaModule,
   ],
 })

@@ -25,9 +25,41 @@ Files in this directory:
 | File | Purpose | Sub-phase |
 |------|---------|-----------|
 | `mappings/podcast_chunks.json` | Index settings + field mapping (English analyzer) | 4.1.2 |
-| `create-index.py` | Create / recreate the index | 4.1.3 |
+| `create-index.py` | Create / recreate the `podcast_chunks` index | 4.1.3 |
 | `ingest-chunks.py` | Bulk-copy chunks Chroma → ES (idempotent) | 4.1.4 |
 | `smoke-test.py` | 8-check verification suite (re-runnable) | 4.1.5 |
+| `mappings/podcast_episodes.json` | Episode-grained index mapping (no analyzer) | 5.1 |
+| `create-episode-index.py` | Create / recreate the `podcast_episodes` index | 5.1 |
+| `build-episode-index.py` | Derive 1 doc/episode from `podcast_chunks` (idempotent) | 5.1 |
+
+### `podcast_episodes` — the aggregation index (Phase 5.1)
+
+`query_metadata` (Phase 5) answers *structured facts over the collection* ("how
+many episodes / distinct guests / longest episode / episodes per guest"). Those
+must aggregate at **episode grain**, but `podcast_chunks` is **chunk-grained** —
+raw `doc_count` is biased by chunk count per episode (e.g. "which guest most
+often" gives Michael Malice by chunks vs Eric Weinstein by episodes). So a small
+derived index, **`podcast_episodes` (one doc per episode, 319 today)**, holds the
+episode-level fields (`episode_id`, `title`, `guest_name`, `duration_min`,
+`total_chunks`) so `count` / `group_by` / `avg` are structurally correct.
+
+It is **derived from `podcast_chunks`** (ES → ES; the metadata is constant per
+episode), itself derived from Chroma — Chroma stays the source of truth, this
+index is rebuildable:
+
+```bash
+docker compose up -d elasticsearch
+python scripts/elasticsearch/create-episode-index.py     # create the index
+python scripts/elasticsearch/build-episode-index.py      # fill: 1 doc/episode (~1s)
+#   --dry-run on build prints the first episode doc, writes nothing
+#   --force on create drops + recreates
+```
+
+`build-episode-index.py` verifies its ES episode count equals the distinct
+`episode_id` count in `podcast_chunks`, and uses `episode_id` as the ES `_id`
+(idempotent re-runs). Rebuild after a chunk re-ingest by re-running both scripts.
+`date`, `guest_affiliation`, `guest_role` are intentionally **omitted** (empty in
+the current dataset). Consumed by `MetadataQueryService` (`src/modules/metadata/`).
 
 The index uses Elasticsearch's built-in **`english` analyzer** (lowercasing,
 English stopword removal, Porter stemming). `text` is the only analyzed field;

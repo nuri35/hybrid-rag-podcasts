@@ -1,0 +1,25 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "episode_id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "keyword"
+      },
+      "guest_name": {
+        "type": "keyword"
+      },
+      "duration_min": {
+        "type": "integer"
+      },
+      "total_chunks": {
+        "type": "integer"
+      }
+    }
+  }
+}
