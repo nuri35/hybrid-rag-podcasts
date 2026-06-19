@@ -1,3 +1,5 @@
+import type { MetadataQueryResult } from '../metadata/metadata.types';
+
 /**
  * One shaped passage returned by `search_content` (Phase 5.2.1).
  *
@@ -23,4 +25,16 @@ export interface SearchContentPassage {
 export interface SearchContentResult {
   passages: SearchContentPassage[];
   context: string;
+}
+
+/**
+ * Result of a `query_metadata` call (Phase 5.2.2). Symmetric to
+ * `SearchContentResult`: `result` is the structured typed aggregation output
+ * (the testable contract, straight from `MetadataQueryService.aggregate()`);
+ * `summary` is a one-line natural-language rendering — the LLM-facing string the
+ * 5.3 ToolMessage will carry.
+ */
+export interface QueryMetadataResult {
+  result: MetadataQueryResult;
+  summary: string;
 }

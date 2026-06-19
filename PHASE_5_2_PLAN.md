@@ -203,3 +203,191 @@ imports `RetrievalModule` and re-declares the `RETRIEVER` binding via the existi
 default & clamp-to-10, order preserved, `[Source N]` context format, empty-query
 rejection, empty-result handling) + skippable integration (real `RETRIEVER` via
 `AppModule`).
+
+---
+
+## Part 3 — 5.2.2 `query_metadata` — Step-0 research & PROPOSAL (for sign-off)
+
+`query_metadata` is the symmetric twin of `search_content`: it wraps
+`MetadataQueryService.aggregate(request)` (Phase 5.1) as an LLM-callable tool.
+**No code yet** — this is the proposal.
+
+### A. The engine we wrap (`MetadataQueryService`, verbatim)
+
+- Entry: `aggregate(request: MetadataQueryRequest): Promise<MetadataQueryResult>`.
+- **Request = discriminated union on `type`:**
+  - `count` — optional `filter: { field: keyword, value: string }`
+  - `count_distinct` — `field: keyword`
+  - `filter` — `field: keyword`, `value: string`, optional `limit`
+  - `min` / `max` — `field: numeric`
+  - `avg` — `field: numeric`
+  - `group_by` — `field: keyword`, optional `size`
+- **Field allow-lists:** keyword = `episode_id | guest_name | title`; numeric =
+  `duration_min` (only). Empty fields (`date`, `guest_affiliation`, `guest_role`)
+  and `total_chunks` are NOT aggregatable.
+- **Result per type:** `count → {value, filter?}`, `count_distinct → {field,value}`,
+  `filter → {field,value,count,episodes: EpisodeRef[]}`, `min|max →
+  {field,value:number|null,episode:EpisodeRef|null}`, `avg → {field,value:number|null}`,
+  `group_by → {field, buckets:[{key,count}]}` (count = episodes, episode grain).
+- **Caps (constants):** `DEFAULT_FILTER_LIMIT 50 / MAX 200`,
+  `DEFAULT_GROUP_BY_SIZE 10 / MAX 100`.
+- **Fail-loud:** bad input → `InvalidMetadataQueryException` (400) *before* ES;
+  ES error/malformed → `MetadataQueryFailedException` (500). Never a guessed value.
+
+### B. Schema shape — FLAT, not the discriminated union (evidence)
+
+**Recommendation: a FLAT single-object LLM-facing schema, mapped to the strict
+`MetadataQueryRequest` union in code.** Evidence (read from the installed deps):
+
+- `@langchain/google-genai` **0.2.18**, `@langchain/core` ^0.3.0, `zod` 3.23.8.
+- Its converter `schemaToGenerativeAIParameters()`
+  (`utils/zod_to_genai_parameters.js`) only strips `$schema`,
+  `additionalProperties`, `strict` — it does **NOT** transform/flatten
+  `anyOf`/`oneOf`. A Zod **discriminated union** → `toJsonSchema()` emits a
+  top-level `{ anyOf: [...] }` (no top-level `type:"object"`/`properties`), passed
+  straight to Gemini's function `parameters`. Gemini's FunctionDeclaration schema
+  is an OpenAPI **OBJECT-with-properties** subset; `convertToGenerativeAITools`
+  even branches on `jsonSchema.type === "object"`. So a union is rejected/unreliable.
+- Even where `anyOf` is tolerated, union function-calling is error-prone (the model
+  must pick a variant AND fill the right per-variant fields). The robust, conventional
+  pattern is **flat object + enum discriminator**, which converts cleanly to a Gemini
+  OBJECT schema and is what `search_content` already does (flat `{query, top_k}`).
+
+**Proposed flat LLM-facing schema** (Zod → bound in 5.3):
+```ts
+{
+  type:  enum('count','count_distinct','filter','min','max','avg','group_by')  // required
+  field?: enum('episode_id','guest_name','title','duration_min')
+          // the field to operate on. Required for every type EXCEPT 'count'
+          // (where it is the OPTIONAL filter field).
+  value?: string
+          // exact value to match. Required for 'filter'; optional for 'count'
+          // (counts episodes where field == value). Ignored otherwise.
+  limit?: integer
+          // 'group_by' → number of buckets (default 10, max 100);
+          // 'filter'   → max episodes returned (default 50, max 200). Ignored otherwise.
+}
+```
+- `type` and `field` are **enums** (Gemini supports STRING enums) — they constrain the
+  vocabulary at the schema level. The enum can't encode the keyword-vs-numeric pairing
+  (e.g. `avg` needs `duration_min`); that is enforced at runtime by
+  `MetadataQueryService` (fail-loud) — the schema stays permissive, the service is the
+  trust boundary (already built in 5.1).
+- **Tool-level validation** (`Zod .superRefine`): `field` required unless `type='count'`;
+  `value` required when `type='filter'`. Flat-shape failures → `InvalidToolInputException`.
+- **Mapping flat → union:** `count` (field&value → `{type:count, filter:{field,value}}`
+  else `{type:count}`); `filter` → `{type:filter, field, value, limit}`; `group_by` →
+  `{type:group_by, field, size:limit}`; others → `{type, field}`.
+
+### C. How the LLM expresses filters
+
+- **Exact keyword equality** — `guest_name = "X"`, `title = "Y"`, `episode_id = "Z"`:
+  expressible as `type='filter'` (list matching episodes) or `type='count'` with
+  `field`+`value` (count them). ✓ supported.
+- **Numeric comparison** — `duration_min > 60`: ⚠️ **NOT supported.** The 5.1 engine's
+  `filter` is an exact `term` on a **keyword** field only; there is no range/comparison
+  aggregation in the closed set. Numeric questions are answered via `min`/`max`/`avg`
+  (e.g. "longest episode" = `max duration_min`), not range filters. So "how many
+  episodes longer than 60 min" is not answerable today. **Recommend: scope numeric-range
+  filtering OUT of 5.2.2, log as a deferred extension** (it needs a `range` aggregation
+  added to `MetadataQueryService` — a 5.1 change), mirroring the deferred "episodes
+  mentioning X" item. The tool description will say filters are exact-match only.
+
+### D. Output shaping — symmetric to `search_content`
+
+Return **`{ result, summary }`** (mirrors `search_content`'s `{ passages, context }`):
+- `result: MetadataQueryResult` — the structured, typed `aggregate()` output (the
+  testable contract).
+- `summary: string` — a one-line natural-language rendering (the LLM-facing string the
+  5.3 ToolMessage carries), e.g.:
+  - count → `"There are 319 episodes."` / `"4 episodes match guest_name = \"Michael Malice\"."`
+  - count_distinct → `"There are 281 distinct guest_name values."`
+  - filter → `"4 episodes match guest_name = \"Michael Malice\": <title> (ep 269), …"`
+  - min/max → `"The maximum duration_min is 315 (episode \"<title>\", ep 7)."`
+  - avg → `"The average duration_min is 59.75."`
+  - group_by → `"Top guest_name by episode count: Eric Weinstein (4), Manolis Kellis (4), Michael Malice (4)."`
+- **Fail-loud preserved:** flat-shape errors → `InvalidToolInputException`; map →
+  `aggregate()`. **Proposed:** re-wrap `InvalidMetadataQueryException` →
+  `InvalidToolInputException` (uniform "model gave bad args" signal for the 5.3 router),
+  but let `MetadataQueryFailedException` (500, infra) **propagate** untouched. (Open for
+  discussion — alternative is to let both metadata exceptions propagate as-is.)
+
+### E. DRAFT joint descriptions (lock the wording together)
+
+The routing hinge. Drafted as a contrasting pair:
+
+> **`search_content`** — "Search the podcast transcripts and return passages about a
+> topic. Use this when the user asks about the SUBSTANCE of what was said or discussed —
+> opinions, explanations, definitions, quotes, arguments, or any subject matter inside
+> the conversations (e.g. 'What did Lee Cronin say about constructors?', 'How do guests
+> describe consciousness?'). Returns relevant transcript passages with episode/title
+> attribution. Do NOT use it to count, list, rank, or compute exact facts about the
+> collection — use query_metadata for that."
+
+> **`query_metadata`** — "Answer EXACT factual questions about the COLLECTION of episodes,
+> not the transcript content. Use this when the answer is a number, a list, a ranking, or
+> an exact-match lookup over structured fields (episode_id, guest_name, title,
+> duration_min). Operations: count (how many episodes), count_distinct (how many distinct
+> guests/titles), filter (which episodes feature a given guest/title), min/max/avg
+> (longest/shortest/average episode duration), group_by (episodes per guest — e.g. which
+> guest appears most). Examples: 'How many episodes are there?', 'How many distinct
+> guests?', 'Which guest appears in the most episodes?', 'What is the longest episode?',
+> 'List episodes with guest Michael Malice'. Filters are exact-match only (e.g.
+> guest_name = 'X') — it cannot do numeric comparisons like 'duration > 60'. Do NOT use
+> it for what was SAID about a topic — use search_content for that."
+
+### F. Conventions to mirror from 5.2.1 (locked)
+
+Same `src/modules/tools/` module; `QueryMetadataToolService.execute(input)`; Zod schema
+file (`query-metadata.schema.ts`); `tools.types.ts` for the result shape;
+`InvalidToolInputException`; `tools.constants.ts` for the tool name + description; **no
+LLM / no bindTools here** (that's 5.3). `ToolsModule` adds the new service (imports
+`MetadataModule`, already in the app) and exports it. Unit tests (mock
+`MetadataQueryService`) + skippable integration (real service via `AppModule`).
+
+### Open items to confirm before the build prompt
+1. Flat schema shape (B) — approve `{type, field?, value?, limit?}` and the enum/refine plan.
+2. Numeric-range filtering (C) — confirm DEFER (out of 5.2.2).
+3. Exception policy (D) — re-wrap `InvalidMetadataQueryException` → `InvalidToolInputException`, propagate `MetadataQueryFailedException`? Or propagate both?
+4. **Final joint description wording (E)** — the routing boundary; lock both together.
+
+---
+
+## Part 4 — 5.2.2 LOCKED (build) ✅
+
+All four open items resolved; `query_metadata` built.
+
+1. **Flat schema** `{ type: enum(7), field?: enum(4), value?: string, limit?: int }`
+   with `.superRefine` (per-type requiredness: field required for everything except
+   `count`; `value` required for `filter`; `count`'s field+value are all-or-nothing).
+   Flat→strict-union mapping per §B; the service enforces keyword↔numeric pairing
+   (fail-loud). `query-metadata.schema.ts`.
+2. **Numeric-range filtering DEFERRED** (out of 5.2.2). Filters = exact keyword
+   equality only.
+3. **Exception policy:** flat-shape error → `InvalidToolInputException`;
+   `InvalidMetadataQueryException` (e.g. `avg` on a keyword field) → re-wrapped to
+   `InvalidToolInputException` (uniform bad-args signal for the 5.3 router);
+   `MetadataQueryFailedException` (500, infra) **propagates** untouched (fail-loud).
+4. **Output:** `{ result: MetadataQueryResult, summary: string }` (symmetric to
+   `search_content`'s `{ passages, context }`).
+
+### FINAL tool descriptions (both locked)
+
+- **`search_content`** — "Use for questions about WHAT was said or discussed in the
+  episodes — opinions, explanations, arguments, topics, anything from the spoken
+  content. Returns relevant passages. Examples: 'What did X say about Y?', 'How did
+  they explain Z?'"
+- **`query_metadata`** — "Use for EXACT factual questions about the collection —
+  counts, distinct counts, ranges (min/max/average), groupings, and exact-match
+  filters over episode metadata (episode, guest, title, duration). Returns precise
+  computed values, not passages. Examples: 'How many episodes?', 'How many distinct
+  guests?', 'Longest/average episode?', 'Which guest appears most?', 'How many
+  episodes feature guest X?'"
+
+### Deferred additive extensions (logged — do not lose)
+
+- **Numeric-range filtering** (e.g. `duration_min > 60`) — needs a `range` aggregation
+  added to `MetadataQueryService` (5.1 closed set). Out of 5.2.2.
+- **"How many episodes mention X"** — content-conditioned count; needs a text filter on
+  the chunk index (`cardinality(episode_id)` within a `match`). Carried from 5.1.
+- Both belong to a future metadata-capability sprint; flagged for 5.3 routing / 5.5 eval.
