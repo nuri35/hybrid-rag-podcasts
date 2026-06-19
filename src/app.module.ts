@@ -10,6 +10,7 @@ import { QaModule } from './modules/qa/qa.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RetrievalModule } from './modules/retrieval/retrieval.module';
 import { ThrottlerModule } from './modules/throttler/throttler.module';
+import { ToolsModule } from './modules/tools/tools.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ThrottlerModule } from './modules/throttler/throttler.module';
     LlmModule,
     MetadataModule,
     QaModule,
+    ToolsModule,
   ],
 })
 export class AppModule {}
