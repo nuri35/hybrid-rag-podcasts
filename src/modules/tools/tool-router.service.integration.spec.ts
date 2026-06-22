@@ -45,4 +45,25 @@ describe.skip('ToolRouterService (integration — real Gemini routing)', () => {
     expect(result.answer.length).toBeGreaterThan(0);
     expect(result.latency).toBeGreaterThan(0);
   }, 60_000);
+
+  it('routes "how many episodes?" through query_metadata (count, no filter)', async () => {
+    const result = await service.route('How many episodes are there?');
+
+    expect(result.toolUsed).toContain('query_metadata');
+    expect(result.answer.length).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('routes "how many distinct guests?" through query_metadata (count_distinct)', async () => {
+    const result = await service.route('How many distinct guests are there?');
+
+    expect(result.toolUsed).toContain('query_metadata');
+    expect(result.answer.length).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('answers a greeting directly with no tool', async () => {
+    const result = await service.route('Hello, how are you?');
+
+    expect(result.toolUsed).toEqual([]);
+    expect(result.answer.length).toBeGreaterThan(0);
+  }, 60_000);
 });

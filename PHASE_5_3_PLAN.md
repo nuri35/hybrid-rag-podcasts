@@ -247,11 +247,23 @@ each (zero regressions).
   over ALL `tool_calls` and append a `ToolMessage` for each** (and set `toolUsed` to all
   names). Single-tool/no-tool (5.3.2 scope) is unaffected.
 
-### 5.3.3 — Routing system prompt
-- **Files:** `tools.constants.ts` (or `routing.constants.ts`) — add `ROUTER_SYSTEM_PROMPT`
-  (D5); wire it as the leading `SystemMessage` in `route()`.
-- **Tests:** unit — the prompt constant is included as message[0] on both invokes;
-  (string-shape assertions only — routing-accuracy is 5.5).
+### 5.3.3 — Routing system prompt — ✅ SHIPPED
+- **Files:** `tools.constants.ts` — replaced the 5.3.2 `ROUTER_SYSTEM_PROMPT` placeholder
+  with the FINAL prompt (already wired as message[0] in `route()` since 5.3.2 — no router
+  mechanics changed). Expanded the skippable integration sanity spec.
+- **Prompt (locked, user-approved):** task frame; sharp content-vs-exact-fact boundary
+  framing the two locked descriptions; **number/ranking tie-breaker → query_metadata**;
+  4 disambiguating examples; both-tools + direct-answer paths; **count-all → leave
+  field/value empty** (§4); ground-only-in-tool-results + refuse-don't-fabricate;
+  **metadata scope-honesty** (only episode count / guests / titles / duration — else "I
+  don't have that information"); `[Source N]` citation; concise/honest tone. Refusal is
+  **English-only** (dropped D5's bilingual string — avoids language-switching on the
+  English dataset).
+- **Tests (green):** existing 7 router unit tests still pass (prompt swap is mechanically
+  inert). Skippable real-Gemini sanity expanded to 4 cases: content→search_content;
+  "how many episodes?"→query_metadata; "how many distinct guests?"→query_metadata; greeting
+  →no tool. Full suite **527 passed, 0 regressions** (skipped 40→43 = the 3 new cases).
+- **Note:** routing-accuracy is MEASURED in 5.5, not asserted here.
 
 ### 5.3.4 — Parallel execution + result feedback + count-all tolerance
 - **Files:** `tool-router.service.ts`; the `query_metadata` flat→union mapping layer
