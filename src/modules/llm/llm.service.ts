@@ -23,6 +23,21 @@ export class LlmService {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   createChatModel(): BaseChatModel {
+    return this.buildModel();
+  }
+
+  /**
+   * Phase 5.3.1 — typed accessor for the tool-routing layer. Returns the
+   * concrete `ChatGoogleGenerativeAI` (not the widened `BaseChatModel`) so
+   * `.bindTools()` is statically available without a cast. Same construction as
+   * `createChatModel()` — reuses the shared private builder, so config/model
+   * stay in lock-step; routing reuses the exact production model, no new client.
+   */
+  createToolCallingModel(): ChatGoogleGenerativeAI {
+    return this.buildModel();
+  }
+
+  private buildModel(): ChatGoogleGenerativeAI {
     const model = this.config.get('LLM_MODEL', { infer: true });
     const temperature = this.config.get('LLM_TEMPERATURE', { infer: true });
     const maxOutputTokens = this.config.get('LLM_MAX_OUTPUT_TOKENS', { infer: true });
