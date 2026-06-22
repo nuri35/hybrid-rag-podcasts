@@ -45,3 +45,16 @@ export const QUERY_METADATA_DESCRIPTION =
   '(episode, guest, title, duration). Returns precise computed values, not passages. ' +
   "Examples: 'How many episodes?', 'How many distinct guests?', 'Longest/average " +
   "episode?', 'Which guest appears most?', 'How many episodes feature guest X?'";
+
+/**
+ * Routing system prompt (Phase 5.3.2 — PLACEHOLDER).
+ *
+ * The `ToolRouterService` puts this as the leading `SystemMessage` on both
+ * invokes. This is a minimal placeholder so 5.3.2 can wire the flow; the real
+ * routing prompt (content→search_content, exact-fact→query_metadata, ground in
+ * tool results, [Source N] citations, count-all→no field/value, refuse don't
+ * fabricate) is finalized in 5.3.3 — see PHASE_5_3_PLAN.md D5.
+ */
+export const ROUTER_SYSTEM_PROMPT =
+  'You are a Q&A assistant for a podcast transcript collection. Use the available ' +
+  'tools when they help answer the question; otherwise answer directly.';

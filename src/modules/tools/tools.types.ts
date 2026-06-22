@@ -38,3 +38,18 @@ export interface QueryMetadataResult {
   result: MetadataQueryResult;
   summary: string;
 }
+
+/**
+ * Result of a `ToolRouterService.route()` call (Phase 5.3.2).
+ *
+ * `answer` is the final grounded text the user sees. `toolUsed` is the list of
+ * tool names the model invoked this turn — `[]` for the direct-answer (no-tool)
+ * path, `["query_metadata"]` for a single tool; it is an ARRAY now so the
+ * parallel case (5.3.4) needs no shape change. `latency` is the wall-clock ms
+ * around the whole `route()` call (for logging + 5.5 routing eval).
+ */
+export interface RouteResult {
+  answer: string;
+  toolUsed: string[];
+  latency: number;
+}

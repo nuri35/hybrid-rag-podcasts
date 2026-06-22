@@ -221,18 +221,31 @@ each (zero regressions).
      tests cast `as string`).
 - **Done:** factory + schemas + accessor exist, unit-green, nothing wired into routing yet.
 
-### 5.3.2 — `ToolRouterService` core: dispatch map + single-shot two-call flow
-- **Files:** `tool-router.service.ts`, `tools.types.ts` (+ `RouteResult` type),
-  `tools.module.ts` (add `LlmModule` import; provide+export `ToolRouterService`).
-- **Work:** build both tools + the dispatch `Map` (D7); the D3 two-call flow for the
-  **single-tool** and **no-tool** paths (parallel deferred to 5.3.4); final invoke on the
-  **UNBOUND** model; return `{ answer, toolUsed, latency }`.
-- **Tests:** unit with a **mocked LLM** (fake `createToolCallingModel()` whose
-  `bindTools().invoke()` returns a canned `AIMessage`; `createChatModel().invoke()` returns
-  the canned final answer) + mocked tool services: single tool_call dispatches the right
-  service, feeds the string back as a `ToolMessage` (correct `tool_call_id`), returns the
-  final answer; no tool_calls → direct `content`, no service called; **the final invoke is
-  on the unbound model** (single-shot guard).
+### 5.3.2 — `ToolRouterService` core: dispatch map + single-shot two-call flow — ✅ SHIPPED
+- **Files:** `tool-router.service.ts`, `tool-router.service.spec.ts`,
+  `tool-router.service.integration.spec.ts` (skipped); edited `tools.types.ts`
+  (`RouteResult`), `tools.constants.ts` (`ROUTER_SYSTEM_PROMPT` placeholder),
+  `tools.module.ts` (added `LlmModule`; provide+export `ToolRouterService`).
+- **Work (done):** constructor builds both tools via `buildRoutingTools` (reused — no
+  re-derived generics), a `Map<name, tool>` dispatch keyed by `tool.name`, the
+  `bindRoutingTools(createToolCallingModel(), tools)` bound model, and the
+  `createChatModel()` UNBOUND model. `route()`: call 1 on the bound model →
+  no `tool_calls` ⇒ return content directly (no 2nd call); else dispatch
+  `toolCalls[0]` → `ToolMessage` (string result + `tool_call_id`) → call 2 on the
+  **UNBOUND** model. Returns `{ answer, toolUsed: string[], latency }`. Unknown tool name
+  → controlled ToolMessage (minimal; full fallback is 5.3.5). Placeholder system prompt
+  (real one 5.3.3). `extractText` flattens string|content-part content.
+- **Tests (green):** 7 unit (mocked LLM) — tool path dispatches the right service, feeds
+  the `ToolMessage` (content + `tool_call_id`) back, returns the answer; **single-shot
+  guard**: bound invoked once, unbound once, `bindTools` called exactly once (construction)
+  → final is unbound; no-tool path → direct content, **no 2nd invoke**; missing-`tool_calls`
+  field handled; content-part array flattened; unknown tool safe. Skippable real-Gemini
+  sanity test. Full suite 520 → **527, 0 regressions**.
+- **⚠️ Scope boundary for 5.3.4:** `route()` currently executes only `toolCalls[0]`. If the
+  model emits >1 tool_call, the others get no `ToolMessage` — Gemini requires a response
+  per call, so a real multi-call would break the final invoke. **5.3.4 must `Promise.all`
+  over ALL `tool_calls` and append a `ToolMessage` for each** (and set `toolUsed` to all
+  names). Single-tool/no-tool (5.3.2 scope) is unaffected.
 
 ### 5.3.3 — Routing system prompt
 - **Files:** `tools.constants.ts` (or `routing.constants.ts`) — add `ROUTER_SYSTEM_PROMPT`
