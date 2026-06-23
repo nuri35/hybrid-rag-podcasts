@@ -1,10 +1,11 @@
 # Phase 5.3 Plan — Tool Routing (`bindTools` + `ToolRouterService`)
 
-> **Status: LOCKED — ready to build, one sub-phase at a time.** Step-0 research is
-> confirmed (read from code + a live end-to-end Gemini check, script since deleted). The
-> 7 decisions are final; the 6 sub-phases (Part 3) are the build units. **No production
-> code is written from this doc** — each sub-phase gets its own build prompt, starting
-> with 5.3.1.
+> **Status: ✅ COMPLETE (closed 2026-06-23).** All 6 sub-phases shipped (5.3.1–5.3.6);
+> the 7 locked decisions are recorded in **ADR 0020**. Final suite **537 passed /
+> 44 skipped, 0 regressions**. Single-shot tool routing (AUTO, binding-safe schemas,
+> parallel-but-one-round, fail-loud/fail-open fallback, count-all tolerance) is built and
+> tested in isolation — **not yet wired into the QA pipeline (that is 5.4)**, and
+> **routing-accuracy is measured in 5.5**, not here.
 
 **Scope boundary (locked).** Single-shot chain — single OR parallel tool call in **one**
 round, then a final text answer. **NO serial loop, NOT agentic.** The model never gets a
@@ -310,16 +311,22 @@ each (zero regressions).
   parallel + MetadataQueryFailed → propagates (fail-loud wins); per-tool logging
   (status=success/invalid_input/failed + latency). Full suite 531 → **536, 0 regressions**.
 
-### 5.3.6 — Tests round-out + doc/ADR closure
-- **Work:** complete the mocked-LLM unit matrix; add a **skippable real-Gemini**
-  integration spec (`tool-router.service.integration.spec.ts`, `describe.skip`, via
-  `AppModule`): content Q → `search_content`; "how many episodes" → `query_metadata count`;
-  "which guest most" → `group_by`; greeting → direct (no tool). Document enable steps
-  (needs `GOOGLE_API_KEY` + live ES/Chroma). Write the ADR (routing layer / single-shot
-  decision / `exclusiveMinimum` finding) and update CLAUDE.md (architectural decision +
-  phase-tracking note). Full suite green, zero regressions.
-- **Out of scope:** routing-accuracy eval over a labeled set → **5.5**. QA-pipeline wiring
-  → **5.4**.
+### 5.3.6 — Tests round-out + doc/ADR closure — ✅ SHIPPED
+- **Coverage audit (result):** the unit + skippable-integration surface already covered
+  single-tool, parallel, no-tool, InvalidToolInput→graceful, MetadataQueryFailed→fail-loud
+  propagate, count-all tolerance, and per-tool logging. **One genuine gap added:** a unit
+  guard that `ROUTER_SYSTEM_PROMPT` is injected as the leading `SystemMessage` (then the
+  question) — guards the 5.3.3 wiring. No other tests added (coverage was otherwise
+  complete — not padded).
+- **ADR:** `docs/ADR/0020-llm-tool-routing.md` — the 7 decisions with WHY (single-shot
+  unbound-final, AUTO, binding-safe schemas + `exclusiveMinimum` finding + strict-stays-
+  strict split, parallel-but-one-round via `allSettled`, fail-loud/fail-open asymmetry,
+  count-all adapter tolerance, router placement) + alternatives rejected.
+- **Closure:** this plan marked complete; CLAUDE.md updated (architectural decision 24 +
+  phase-tracking note + module-structure entry).
+- **Tests:** full suite **537 passed / 44 skipped, 0 regressions.**
+- **Out of scope (stated):** routing-accuracy eval over a labeled set → **5.5**;
+  QA-pipeline wiring + resilience (retry/circuit/timeout) → **5.4**.
 
 ---
 

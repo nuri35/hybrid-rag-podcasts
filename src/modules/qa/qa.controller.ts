@@ -13,16 +13,23 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { Observable } from 'rxjs';
 import { AskQuestionDto } from './dto/ask-question.dto';
 import { AskQuestionStreamQuery } from './dto/ask-question-stream.query';
-import { QaResponseDto } from './dto/qa-response.dto';
+import { AnswerResponseDto } from './dto/answer-response.dto';
 import { ValidationErrorResponseDto } from './dto/validation-error.dto';
 import { QaChainService } from './qa-chain.service';
+import { QaFacadeService } from './qa-facade.service';
 
 const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 
 @ApiTags('questions')
 @Controller({ path: 'questions', version: '1' })
 export class QaController {
-  constructor(private readonly qaChainService: QaChainService) {}
+  // Non-streaming endpoint → QaFacadeService (picks direct vs tool-use per
+  // TOOL_USE_ENABLED). Streaming endpoint → QaChainService.askStream directly
+  // (Phase 4 streaming is never routed).
+  constructor(
+    private readonly qaFacadeService: QaFacadeService,
+    private readonly qaChainService: QaChainService,
+  ) {}
 
   // Scope to the `default` throttler (30/min). Both named throttlers apply to
   // every route by default; skipping `stream` here stops the stricter 5/min
@@ -65,8 +72,10 @@ export class QaController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Answer with source citations',
-    type: QaResponseDto,
+    description:
+      'Answer with source citations. `path` indicates which pipeline answered ' +
+      "('direct' RAG or 'tool_use' routing). `sources` is empty on the tool-use path.",
+    type: AnswerResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -77,8 +86,8 @@ export class QaController {
     status: 500,
     description: 'Internal error (LLM failure, Chroma unreachable, etc.)',
   })
-  async ask(@Body() dto: AskQuestionDto): Promise<QaResponseDto> {
-    return this.qaChainService.ask(dto.question, { topK: dto.topK });
+  async ask(@Body() dto: AskQuestionDto): Promise<AnswerResponseDto> {
+    return this.qaFacadeService.answer(dto.question, { topK: dto.topK });
   }
 
   /**

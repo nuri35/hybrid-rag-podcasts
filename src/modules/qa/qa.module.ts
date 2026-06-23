@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { LlmModule } from '../llm/llm.module';
 import { RedisModule } from '../redis/redis.module';
 import { RetrievalModule } from '../retrieval/retrieval.module';
+import { ToolsModule } from '../tools/tools.module';
 import { VectorStoreModule } from '../vector-store/vector-store.module';
 import { QaChainService } from './qa-chain.service';
+import { QaFacadeService } from './qa-facade.service';
 import { QaController } from './qa.controller';
 import { retrieverProvider } from './retriever.provider';
 import { CircuitBreakerRedisStorage } from './services/circuit-breaker-redis.storage';
@@ -36,13 +38,19 @@ import { TokenUsageService } from './services/token-usage.service';
  *   - `ResilientLlmService` — Phase 3 composer that wraps every chat
  *     LLM `chain.invoke()` with circuit (outer) + retry (inner).
  *     Consumed by `QaChainService.ask()`.
+ *
+ * Phase 5.4: imports `ToolsModule` (for `ToolRouterService`) — acyclic, since
+ * `ToolsModule` does NOT import `QaModule`. Adds `QaFacadeService`, the single
+ * entry the controller's non-streaming endpoint calls; it picks the direct vs
+ * tool-use pipeline behind `TOOL_USE_ENABLED`.
  */
 @Module({
-  imports: [RetrievalModule, LlmModule, RedisModule, VectorStoreModule],
+  imports: [RetrievalModule, LlmModule, RedisModule, VectorStoreModule, ToolsModule],
   controllers: [QaController],
   providers: [
     retrieverProvider,
     QaChainService,
+    QaFacadeService,
     RetryPolicyService,
     CircuitBreakerRedisStorage,
     CircuitBreakerService,
@@ -54,6 +62,7 @@ import { TokenUsageService } from './services/token-usage.service';
   ],
   exports: [
     QaChainService,
+    QaFacadeService,
     RetryPolicyService,
     CircuitBreakerService,
     ResilientLlmService,

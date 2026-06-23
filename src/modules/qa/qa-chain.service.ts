@@ -36,7 +36,7 @@ import { ResilientLlmService } from './services/resilient-llm.service';
 import { TokenUsageService } from './services/token-usage.service';
 import { OutputRejectedException } from './exceptions/output-rejected.exception';
 import { QuestionRejectedException } from './exceptions/question-rejected.exception';
-import { OutputVerdict } from './types/output-validation.types';
+import { AnswerKind, OutputVerdict } from './types/output-validation.types';
 import { SanitizationVerdict } from './types/sanitization.types';
 import type { TokenUsage } from './types/token-usage.types';
 import type { QaOptions, QaResult, QaSource, RetrievalMetadata } from './qa.types';
@@ -140,6 +140,21 @@ export class QaChainService implements OnModuleInit {
   }
 
   /**
+   * Phase 5.4 — public integrity-gate CHECK, shared with the QA facade's
+   * tool-use path (which has none of `ask()`'s inline guards). State ownership is
+   * unchanged: `integrityState` is still set ONLY by `verifyIntegrityOnStartup`
+   * (onModuleInit) and lives here; this method merely QUERIES readiness and throws
+   * `DataIntegrityMismatchException` (503) when the startup check latched degraded.
+   * `ask()`/`askStream()` call it too (replacing their previously-inline checks),
+   * so there is one integrity-check implementation.
+   */
+  assertDataIntegrity(): void {
+    if (!this.integrityState.healthy) {
+      throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
+    }
+  }
+
+  /**
    * Compares the Redis-stored integrity marker against Chroma's current
    * chunk count. Latches into degraded mode on mismatch / missing marker.
    * Fail-open if Redis itself is unreachable — the service stays up.
@@ -209,9 +224,7 @@ export class QaChainService implements OnModuleInit {
 
     // 0b. Integrity gate — if the startup check latched degraded, every
     //     request refuses until next boot after corrective ingestion.
-    if (!this.integrityState.healthy) {
-      throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
-    }
+    this.assertDataIntegrity();
 
     const startTime = Date.now();
     const topK = options.topK ?? this.defaultTopK;
@@ -324,7 +337,11 @@ export class QaChainService implements OnModuleInit {
       //     OutputRejectedException sits in the pass-through ladder
       //     below; the public 500 message stays generic, the
       //     categorised reason lives in the warn log.
-      const outputValidation = this.outputValidation.validate(answer, correlationId);
+      const outputValidation = this.outputValidation.validate(
+        answer,
+        correlationId,
+        AnswerKind.DIRECT,
+      );
       if (outputValidation.verdict === OutputVerdict.REJECTED) {
         throw new OutputRejectedException();
       }
@@ -569,9 +586,7 @@ export class QaChainService implements OnModuleInit {
     }
 
     // 0b. Integrity gate.
-    if (!this.integrityState.healthy) {
-      throw new DataIntegrityMismatchException(this.integrityState.reason ?? 'unknown');
-    }
+    this.assertDataIntegrity();
 
     // 0c. Phase 1.6 Sprint Prompt-Security Layer 1 — input sanitization.
     //     Throws BEFORE the first yield so QuestionRejectedException
@@ -640,7 +655,11 @@ export class QaChainService implements OnModuleInit {
         yield { type: 'token', data: token };
       }
 
-      const outputValidation = this.outputValidation.validate(accumulatedAnswer, correlationId);
+      const outputValidation = this.outputValidation.validate(
+        accumulatedAnswer,
+        correlationId,
+        AnswerKind.DIRECT,
+      );
       if (outputValidation.verdict === OutputVerdict.REJECTED) {
         this.logger.warn(
           `qa_stream_output_rejected correlation_id=${correlationId} ` +

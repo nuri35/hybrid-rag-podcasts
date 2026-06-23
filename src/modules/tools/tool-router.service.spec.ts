@@ -1,7 +1,13 @@
 import { Logger } from '@nestjs/common';
-import { ToolMessage, type BaseMessage } from '@langchain/core/messages';
+import {
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+  type BaseMessage,
+} from '@langchain/core/messages';
 import { ToolRouterService } from './tool-router.service';
 import {
+  ROUTER_SYSTEM_PROMPT,
   SEARCH_CONTENT_TOOL_NAME,
   QUERY_METADATA_TOOL_NAME,
   TOOL_INVALID_INPUT_MESSAGE,
@@ -61,6 +67,18 @@ describe('ToolRouterService (Phase 5.3.2)', () => {
   it('binds tools exactly once at construction (the only bindTools call)', () => {
     expect(bindTools).toHaveBeenCalledTimes(1);
     expect(createChatModel).toHaveBeenCalledTimes(1);
+  });
+
+  it('injects ROUTER_SYSTEM_PROMPT as the leading SystemMessage, then the question', async () => {
+    boundInvoke.mockResolvedValue({ content: 'hi', tool_calls: [] });
+
+    await service.route('hello there');
+
+    const messages = (boundInvoke.mock.calls as unknown as BaseMessage[][][])[0][0];
+    expect(messages[0]).toBeInstanceOf(SystemMessage);
+    expect(messages[0].content).toBe(ROUTER_SYSTEM_PROMPT);
+    expect(messages[1]).toBeInstanceOf(HumanMessage);
+    expect(messages[1].content).toBe('hello there');
   });
 
   // --------------------------------------------------------------------------

@@ -8,21 +8,24 @@ import { AskQuestionStreamQuery } from './dto/ask-question-stream.query';
 import { CircuitOpenException } from './exceptions/circuit-open.exception';
 import { QaChainFailedException } from './exceptions';
 import { QaChainService } from './qa-chain.service';
+import { QaFacadeService } from './qa-facade.service';
 import { QaController } from './qa.controller';
-import type { QaResult } from './qa.types';
+import type { AnswerResponseDto } from './dto/answer-response.dto';
 import type { StreamEvent } from './dto/stream-event.types';
 
 interface MockQaChainService {
-  ask: jest.Mock<Promise<QaResult>, [string, { topK?: number } | undefined]>;
   askStream: jest.Mock<
     AsyncGenerator<StreamEvent, void, void>,
     [string, { topK?: number } | undefined]
   >;
 }
 
+interface MockQaFacadeService {
+  answer: jest.Mock<Promise<AnswerResponseDto>, [string, { topK?: number } | undefined]>;
+}
+
 function makeMockQaChainService(): MockQaChainService {
   return {
-    ask: jest.fn<Promise<QaResult>, [string, { topK?: number } | undefined]>(),
     // Default askStream produces no events. Sprint Streaming tests
     // override per-test to drive specific sequences.
     askStream: jest.fn<
@@ -32,6 +35,12 @@ function makeMockQaChainService(): MockQaChainService {
     >(async function* () {
       await Promise.resolve();
     }),
+  };
+}
+
+function makeMockQaFacadeService(): MockQaFacadeService {
+  return {
+    answer: jest.fn<Promise<AnswerResponseDto>, [string, { topK?: number } | undefined]>(),
   };
 }
 
@@ -51,15 +60,24 @@ async function collectObservable(
 
 async function buildController(
   qaChainService: MockQaChainService = makeMockQaChainService(),
-): Promise<{ controller: QaController; qaChainService: MockQaChainService }> {
+  qaFacadeService: MockQaFacadeService = makeMockQaFacadeService(),
+): Promise<{
+  controller: QaController;
+  qaChainService: MockQaChainService;
+  qaFacadeService: MockQaFacadeService;
+}> {
   const moduleRef = await Test.createTestingModule({
     controllers: [QaController],
-    providers: [{ provide: QaChainService, useValue: qaChainService }],
+    providers: [
+      { provide: QaChainService, useValue: qaChainService },
+      { provide: QaFacadeService, useValue: qaFacadeService },
+    ],
   }).compile();
 
   return {
     controller: moduleRef.get(QaController),
     qaChainService,
+    qaFacadeService,
   };
 }
 
@@ -85,8 +103,8 @@ function makeStreamQuery(question: string, topK?: number): AskQuestionStreamQuer
 }
 
 describe('QaController', () => {
-  it('delegates to QaChainService.ask() with question + topK from DTO', async () => {
-    const expected: QaResult = {
+  it('delegates to QaFacadeService.answer() with question + topK from DTO', async () => {
+    const expected: AnswerResponseDto = {
       answer: 'mock answer',
       sources: [
         {
@@ -96,41 +114,45 @@ describe('QaController', () => {
           metadata: { episode_id: 'ep_001' },
         },
       ],
+      path: 'direct',
     };
-    const qaChainService = makeMockQaChainService();
-    qaChainService.ask.mockResolvedValue(expected);
+    const qaFacadeService = makeMockQaFacadeService();
+    qaFacadeService.answer.mockResolvedValue(expected);
 
-    const { controller } = await buildController(qaChainService);
+    const { controller } = await buildController(makeMockQaChainService(), qaFacadeService);
     const result = await controller.ask(makeDto('What is consciousness?', 3));
 
-    expect(qaChainService.ask).toHaveBeenCalledTimes(1);
-    expect(qaChainService.ask).toHaveBeenCalledWith('What is consciousness?', { topK: 3 });
+    expect(qaFacadeService.answer).toHaveBeenCalledTimes(1);
+    expect(qaFacadeService.answer).toHaveBeenCalledWith('What is consciousness?', { topK: 3 });
     expect(result).toBe(expected);
   });
 
-  it('passes topK as undefined when DTO omits it (service applies default)', async () => {
-    const qaChainService = makeMockQaChainService();
-    qaChainService.ask.mockResolvedValue({ answer: 'x', sources: [] });
+  it('passes topK as undefined when DTO omits it (facade applies default)', async () => {
+    const qaFacadeService = makeMockQaFacadeService();
+    qaFacadeService.answer.mockResolvedValue({ answer: 'x', sources: [], path: 'direct' });
 
-    const { controller } = await buildController(qaChainService);
+    const { controller } = await buildController(makeMockQaChainService(), qaFacadeService);
     await controller.ask(makeDto('a valid question'));
 
-    expect(qaChainService.ask).toHaveBeenCalledWith('a valid question', { topK: undefined });
+    expect(qaFacadeService.answer).toHaveBeenCalledWith('a valid question', { topK: undefined });
   });
 
-  it('returns canned no-info result unchanged (sources: [])', async () => {
-    const canned: QaResult = {
-      answer: "I don't have enough information to answer this question.",
+  it('returns the facade result unchanged (e.g. tool-use path shape)', async () => {
+    const toolUse: AnswerResponseDto = {
+      answer: 'There are 319 episodes.',
       sources: [],
+      toolUsed: ['query_metadata'],
+      latency: 42,
+      path: 'tool_use',
     };
-    const qaChainService = makeMockQaChainService();
-    qaChainService.ask.mockResolvedValue(canned);
+    const qaFacadeService = makeMockQaFacadeService();
+    qaFacadeService.answer.mockResolvedValue(toolUse);
 
-    const { controller } = await buildController(qaChainService);
-    const result = await controller.ask(makeDto('off-topic question'));
+    const { controller } = await buildController(makeMockQaChainService(), qaFacadeService);
+    const result = await controller.ask(makeDto('How many episodes?'));
 
-    expect(result).toBe(canned);
-    expect(result.sources).toEqual([]);
+    expect(result).toBe(toolUse);
+    expect(result.path).toBe('tool_use');
   });
 
   it.each([
@@ -143,11 +165,11 @@ describe('QaController', () => {
       'ChromaUnreachableException',
       new ChromaUnreachableException('http://localhost:8000', 'ECONNREFUSED'),
     ],
-  ])('propagates %s from service unchanged', async (_label, error) => {
-    const qaChainService = makeMockQaChainService();
-    qaChainService.ask.mockRejectedValue(error);
+  ])('propagates %s from the facade unchanged', async (_label, error) => {
+    const qaFacadeService = makeMockQaFacadeService();
+    qaFacadeService.answer.mockRejectedValue(error);
 
-    const { controller } = await buildController(qaChainService);
+    const { controller } = await buildController(makeMockQaChainService(), qaFacadeService);
     const caught = await controller.ask(makeDto('a valid question')).catch((e: unknown) => e);
 
     expect(caught).toBe(error);

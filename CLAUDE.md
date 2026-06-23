@@ -117,6 +117,8 @@ Each was a deliberate choice. Do not revisit without an ADR.
 
 23. **Post-fusion neighbor-chunk expansion completes boundary-split answers (`NeighborExpansionService`, Phase 4 enhancement).** The q017 investigation proved a failure mode no fusion knob can fix: the answer-completing chunk `269_chunk_307` is in NEITHER source's top-10 (no literal query terms → BM25 skips it; vector locked onto the C++ "constructor" homonym → never surfaces ep 269), and `306` alone ends mid-sentence ("…a set of axioms |"). Raising `FUSION_OUTPUT_TOP_K`/`SOURCE_TOP_K`/`RRF_K` only reorders lists that already contain the chunk — useless here. **Fix:** after `fuse()`, `HybridRetrievalService` calls `NeighborExpansionService.expand(fused)` (`src/modules/retrieval/`), which pulls each fused chunk's **±1 neighbors** by deterministic id and places them **adjacent to the parent in `chunk_index` order**, reassembling the split sentence (306→307 contiguous). **One batched `ChromaRepository.getByIds()`** (new method) fetches only the missing neighbor ids; non-existent ids (episode boundaries) are silently skipped. id parsing is **right-anchored** (`/^(.+)_chunk_(\d+)$/`) so underscore-bearing/`_0`-disambiguated episode ids parse and neighbors never cross `episode_id`. Ordering: per-parent group `[prev?,parent,next?]`, concatenated in fusion-rank order, dedup first-wins, capped `MAX_EXPANDED_CHUNKS=12` (truncate from end). Injected neighbors get **score=0 sentinel** (context, not ranked; `formatContext` orders by position so it's inert). **Toggle:** `NEIGHBOR_EXPANSION_ENABLED` (env enum+transform bool, default true; false → fused top-K passes through byte-identical for A/B eval). Chroma fetch error → degrade to un-expanded list (WARN `neighbor_fetch_failed`). Log line gains `expanded= chunks_before= chunks_after= neighbors_added=`. `NEIGHBOR_WINDOW`/`MAX_EXPANDED_CHUNKS` are code constants (4.5-eval-gated). Smoke test deferred to a separate follow-up. See ADR 0019 (Neighbor-Chunk Expansion section).
 
+24. **Single-shot LLM tool routing (`ToolRouterService`, Phase 5.3).** Binds the two Phase 5.2 tools to Gemini with **AUTO** tool-choice; `route()` invokes the bound model once, executes the chosen tool(s), then invokes the **UNBOUND** model (`createChatModel()`) for the final text answer — a second tool round is **structurally impossible**, so it is single-shot, **not agentic, no serial loop**. **Flat binding-safe schemas** (`top_k`/`limit` as plain `z.number()`): the strict `.int().positive()` emits JSON-Schema `exclusiveMinimum`, which Gemini's `FunctionDeclaration` subset **rejects with a 400** (verified live); the binding schema is isolated and additive — the **strict Phase 5.2 schemas stay strict** inside each tool's `execute()` (the real trust boundary). **Parallel-but-one-round:** multiple `tool_calls` run via `Promise.allSettled` (one tool's failure never loses a sibling's success), each yielding exactly one `ToolMessage` (Gemini requires one response per `tool_call` id). **Fail-loud / fail-open asymmetry:** `InvalidToolInputException` (bad LLM args) → controlled-error `ToolMessage` (graceful, model answers honestly); `MetadataQueryFailedException` / any other infra error → **rethrow** (propagates, no final invoke) — never silently dressed up as a result. **Count-all tolerance** lives in the `query_metadata` adapter (`applyCountAllTolerance` drops an orphan `field` on a value-less `count`), NOT the strict schema/service. Dispatch via a `Map<toolName, tool>` keyed by the locked name constants. Reuses `LlmService` (no new client); lives in `ToolsModule` (no `QaModule` import → no cycle). **Not yet wired into the QA pipeline (5.4); routing accuracy is measured in 5.5.** See ADR 0020.
+
 ---
 
 ## Future optimizations
@@ -207,8 +209,27 @@ src/
       rrf-fusion.service.ts               # pure fuse() — Σ 1/(60+rank), rank-based
       rrf-fusion.constants.ts             # RRF_K=60, FUSION_OUTPUT_TOP_K=5
       fusion.module.ts
+    metadata/                     # Episode-grained exact aggregations (Phase 5.1)
+      metadata-query.service.ts           # aggregate() → exact ES aggs over podcast_episodes (fail-loud)
+      metadata.types.ts                   # discriminated MetadataQueryRequest/Result union
+      metadata.constants.ts               # METADATA_INDEX, keyword/numeric allow-lists, caps
+      metadata.module.ts                  # imports ElasticsearchModule (shares ELASTICSEARCH_CLIENT)
+      exceptions/                         # InvalidMetadataQuery (400) / MetadataQueryFailed (500)
+    tools/                        # LLM tool layer + routing (Phase 5.2–5.3)
+      search-content.tool.ts              # wraps hybrid retrieval → { passages, context }
+      query-metadata.tool.ts              # wraps MetadataQueryService → { result, summary } (+ count-all tolerance)
+      search-content.schema.ts            # strict runtime input schemas (the trust boundary)
+      query-metadata.schema.ts
+      search-content.binding-schema.ts    # Gemini binding-safe schemas (no exclusiveMinimum) — Phase 5.3.1
+      query-metadata.binding-schema.ts
+      tool-factory.ts                     # tool() wrappers + buildRoutingTools/bindRoutingTools (5.3.1)
+      tool-router.service.ts              # single-shot AUTO routing, parallel, fallback, logging (5.3.2–5.3.5)
+      tools.constants.ts                  # tool names/descriptions + ROUTER_SYSTEM_PROMPT + controlled-error text
+      tools.types.ts                      # SearchContentResult / QueryMetadataResult / RouteResult
+      tools.module.ts                     # imports RetrievalModule + MetadataModule + LlmModule (NOT QaModule → no cycle)
+      exceptions/                         # InvalidToolInputException (400)
     llm/                          # Shared chat-model factory (Phase 1.6)
-      llm.service.ts
+      llm.service.ts                      # createChatModel() + createToolCallingModel() (5.3.1 typed bindTools handle)
       llm.module.ts
     qa/                           # QA chain + HTTP endpoint (Phase 1.6 + 1.7)
       qa-chain.service.ts         # LCEL: prompt | llm | StringOutputParser
@@ -296,7 +317,7 @@ Current phase: **Phase 4 — Hybrid Retrieval (Vector + Elasticsearch + RRF + ±
 | 2. Evaluation | ✅ Done (2026-06-07) | Python eval harness in `evaluation/` (dev-time only): golden dataset (25 Q), deterministic retrieval metrics (MRR/Hit@5/Precision@5/Recall@5) + Ragas 3 (Faithfulness/Answer Relevancy/Context Recall) + refusal compliance + diagnostic engine. **Clean baseline (25/25 coverage):** MRR 0.712, Hit@5 0.810, Precision@5 0.248, Recall@5 0.786, Faithfulness 0.768, Answer Relevancy 0.589 (refusal-deflated), Context Recall 0.767, Refusal 1.000 (4/4) — overall WARNING. **Operational gotchas:** `gemini-2.5-pro` judge = 1000 req/day free tier → ~one full eval/day (≈400-600 calls); verify `questions_evaluated_for_faithfulness`≈25 in `baseline.json` to catch quota-gutted runs; `SSL_CERT_FILE`-family vars auto-cleared in the Chroma fetch. **Known gap:** q006/q012/q014/q017 = Hit@5 0 (abstract terminology, vector-only limit → Phase 4). Details: ADR 0017 + `evaluation/README.md` (incl. the excerpt-artifact discovery: 200-char excerpts → false-zero Faithfulness 0.292, fixed to 0.927 with full chunk text). |
 | 3. Graph layer | ⚪ Pending | Neo4j entity graph (deterministic + LLM-based extraction) — now sequenced AFTER Phase 4 |
 | 4. Hybrid retrieval | ✅ Done (closed 2026-06-14) | **Vector + Elasticsearch keyword fusion via RRF + ±1 neighbor expansion** (redefined from "vector + graph"). Final clean eval: **Hit@5 0.810→0.905, MRR 0.712→0.774, Context Recall 0.767→0.900, substantive Faithfulness ~0.841→0.905; q014/q017 fixed, q006/q012 documented out-of-scope misses, 0 regressions.** Sub-phases 4.1 ES setup → 4.2 ES service → 4.3 RRF → 4.4 integration → 4.4-E neighbor expansion → 4.5 eval → 4.6 docs/closure all done. Post-eval fixes: citation regex `601c32d`, eval methodology `bc8135b`. Details: ADR 0019, decisions 20–23, `docs/phases/phase-4.md`. |
-| 5. Query routing | ⚪ Pending | LLM tool use for adaptive retrieval routing |
+| 5. Query routing | 🟡 In progress | LLM tool use for adaptive retrieval routing. **5.1 metadata aggregation engine ✅** (`MetadataQueryService` + episode-grained `podcast_episodes` index, fail-loud). **5.2 tool defs ✅** (`search_content` + `query_metadata`, flat binding schemas, locked descriptions). **5.3 routing ✅ (closed 2026-06-23, ADR 0020)** — `ToolRouterService`: single-shot (UNBOUND final invoke, not agentic), AUTO tool-choice, binding-safe schemas (`exclusiveMinimum` 400 finding), parallel-but-one-round (`allSettled`), fail-loud/fail-open fallback, count-all adapter tolerance; tested in isolation (537 passed/44 skipped). **Pending: 5.4 QA-pipeline wiring + resilience, 5.5 routing-accuracy eval.** |
 | 6. Queue-based ingestion | ⚪ Future | Async ingestion via queue/worker pattern (optional) |
 
 **Update this table when a phase completes.** Add a brief note about what was shipped.

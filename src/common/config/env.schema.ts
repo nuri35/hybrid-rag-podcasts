@@ -67,6 +67,17 @@ export const envSchema = z.object({
     .default('true')
     .transform((value) => value === 'true'),
 
+  // Tool-use routing toggle (Phase 5.4). true → the non-streaming QA endpoint
+  // routes through ToolRouterService (single-shot LLM tool use: search_content /
+  // query_metadata); false (default) → the classic Phase 4 direct RAG path,
+  // byte-identical. Streaming is never routed (Phase 4 streaming unchanged). Same
+  // enum+transform pattern as HYBRID_RETRIEVAL_ENABLED — `z.coerce.boolean()`
+  // would map "false" → true and silently disable the off-switch.
+  TOOL_USE_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+
   // LLM (Phase 1.6) — chat model for QA chain. Reuses GOOGLE_API_KEY above.
   LLM_MODEL: z.string().min(1).default('gemini-2.0-flash'),
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0),

@@ -24,6 +24,7 @@ import { HealthController } from '../../common/health/health.controller';
 import { HealthService } from '../../common/health/health.service';
 import { QaController } from '../qa/qa.controller';
 import { QaChainService } from '../qa/qa-chain.service';
+import { QaFacadeService } from '../qa/qa-facade.service';
 import type { StreamEvent } from '../qa/dto/stream-event.types';
 
 const DEFAULT_LIMIT = 30;
@@ -45,6 +46,13 @@ describe('Throttler integration (guard + per-endpoint scoping, in-memory storage
     ask: jest.fn().mockResolvedValue({ answer: 'mock answer [Source 1]', sources: [] }),
     askStream: jest.fn(() => makeStream()),
   };
+  // Phase 5.4: the non-streaming endpoint goes through the facade; streaming still
+  // uses QaChainService directly. Throttler tests only exercise rate-limit counters.
+  const qaFacadeMock = {
+    answer: jest
+      .fn()
+      .mockResolvedValue({ answer: 'mock answer [Source 1]', sources: [], path: 'direct' }),
+  };
   const healthMock = {
     check: jest.fn().mockResolvedValue({ status: 'ok' }),
   };
@@ -64,6 +72,7 @@ describe('Throttler integration (guard + per-endpoint scoping, in-memory storage
       providers: [
         { provide: APP_GUARD, useClass: ProxyAwareThrottlerGuard },
         { provide: QaChainService, useValue: qaChainMock },
+        { provide: QaFacadeService, useValue: qaFacadeMock },
         { provide: HealthService, useValue: healthMock },
       ],
     }).compile();
