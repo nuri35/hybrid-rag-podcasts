@@ -265,26 +265,50 @@ each (zero regressions).
   →no tool. Full suite **527 passed, 0 regressions** (skipped 40→43 = the 3 new cases).
 - **Note:** routing-accuracy is MEASURED in 5.5, not asserted here.
 
-### 5.3.4 — Parallel execution + result feedback + count-all tolerance
-- **Files:** `tool-router.service.ts`; the `query_metadata` flat→union mapping layer
-  (`query-metadata.tool.ts` `toRequest`, or the binding mapping) for the count tolerance.
-- **Work:** D4 `Promise.all` over multiple `tool_calls`; append all `ToolMessage`s in
-  order before the single final invoke; pin `toolUsed` for the multi-tool case. **Count
-  tolerance (§4):** on `type="count"`, a lone `field` with no `value` → unfiltered count
-  (chosen layer: the `count` mapping — keep the strict service contract pure; document the
-  exact edit in the build prompt).
-- **Tests:** unit — 2 tool_calls → both services called concurrently, both ToolMessages
-  fed back in order; `count` + `field` + no `value` → unfiltered count (no
-  `InvalidToolInputException`).
+### 5.3.4 — Parallel execution + result feedback + count-all tolerance — ✅ SHIPPED
+- **Files:** `tool-router.service.ts` (parallel round + placeholder); `query-metadata.tool.ts`
+  (count-all tolerance); specs `tool-router.service.spec.ts`, `query-metadata.tool.spec.ts`,
+  `tool-router.service.integration.spec.ts`.
+- **Work (done):** `route()` now runs **all** `tool_calls` via `Promise.allSettled`
+  (mapped over `dispatchAndExecute`), appends **exactly one `ToolMessage` per call** (each
+  with its `tool_call_id`) before the single **UNBOUND** final invoke; a rejected settle
+  yields a minimal **placeholder ToolMessage** (`placeholderToolMessage`) so every
+  tool_call id has a match (Gemini requires it) — full exception-type routing is 5.3.5.
+  `toolUsed` = all names in `tool_calls` order. Single-shot intact (one round, unbound
+  final). **Count-all tolerance:** `QueryMetadataToolService.applyCountAllTolerance()`
+  (scoped, adapter-only) drops an orphan `field` on `type="count"` with no `value` BEFORE
+  the strict parse → maps to count-all instead of erroring. Scoped to `count` only; the
+  strict `queryMetadataInputSchema` + `MetadataQueryService` contract are **untouched**.
+- **Tests (green):** router unit +2 (parallel: both dispatched, 2 ToolMessages w/ correct
+  ids+contents in order, single unbound final, `toolUsed` both; rejected-tool → placeholder
+  ToolMessage, shape valid). metadata-tool: replaced the old "count field-without-value
+  throws" assertion with 3 tolerance tests (drops filter → count-all; field+value still a
+  filter; **direct `queryMetadataInputSchema.safeParse` of the same shape still fails** —
+  proves the schema wasn't loosened). Skippable real-Gemini parallel sanity. Full suite
+  527 → **531, 0 regressions**.
 
-### 5.3.5 — Fallback + per-tool logging
-- **Files:** `tool-router.service.ts`; maybe `exceptions/unknown-tool.exception.ts`.
-- **Work:** D6 — `InvalidToolInputException` → controlled-error `ToolMessage` (flow
-  continues); `MetadataQueryFailedException`/infra → propagate; unknown tool name →
-  `UnknownToolException` / controlled error; the `tool_dispatch` + `tool_routing` log lines.
-- **Tests:** unit — `InvalidToolInput` produces a controlled-error ToolMessage and the
-  router still returns an answer (no throw); `MetadataQueryFailed`/retrieval-infra error
-  **propagates** (router throws); log shape + `toolUsed` correctness.
+### 5.3.5 — Fallback + per-tool logging — ✅ SHIPPED
+- **Files:** `tool-router.service.ts` (`settledResultToToolMessage` + logging in
+  `dispatchAndExecute`); `tools.constants.ts` (`TOOL_INVALID_INPUT_MESSAGE`,
+  `UNKNOWN_TOOL_MESSAGE`); `tool-router.service.spec.ts`.
+- **Work (done):** replaced the 5.3.4 placeholder with `settledResultToToolMessage(toolCall,
+  outcome)` routing each `allSettled` result by exception TYPE: fulfilled → its ToolMessage;
+  rejected `InvalidToolInputException` (bad LLM args) → controlled-error ToolMessage
+  (`TOOL_INVALID_INPUT_MESSAGE`, same `tool_call_id`) so the UNBOUND final still answers
+  honestly — graceful, single-shot, no loop; rejected anything else
+  (`MetadataQueryFailedException` / infra / generic) → **rethrow** (fail-loud) → route()
+  propagates, Call 2 never happens. Unknown tool name → controlled `UNKNOWN_TOOL_MESSAGE`
+  (never throws). Per-tool telemetry logged in `dispatchAndExecute`:
+  `tool_dispatch name=… status=success|invalid_input|failed|unknown_tool latency_ms=…`
+  (no "why chosen", no payloads). `allSettled` preserved (one rejection never loses
+  another's success); `route()` shape unchanged. No retry/timeout (5.4). No magic
+  strings (controlled text is constants; `instanceof` type checks).
+- **Tests (green):** replaced the 5.3.4 generic-Error placeholder test (generic errors now
+  fail-loud by design). Added: InvalidToolInput → controlled-error ToolMessage + final
+  answers; MetadataQueryFailed → propagates, no final invoke; parallel mixed
+  (success + InvalidToolInput) → success kept, failed → controlled-error, both fed forward;
+  parallel + MetadataQueryFailed → propagates (fail-loud wins); per-tool logging
+  (status=success/invalid_input/failed + latency). Full suite 531 → **536, 0 regressions**.
 
 ### 5.3.6 — Tests round-out + doc/ADR closure
 - **Work:** complete the mocked-LLM unit matrix; add a **skippable real-Gemini**

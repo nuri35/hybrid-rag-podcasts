@@ -18,8 +18,13 @@ import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { LlmService } from '../llm/llm.service';
 import { SearchContentToolService } from './search-content.tool';
 import { QueryMetadataToolService } from './query-metadata.tool';
+import { InvalidToolInputException } from './exceptions/invalid-tool-input.exception';
 import { bindRoutingTools, buildRoutingTools } from './tool-factory';
-import { ROUTER_SYSTEM_PROMPT } from './tools.constants';
+import {
+  ROUTER_SYSTEM_PROMPT,
+  TOOL_INVALID_INPUT_MESSAGE,
+  UNKNOWN_TOOL_MESSAGE,
+} from './tools.constants';
 import type { RouteResult } from './tools.types';
 
 /**
@@ -88,17 +93,31 @@ export class ToolRouterService {
       return { answer, toolUsed: [], latency: Date.now() - startTime };
     }
 
-    // 2b. Single-tool path (parallel is 5.3.4) — execute the first tool_call,
-    //     feed the result back, then force a text answer on the UNBOUND model.
-    const toolCall = toolCalls[0];
-    const toolMessage = await this.dispatchAndExecute(toolCall);
-    const final = await this.unboundModel.invoke([...messages, ai, toolMessage]);
+    // 2b. ONE round, ALL tool_calls in parallel (single-shot ≠ single-tool).
+    //     `Promise.allSettled` so one tool's failure does not lose another tool's
+    //     successful result. Each settled result is then routed by exception TYPE
+    //     (`settledResultToToolMessage`): a fulfilled call → its ToolMessage; bad
+    //     LLM args (`InvalidToolInputException`) → a controlled-error ToolMessage
+    //     (graceful, single-shot preserved); a system/infra error
+    //     (`MetadataQueryFailedException`, anything else) → rethrow (fail-loud) so
+    //     route() propagates and Call 2 never happens. Gemini requires one
+    //     ToolMessage per tool_call id, which both the fulfilled and graceful paths
+    //     satisfy. The final answer is then forced on the UNBOUND model.
+    const settled = await Promise.allSettled(
+      toolCalls.map((toolCall) => this.dispatchAndExecute(toolCall)),
+    );
+    const toolMessages = settled.map((outcome, index) =>
+      this.settledResultToToolMessage(toolCalls[index], outcome),
+    );
+
+    const final = await this.unboundModel.invoke([...messages, ai, ...toolMessages]);
     const answer = this.extractText(final.content);
+    const toolUsed = toolCalls.map((toolCall) => toolCall.name);
 
     this.logger.log(
-      `tool_routing tool_used=${toolCall.name} direct=false latency_ms=${Date.now() - startTime}`,
+      `tool_routing tool_used=${toolUsed.join(',')} direct=false latency_ms=${Date.now() - startTime}`,
     );
-    return { answer, toolUsed: [toolCall.name], latency: Date.now() - startTime };
+    return { answer, toolUsed, latency: Date.now() - startTime };
   }
 
   /**
@@ -106,20 +125,58 @@ export class ToolRouterService {
    * a `ToolMessage` carrying the result string + the `tool_call_id` (so Gemini
    * matches the result to its call). `tool.invoke(args)` returns `any`, so the
    * result is bound to `string` explicitly. An unknown tool name is handled safely
-   * here (a controlled note); the full fallback policy is 5.3.5.
+   * here (a controlled note, never throws). Per-tool telemetry (name + latency +
+   * status) is logged here; the exception is rethrown so `allSettled` captures it
+   * and `settledResultToToolMessage` routes it by type. NO retry/timeout (5.4).
    */
   private async dispatchAndExecute(toolCall: RoutedToolCall): Promise<ToolMessage> {
+    const startTime = Date.now();
     const toolCallId = toolCall.id ?? '';
     const tool = this.dispatchMap.get(toolCall.name);
     if (!tool) {
-      this.logger.warn(`tool_dispatch name=${toolCall.name} status=unknown_tool`);
+      this.logger.warn(
+        `tool_dispatch name=${toolCall.name} status=unknown_tool latency_ms=${Date.now() - startTime}`,
+      );
+      return new ToolMessage({ content: UNKNOWN_TOOL_MESSAGE, tool_call_id: toolCallId });
+    }
+    try {
+      const result = (await tool.invoke(toolCall.args)) as string;
+      this.logger.log(
+        `tool_dispatch name=${toolCall.name} status=success latency_ms=${Date.now() - startTime}`,
+      );
+      return new ToolMessage({ content: result, tool_call_id: toolCallId });
+    } catch (error) {
+      const status = error instanceof InvalidToolInputException ? 'invalid_input' : 'failed';
+      this.logger.warn(
+        `tool_dispatch name=${toolCall.name} status=${status} latency_ms=${Date.now() - startTime}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Route one settled tool result to a `ToolMessage`, by exception TYPE (5.3.5):
+   *   - fulfilled → the tool's `ToolMessage` (its `tool_call_id` already set);
+   *   - rejected `InvalidToolInputException` (bad LLM args) → a controlled-error
+   *     `ToolMessage` so the final invoke still has a valid response per tool_call
+   *     and answers honestly (graceful, single-shot — no loop);
+   *   - rejected anything else (`MetadataQueryFailedException` / infra) → RETHROW
+   *     (fail-loud); route() propagates and Call 2 never happens.
+   */
+  private settledResultToToolMessage(
+    toolCall: RoutedToolCall,
+    outcome: PromiseSettledResult<ToolMessage>,
+  ): ToolMessage {
+    if (outcome.status === 'fulfilled') return outcome.value;
+
+    const reason: unknown = outcome.reason;
+    if (reason instanceof InvalidToolInputException) {
       return new ToolMessage({
-        content: `Unknown tool: ${toolCall.name}. No data returned.`,
-        tool_call_id: toolCallId,
+        content: TOOL_INVALID_INPUT_MESSAGE,
+        tool_call_id: toolCall.id ?? '',
       });
     }
-    const result = (await tool.invoke(toolCall.args)) as string;
-    return new ToolMessage({ content: result, tool_call_id: toolCallId });
+    throw reason instanceof Error ? reason : new Error(String(reason));
   }
 
   /** Flatten a message's content (string or content-part array) to plain text. */

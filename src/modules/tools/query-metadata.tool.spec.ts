@@ -8,6 +8,7 @@ import {
 import { MetadataAggregation } from '../metadata/metadata.types';
 import { KEYWORD_FIELDS, NUMERIC_FIELDS } from '../metadata/metadata.constants';
 import { QUERY_METADATA_FIELDS } from './tools.constants';
+import { queryMetadataInputSchema } from './query-metadata.schema';
 
 interface MetadataMock {
   aggregate: jest.Mock;
@@ -122,6 +123,38 @@ describe('QueryMetadataToolService', () => {
   });
 
   // --------------------------------------------------------------------------
+  // 1b. count-all tolerance (Phase 5.3.4) — adapter-only, service NOT loosened
+  // --------------------------------------------------------------------------
+  describe('count-all tolerance', () => {
+    it('count with field but NO value → adapter drops the filter (count all)', async () => {
+      await service.execute({ type: MetadataAggregation.COUNT, field: 'episode_id' } as never);
+      expect(metadata.aggregate).toHaveBeenCalledWith({ type: MetadataAggregation.COUNT });
+    });
+
+    it('count with field AND value is still a filter (tolerance does not fire)', async () => {
+      await service.execute({
+        type: MetadataAggregation.COUNT,
+        field: 'guest_name',
+        value: 'Michael Malice',
+      });
+      expect(metadata.aggregate).toHaveBeenCalledWith({
+        type: MetadataAggregation.COUNT,
+        filter: { field: 'guest_name', value: 'Michael Malice' },
+      });
+    });
+
+    it('the strict tool schema still rejects count field-without-value (service not loosened)', () => {
+      // The tolerance normalizes the INPUT before the strict parse — the schema
+      // itself is unchanged, so a direct safeParse of the same shape still fails.
+      const parsed = queryMetadataInputSchema.safeParse({
+        type: MetadataAggregation.COUNT,
+        field: 'guest_name',
+      });
+      expect(parsed.success).toBe(false);
+    });
+  });
+
+  // --------------------------------------------------------------------------
   // 2. superRefine validation — InvalidToolInputException, aggregate untouched
   // --------------------------------------------------------------------------
   describe('input validation (superRefine)', () => {
@@ -138,8 +171,6 @@ describe('QueryMetadataToolService', () => {
     it('min without field', () => expectInvalid({ type: MetadataAggregation.MIN }));
     it('filter without value', () =>
       expectInvalid({ type: MetadataAggregation.FILTER, field: 'guest_name' }));
-    it('count with field but no value (all-or-nothing)', () =>
-      expectInvalid({ type: MetadataAggregation.COUNT, field: 'guest_name' }));
     it('unknown aggregation type', () => expectInvalid({ type: 'median', field: 'duration_min' }));
     it('field outside the enum (text)', () =>
       expectInvalid({ type: MetadataAggregation.COUNT_DISTINCT, field: 'text' }));

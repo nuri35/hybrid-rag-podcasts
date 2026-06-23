@@ -39,7 +39,7 @@ export class QueryMetadataToolService {
   constructor(private readonly metadataQueryService: MetadataQueryService) {}
 
   async execute(input: QueryMetadataInput): Promise<QueryMetadataResult> {
-    const parsed = queryMetadataInputSchema.safeParse(input);
+    const parsed = queryMetadataInputSchema.safeParse(this.applyCountAllTolerance(input));
     if (!parsed.success) {
       throw new InvalidToolInputException(
         `query_metadata: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
@@ -66,6 +66,31 @@ export class QueryMetadataToolService {
         `summary="${summary}"`,
     );
     return { result, summary };
+  }
+
+  /**
+   * Count-all tolerance (Phase 5.3.4 — adapter-only, scoped).
+   *
+   * The model sometimes attaches a `field` to a whole-collection `count` (e.g.
+   * `{type:'count', field:'episode_id'}`) with NO `value`. Semantically that is a
+   * count of ALL episodes, not a filter — but `field` without `value` violates the
+   * strict `count` all-or-nothing rule and would 400. We drop the orphan `field`
+   * so it maps to count-all instead of erroring. Scoped to `count` ONLY — for every
+   * other type `field` is the operand (not a filter) and must be preserved. This
+   * normalizes the INPUT before strict validation; the strict schema and
+   * `MetadataQueryService` contract are NOT relaxed (a direct
+   * `queryMetadataInputSchema.safeParse` of the same shape still rejects it).
+   */
+  private applyCountAllTolerance(input: QueryMetadataInput): QueryMetadataInput {
+    if (
+      input.type === MetadataAggregation.COUNT &&
+      input.field !== undefined &&
+      input.value === undefined
+    ) {
+      const { field: _droppedField, ...countAll } = input;
+      return countAll;
+    }
+    return input;
   }
 
   /**

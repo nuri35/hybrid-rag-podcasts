@@ -83,3 +83,18 @@ Grounding rules:
 - When you use search_content passages, cite them with their [Source N] markers exactly as they appear.
 
 Keep answers concise, honest, and directly responsive to the question.`;
+
+/**
+ * Controlled-error `ToolMessage` content fed back when a tool_call REJECTED with
+ * an `InvalidToolInputException` (the model produced bad arguments) — Phase 5.3.5.
+ * The model still gets a valid response per tool_call (single-shot preserved) and
+ * answers honestly. Infra failures (`MetadataQueryFailedException`) are NOT routed
+ * here — they propagate fail-loud.
+ */
+export const TOOL_INVALID_INPUT_MESSAGE = 'This query could not be run.';
+
+/**
+ * `ToolMessage` content when the model names a tool that is not in the dispatch
+ * map (should be impossible under AUTO with the two registered tools) — 5.3.5.
+ */
+export const UNKNOWN_TOOL_MESSAGE = 'Unknown tool requested. No data returned.';

@@ -66,4 +66,15 @@ describe.skip('ToolRouterService (integration — real Gemini routing)', () => {
     expect(result.toolUsed).toEqual([]);
     expect(result.answer.length).toBeGreaterThan(0);
   }, 60_000);
+
+  it('runs a parallel round when a question needs content AND an exact fact', async () => {
+    const result = await service.route(
+      'How many episodes are there, and what do guests say about consciousness?',
+    );
+
+    // ideally both tools fire in one round; assert the metadata + content split
+    expect(result.toolUsed).toContain('query_metadata');
+    expect(result.toolUsed).toContain('search_content');
+    expect(result.answer.length).toBeGreaterThan(0);
+  }, 60_000);
 });
