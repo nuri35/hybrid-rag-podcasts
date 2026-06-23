@@ -298,8 +298,19 @@ strings. Policy, branched in ONE place (`citationRequired`):
   facade; skippable `qa-facade.integration.spec.ts` (both toggle states e2e).
 - Full suite **555 passed / 46 skipped, 0 regressions** (was 537).
 
+## Follow-up shipped — ingestion-lock on the tool-use path
+The ingestion-LOCK check (data-level guard) is now applied to the tool-use branch via the
+SAME shared seam, completing the data-level-guard parity. Extracted the existing fail-open
+lock check into `QaChainService.assertIngestionNotInProgress()` (lock ownership unchanged —
+`DistributedLockService` still owns it; this only reads it); `ask()`, `askStream()`, and the
+facade's tool-use path all call it (one implementation, three call sites). PRE-routing,
+ordered lock → integrity exactly as `ask()`. Lock engaged → `IngestionInProgressException`
+(503), identical to the direct path; Redis error → WARN `qa_lock_check_failed` + proceed
+(fail-open, unchanged). `askStream()`'s fail-open log label unified to `qa_lock_check_failed`
+(was `qa_stream_lock_check_failed` — no test asserted it; semantics identical). +2 facade
+tests (engaged → blocked; free → proceeds + lock not re-run on the direct path). Full suite
+**557 passed / 46 skipped, 0 regressions**.
+
 ## Still pending (final 5.4 step — separate)
 Resilience/timeout/token telemetry around the router's two `invoke`s (the AMBIGUOUS Part-2
-items #6/#7/#8). Also out of this step and noted: the ingestion-LOCK check is not applied to
-the tool-use path (facade flow scoped to integrity per the locked design) — flag for the
-resilience step or a follow-up.
+items #6/#7/#8).

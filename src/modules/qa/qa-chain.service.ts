@@ -155,6 +155,31 @@ export class QaChainService implements OnModuleInit {
   }
 
   /**
+   * Phase 5.4 — shared ingestion-lock CHECK (fail-open), queryable by the QA
+   * facade's tool-use path so it gets the SAME data-level protection as
+   * `ask()`/`askStream()` (the lock blocks queries while data is being written, and
+   * the tool-use path reads the same Chroma/ES). Lock OWNERSHIP is unchanged
+   * (`DistributedLockService` owns it); this only reads it. Throws
+   * `IngestionInProgressException` (503) when the lock is held; ANY Redis error →
+   * WARN + proceed (fail-open — the lock is a guard, not a correctness primitive).
+   * One implementation, three call sites (`ask`, `askStream`, facade).
+   */
+  async assertIngestionNotInProgress(): Promise<void> {
+    try {
+      const locked = await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK);
+      if (locked) {
+        throw new IngestionInProgressException();
+      }
+    } catch (error) {
+      if (error instanceof IngestionInProgressException) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `qa_lock_check_failed reason=${message} action=proceeding (Redis fail-open)`,
+      );
+    }
+  }
+
+  /**
    * Compares the Redis-stored integrity marker against Chroma's current
    * chunk count. Latches into degraded mode on mismatch / missing marker.
    * Fail-open if Redis itself is unreachable — the service stays up.
@@ -209,18 +234,7 @@ export class QaChainService implements OnModuleInit {
     // 0a. Ingestion lock check — refuse queries while an ingestion run
     //     holds the lock. Fail-open if Redis is unreachable so a transient
     //     Redis blip doesn't take the API down with it.
-    try {
-      const locked = await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK);
-      if (locked) {
-        throw new IngestionInProgressException();
-      }
-    } catch (error) {
-      if (error instanceof IngestionInProgressException) throw error;
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `qa_lock_check_failed reason=${message} action=proceeding (Redis fail-open)`,
-      );
-    }
+    await this.assertIngestionNotInProgress();
 
     // 0b. Integrity gate — if the startup check latched degraded, every
     //     request refuses until next boot after corrective ingestion.
@@ -571,19 +585,8 @@ export class QaChainService implements OnModuleInit {
     const startTime = Date.now();
     const topK = options.topK ?? this.defaultTopK;
 
-    // 0a. Lock check — same fail-open Redis policy as ask().
-    try {
-      const locked = await this.lockService.isLocked(REDIS_KEYS.INGESTION_LOCK);
-      if (locked) {
-        throw new IngestionInProgressException();
-      }
-    } catch (error) {
-      if (error instanceof IngestionInProgressException) throw error;
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `qa_stream_lock_check_failed reason=${message} action=proceeding (Redis fail-open)`,
-      );
-    }
+    // 0a. Lock check — same shared fail-open seam as ask().
+    await this.assertIngestionNotInProgress();
 
     // 0b. Integrity gate.
     this.assertDataIntegrity();

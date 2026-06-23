@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { QaFacadeService } from './qa-facade.service';
 import { QuestionRejectedException } from './exceptions/question-rejected.exception';
 import { OutputRejectedException } from './exceptions/output-rejected.exception';
-import { DataIntegrityMismatchException } from './exceptions';
+import { DataIntegrityMismatchException, IngestionInProgressException } from './exceptions';
 import { AnswerKind, OutputVerdict } from './types/output-validation.types';
 import { SanitizationVerdict } from './types/sanitization.types';
 import type { QaChainService } from './qa-chain.service';
@@ -16,12 +16,17 @@ import type { QaResult } from './qa.types';
 describe('QaFacadeService (Phase 5.4)', () => {
   let ask: jest.Mock;
   let assertDataIntegrity: jest.Mock;
+  let assertIngestionNotInProgress: jest.Mock;
   let route: jest.Mock;
   let inspect: jest.Mock;
   let validate: jest.Mock;
 
   const buildFacade = (toolUseEnabled: boolean): QaFacadeService => {
-    const qaChain = { ask, assertDataIntegrity } as unknown as QaChainService;
+    const qaChain = {
+      ask,
+      assertDataIntegrity,
+      assertIngestionNotInProgress,
+    } as unknown as QaChainService;
     const router = { route } as unknown as ToolRouterService;
     const sanitization = { inspect } as unknown as PromptSanitizationService;
     const outputValidation = { validate } as unknown as OutputValidationService;
@@ -34,6 +39,7 @@ describe('QaFacadeService (Phase 5.4)', () => {
   beforeEach(() => {
     ask = jest.fn();
     assertDataIntegrity = jest.fn();
+    assertIngestionNotInProgress = jest.fn().mockResolvedValue(undefined);
     route = jest.fn();
     // default: sanitize allows, output validates
     inspect = jest.fn().mockReturnValue({
@@ -80,6 +86,7 @@ describe('QaFacadeService (Phase 5.4)', () => {
 
       await facade.answer('q');
 
+      expect(assertIngestionNotInProgress).not.toHaveBeenCalled();
       expect(assertDataIntegrity).not.toHaveBeenCalled();
       expect(inspect).not.toHaveBeenCalled();
       expect(validate).not.toHaveBeenCalled();
@@ -146,6 +153,22 @@ describe('QaFacadeService (Phase 5.4)', () => {
         AnswerKind.TOOL_SEARCH_CONTENT,
       );
       expect(result.toolUsed).toEqual(['search_content']);
+    });
+
+    it('runs the ingestion-lock check pre-routing (shared seam)', async () => {
+      const facade = buildFacade(true);
+      await facade.answer('How many episodes?');
+      expect(assertIngestionNotInProgress).toHaveBeenCalledTimes(1);
+    });
+
+    it('ingestion lock engaged → blocked the same way (IngestionInProgressException), no integrity/sanitize/route', async () => {
+      assertIngestionNotInProgress.mockRejectedValue(new IngestionInProgressException());
+      const facade = buildFacade(true);
+
+      await expect(facade.answer('q')).rejects.toBeInstanceOf(IngestionInProgressException);
+      expect(assertDataIntegrity).not.toHaveBeenCalled();
+      expect(inspect).not.toHaveBeenCalled();
+      expect(route).not.toHaveBeenCalled();
     });
 
     it('integrity not ready → propagates, no sanitize/route', async () => {

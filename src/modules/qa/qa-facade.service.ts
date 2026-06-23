@@ -87,6 +87,12 @@ export class QaFacadeService {
     const correlationId = randomUUID();
     const startTime = Date.now();
 
+    // Ingestion-lock check (data-level guard, fail-open) — the tool-use path reads
+    // the same Chroma/ES, so it gets the SAME shared seam ask() uses. PRE-routing,
+    // and ordered lock → integrity exactly as ask() does (lock state owned by
+    // DistributedLockService; we only query it).
+    await this.qaChainService.assertIngestionNotInProgress();
+
     // Integrity-gate check (state owned by QaChainService; we only query readiness).
     this.qaChainService.assertDataIntegrity();
 
