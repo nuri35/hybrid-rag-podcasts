@@ -1,5 +1,12 @@
 # Phase 5.4 Plan — Wire the router into the QA pipeline
 
+> **Status: ✅ COMPLETE.** QA-side facade (C3) integration + shared-provider extraction
+> (sanitization, output-validation, integrity-check, ingestion-lock) + context-aware
+> output validation (`AnswerKind`) + lock/integrity parity across both paths — all done,
+> `557 passed / 46 skipped, 0 regressions`. **Tool-use-path resilience (retry / timeout /
+> circuit-breaker + token telemetry) is consciously DEFERRED** — see "Resilience deferral"
+> at the end of Part 3.
+
 > **Part 1 — Step-0 research ONLY (read-only, no code, no design decisions).** This
 > records how the QA pipeline works today so we can choose the integration approach
 > together. No wiring option is proposed or picked here.
@@ -311,6 +318,16 @@ ordered lock → integrity exactly as `ask()`. Lock engaged → `IngestionInProg
 tests (engaged → blocked; free → proceeds + lock not re-run on the direct path). Full suite
 **557 passed / 46 skipped, 0 regressions**.
 
-## Still pending (final 5.4 step — separate)
-Resilience/timeout/token telemetry around the router's two `invoke`s (the AMBIGUOUS Part-2
-items #6/#7/#8).
+## Resilience deferral (CLOSED — deliberately deferred, not pending)
+Tool-use path resilience (retry / timeout / circuit-breaker + token telemetry around
+`ToolRouterService`'s two Gemini invokes — the AMBIGUOUS Part-2 items #6/#7/#8) is
+**deliberately DEFERRED.** Rationale: `ask()` already implements and demonstrates the full
+resilient-LLM pattern (`ResilientLlmService` = circuit + retry + timeout + token callback);
+duplicating it for the router is not warranted in this repo (YAGNI). It is **REQUIRED before
+enabling `TOOL_USE_ENABLED` in production**, and is planned for the **agentic phase** where
+multi-step loops make it essential. Until then, the **direct (ask) path remains fully
+protected**; the tool-use path's two invokes are **unprotected by design**. With
+`TOOL_USE_ENABLED` defaulting to `false`, no production traffic hits the unprotected path.
+
+**Phase 5.4 is COMPLETE** — integration + shared-provider extraction + context-aware
+validation + lock/integrity parity all done; resilience consciously deferred as above.
