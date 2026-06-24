@@ -161,6 +161,21 @@ describe('SearchContentToolService', () => {
       await service.execute({ query: 'q', top_k: 10 });
       expect(retriever.retrieve).toHaveBeenCalledWith('q', { topK: 10 });
     });
+
+    it('does NOT slice the expanded set down to top_k (keeps the ±1 neighbor context)', async () => {
+      // Mimic the neighbor-expanded set: the retriever returns MORE chunks than
+      // top_k (~10-12 after ±1 expansion). The tool must return ALL of them — it
+      // does not slice to top_k, or it would cut the neighbor context.
+      const expanded = Array.from({ length: 12 }, (_, i) =>
+        chunk(`10_chunk_${i}`, `t${i}`, '10', 'Ep'),
+      );
+      retriever.retrieve.mockResolvedValue(expanded);
+
+      const { passages } = await service.execute({ query: 'q', top_k: 5 });
+
+      expect(passages).toHaveLength(12);
+      expect(passages.map((p) => p.text)).toEqual(expanded.map((c) => c.document));
+    });
   });
 
   // --------------------------------------------------------------------------

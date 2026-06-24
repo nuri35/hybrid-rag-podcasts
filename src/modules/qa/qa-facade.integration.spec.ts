@@ -98,7 +98,7 @@ describe.skip('QA pipeline toggle (HTTP integration — requires Chroma + ES + G
       process.env.TOOL_USE_ENABLED = prev;
     });
 
-    it('answers a metadata question via the tool-use path (sources [], toolUsed set)', async () => {
+    it('answers a metadata question via the tool-use path (sources [], toolUsed set, value 319)', async () => {
       const res = await request(server)
         .post('/api/v1/questions')
         .send({ question: 'How many episodes are there?' })
@@ -108,6 +108,25 @@ describe.skip('QA pipeline toggle (HTTP integration — requires Chroma + ES + G
       expect(body.sources).toEqual([]);
       expect(Array.isArray(body.toolUsed)).toBe(true);
       expect(body.answer.length).toBeGreaterThan(0);
+      // value correctness end-to-end (episode-grain count)
+      expect(body.answer).toContain('319');
+    }, 60_000);
+
+    it('returns 200 for a LONG uncited metadata answer (TOOL_QUERY_METADATA relaxes the citation gate)', async () => {
+      // "List the episodes featuring Michael Malice" → query_metadata filter → a
+      // multi-title list summary with NO [Source N] markers, ≥50 chars. The OLD
+      // strict validator would 500 this (missing_citation); context-aware
+      // validation (kind=TOOL_QUERY_METADATA) relaxes the citation gate → 200.
+      // This is the q007/q024 fault-line proof for the tool path.
+      const res = await request(server)
+        .post('/api/v1/questions')
+        .send({ question: 'List the episodes featuring Michael Malice.' })
+        .expect(200);
+      const body = res.body as AnswerBody;
+      expect(body.path).toBe('tool_use');
+      expect(body.toolUsed ?? []).toContain('query_metadata');
+      // confirms it is the LONG-answer case (not bypassing via the <50-char length floor)
+      expect(body.answer.length).toBeGreaterThanOrEqual(50);
     }, 60_000);
   });
 });

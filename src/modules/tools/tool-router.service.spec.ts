@@ -64,6 +64,15 @@ describe('ToolRouterService (Phase 5.3.2)', () => {
     return calls[0][0];
   };
 
+  /** The per-tool `tool_dispatch …` log lines emitted this run (log + warn). */
+  const dispatchLines = (): string[] => {
+    const calls = [
+      ...(logSpy.mock.calls as unknown as string[][]),
+      ...(warnSpy.mock.calls as unknown as string[][]),
+    ];
+    return calls.map((c) => c[0]).filter((line) => line.startsWith('tool_dispatch'));
+  };
+
   it('binds tools exactly once at construction (the only bindTools call)', () => {
     expect(bindTools).toHaveBeenCalledTimes(1);
     expect(createChatModel).toHaveBeenCalledTimes(1);
@@ -255,14 +264,6 @@ describe('ToolRouterService (Phase 5.3.2)', () => {
   // Per-tool logging — name + latency + status
   // --------------------------------------------------------------------------
   describe('per-tool logging', () => {
-    const dispatchLines = (): string[] => {
-      const calls = [
-        ...(logSpy.mock.calls as unknown as string[][]),
-        ...(warnSpy.mock.calls as unknown as string[][]),
-      ];
-      return calls.map((c) => c[0]).filter((line) => line.startsWith('tool_dispatch'));
-    };
-
     it('logs name + latency + status=success on a fulfilled call', async () => {
       boundInvoke.mockResolvedValue({
         content: '',
@@ -363,6 +364,11 @@ describe('ToolRouterService (Phase 5.3.2)', () => {
       ) as ToolMessage;
       expect(toolMessage.content).toContain('Unknown tool');
       expect(result.answer).toBe('I could not run that.');
+
+      // per-tool logging: the fourth status (unknown_tool) is emitted too
+      const line = dispatchLines().find((l) => l.includes('name=nonexistent_tool'));
+      expect(line).toMatch(/status=unknown_tool/);
+      expect(line).toMatch(/latency_ms=\d+/);
     });
   });
 });
