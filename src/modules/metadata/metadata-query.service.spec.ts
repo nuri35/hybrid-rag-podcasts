@@ -282,6 +282,12 @@ describe('MetadataQueryService', () => {
       await expectInvalid({ type: MetadataAggregation.COUNT_DISTINCT, field: 'date' });
     });
 
+    it('rejects the dead field guest_affiliation (excluded/empty, before ES)', () =>
+      expectInvalid({ type: MetadataAggregation.COUNT_DISTINCT, field: 'guest_affiliation' }));
+
+    it('rejects the dead field guest_role (excluded/empty, before ES)', () =>
+      expectInvalid({ type: MetadataAggregation.COUNT_DISTINCT, field: 'guest_role' }));
+
     it('rejects an unknown keyword field (text)', () =>
       expectInvalid({ type: MetadataAggregation.GROUP_BY, field: 'text' }));
 
