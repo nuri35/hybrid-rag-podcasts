@@ -305,6 +305,19 @@ strings. Policy, branched in ONE place (`citationRequired`):
   facade; skippable `qa-facade.integration.spec.ts` (both toggle states e2e).
 - Full suite **555 passed / 46 skipped, 0 regressions** (was 537).
 
+## Known test-harness limitation — `qa-facade.integration.spec.ts` toggle
+`qa-facade.integration.spec.ts` flips `TOOL_USE_ENABLED` by mutating `process.env` in
+`beforeAll`. Because `ConfigModule.forRoot({ cache: true })` snapshots env **once at process
+startup**, runtime mutation is NOT honored — so when this spec is un-skipped as-is, the two
+`TOOL_USE_ENABLED=true` blocks report `path:'direct'` (~2 failures). This is a **TEST-HARNESS
+limitation, not a product defect**: verified via a shell-set flag (`TOOL_USE_ENABLED=true`)
+that the tool-use path routes correctly, returns `sources:[]`/`toolUsed`/`319`, and the
+context-aware citation relaxation returns **200** for a long uncited metadata answer. To run
+the tool-use blocks cleanly, set the env var in the shell **before** jest starts (and/or split
+the ON/OFF blocks into separate processes) rather than relying on in-process `beforeAll`
+mutation. Pre-flight (all 6 Phase-5 live specs) confirmed **20/20 in-scope assertions pass and
+all three 5.4 critical behaviors hold**.
+
 ## Follow-up shipped — ingestion-lock on the tool-use path
 The ingestion-LOCK check (data-level guard) is now applied to the tool-use branch via the
 SAME shared seam, completing the data-level-guard parity. Extracted the existing fail-open
