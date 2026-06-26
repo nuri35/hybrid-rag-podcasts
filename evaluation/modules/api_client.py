@@ -6,7 +6,7 @@ timeouts before giving up.
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 import time
 
 import requests
@@ -36,6 +36,13 @@ class QueryResult:
     # expanded LLM context). Falls back to the expanded ids when the API omits
     # the metadata (cache hit / older API), so older runs still score.
     fused_top_k_ids: List[str] = field(default_factory=list)
+    # Phase 5.5 routing eval: the tool(s) the router invoked this turn, from the
+    # response `toolUsed` (tool-use path only). The routing-accuracy scorer reads
+    # this. Absent on the direct/Phase-4 path → defaults to [] (no tool used).
+    tool_used: List[str] = field(default_factory=list)
+    # Phase 5.5 routing eval: which pipeline answered, from the response `path`
+    # ('direct' | 'tool_use'). Absent on older/Phase-4 responses → None.
+    path: Optional[str] = None
 
     @property
     def retrieved_chunk_ids(self) -> List[str]:
@@ -138,9 +145,16 @@ class ApiClient:
                 if cid is not None:
                     fused_top_k_ids.append(cid)
 
+        # Phase 5.5: routing fields. Additive and optional — the direct/Phase-4
+        # path omits `toolUsed` (→ []) and may omit `path` (→ None).
+        tool_used = data.get('toolUsed') or []
+        path = data.get('path')
+
         return QueryResult(
             question=question,
             answer=data['answer'],
             sources=sources,
             fused_top_k_ids=fused_top_k_ids,
+            tool_used=list(tool_used),
+            path=path,
         )
