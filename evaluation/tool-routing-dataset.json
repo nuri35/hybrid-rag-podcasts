@@ -3,12 +3,12 @@
   "created_at": "2026-06-26",
   "purpose": "Phase 5.5 tool-use routing evaluation. Extends the golden-dataset format with routing-expectation fields (expected_tools, expected_value_or_check). Scores whether ToolRouterService picks the right tool(s) and grounds/refuses honestly. Tool names are the locked constants SEARCH_CONTENT_TOOL_NAME='search_content' and QUERY_METADATA_TOOL_NAME='query_metadata'.",
   "tool_names": ["search_content", "query_metadata"],
-  "total_questions": 32,
+  "total_questions": 33,
   "distribution": {
     "content": 5,
     "count": 4,
     "filter": 5,
-    "aggregate": 5,
+    "aggregate": 6,
     "parallel": 4,
     "no_tool": 4,
     "scope_honesty": 5
@@ -20,6 +20,7 @@
     "distinct_titles": 317,
     "min_duration_min": 33,
     "max_duration_min": 315,
+    "longest_episode": { "episode_id": "309", "guest_name": "John Carmack", "duration_min": 315, "title": "Doom, Quake, VR, AGI, Programming, Video Games, and Rockets", "is_unique_max": true },
     "avg_duration_min": 59.749,
     "top_guest_episode_count": 4,
     "top_guests_tied_at_4": ["Eric Weinstein", "Manolis Kellis", "Michael Malice"],
@@ -217,6 +218,16 @@
       "notes": "group_by over guest_name (plural framing → naturally returns the tied set). Verified top buckets all at 4."
     },
     {
+      "id": "r033",
+      "category": "aggregate",
+      "question": "Which guest's episode is the longest, and how long is it?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer names John Carmack and contains 315 (minutes); episode is 'Doom, Quake, VR, AGI, Programming, Video Games, and Rockets' (episode_id 309) — single, non-tied max over duration_min",
+      "ground_truth": "The longest episode is John Carmack's, at 315 minutes (episode 309, 'Doom, Quake, VR, AGI, Programming, Video Games, and Rockets').",
+      "ground_truth_chunk_ids": [],
+      "notes": "Non-tied aggregate (max over duration_min returns the episode ref) → query_metadata. Unambiguous: exactly ONE episode at 315 min; the next-longest value is 60 min (292 episodes tied), so the max is uniquely the Carmack episode. Verified live: duration_min=315, guest_name='John Carmack', episode_id=309, count(duration_min==315)=1."
+    },
+    {
       "id": "r020",
       "category": "parallel",
       "question": "How many episodes feature Michael Malice, and what did he talk about?",
@@ -304,7 +315,7 @@
       "expected_value_or_check": "honest no-info: states it doesn't have date information; MUST NOT fabricate a date. Tolerant on tooling: [] (direct honest) OR ['query_metadata']-then-honest both acceptable",
       "ground_truth": "The sources do not contain episode date information.",
       "ground_truth_chunk_ids": [],
-      "notes": "Date is an out-of-scope field (empty across all 319 docs; not in the query_metadata allow-list). ROUTER_SYSTEM_PROMPT tells the model to say it lacks date info. Scored on honesty, not tool choice."
+      "notes": "Date is an out-of-scope field (empty across all 319 docs; not in the query_metadata allow-list). ROUTER_SYSTEM_PROMPT tells the model to say it lacks date info. Tooling tolerant: expected_tools=[] is the primary expectation, but ['query_metadata']-then-honest is equally acceptable — the scored signal is honesty (no fabricated date), NOT tool choice."
     },
     {
       "id": "r029",
@@ -314,7 +325,7 @@
       "expected_value_or_check": "honest no-info: states it doesn't have affiliation info; MUST NOT fabricate one. Tooling tolerant ([] or query_metadata-then-honest)",
       "ground_truth": "The sources do not contain guest-affiliation information.",
       "ground_truth_chunk_ids": [],
-      "notes": "guest_affiliation is empty across all docs and excluded from the allow-list (CLAUDE.md / metadata.constants). Scope-honesty: refuse, don't invent."
+      "notes": "guest_affiliation is empty across all docs and excluded from the allow-list (CLAUDE.md / metadata.constants). Scope-honesty: refuse, don't invent. Tooling tolerant: expected_tools=[] primary, but ['query_metadata']-then-honest is equally acceptable — the scored signal is honesty (no fabricated affiliation), NOT tool choice."
     },
     {
       "id": "r030",
@@ -324,7 +335,7 @@
       "expected_value_or_check": "honest no-info: states it doesn't have guest role/title info; MUST NOT fabricate. Tooling tolerant ([] or query_metadata-then-honest)",
       "ground_truth": "The sources do not contain guest role/title information.",
       "ground_truth_chunk_ids": [],
-      "notes": "guest_role is empty across all docs and excluded from the allow-list. Scope-honesty: refuse, don't invent."
+      "notes": "guest_role is empty across all docs and excluded from the allow-list. Scope-honesty: refuse, don't invent. Tooling tolerant: expected_tools=[] primary, but ['query_metadata']-then-honest is equally acceptable — the scored signal is honesty (no fabricated role), NOT tool choice."
     },
     {
       "id": "r031",
@@ -334,17 +345,17 @@
       "expected_value_or_check": "honest no-info: states it doesn't have publication-date info; MUST NOT fabricate dates. Tooling tolerant ([] or query_metadata-then-honest)",
       "ground_truth": "The sources do not contain episode publication dates.",
       "ground_truth_chunk_ids": [],
-      "notes": "Whole-collection date question — date is out of scope (empty field). Scope-honesty: refuse, don't invent."
+      "notes": "Whole-collection date question — date is out of scope (empty field). Scope-honesty: refuse, don't invent. Tooling tolerant: expected_tools=[] primary, but ['query_metadata']-then-honest is equally acceptable — the scored signal is honesty (no fabricated dates), NOT tool choice."
     },
     {
       "id": "r032",
       "category": "scope_honesty",
-      "question": "How many episodes are there in total?",
+      "question": "Across the entire podcast, counting every single episode ever published, what is the grand total number of episodes?",
       "expected_tools": ["query_metadata"],
-      "expected_value_or_check": "answer contains 319 and the request succeeds with NO error (count-all tolerance: model may emit an orphan 'field' with no value; applyCountAllTolerance drops it so no 400/500)",
+      "expected_value_or_check": "answer contains 319 and the request succeeds with NO error (count-all tolerance: the 'across the entire podcast / every episode' framing tempts the model to attach an orphan 'field' with no value to the count; applyCountAllTolerance drops the value-less field so the call must NOT 400/500)",
       "ground_truth": "There are 319 episodes in total.",
       "ground_truth_chunk_ids": [],
-      "notes": "Count-all stress case (per task spec). Same semantics as r006 but specifically labeled to verify the count-all tolerance path holds (no error when the model attaches a value-less filter field). Verified 319."
+      "notes": "Count-all TOLERANCE stress case (per task spec) — distinct from r006's plain total count. The 'across the entire podcast, counting every single episode' phrasing is deliberately worded to push the model toward emitting a count with a spurious/value-less filter field; this item verifies applyCountAllTolerance (query-metadata adapter) drops the orphan field so the count-all path returns 319 with no error. Expected toolUsed=[query_metadata]. Verified 319."
     }
   ]
 }
