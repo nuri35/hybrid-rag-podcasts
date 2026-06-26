@@ -6,6 +6,8 @@ A hybrid RAG Q&A system over podcast transcripts. Users ask natural-language que
 
 **Phase 4 results** (hybrid+expansion vs. vector-only baseline, 25-question golden set): **Hit@5 0.810 → 0.905**, **Context Recall 0.767 → 0.900**, **MRR 0.712 → 0.774**, **Recall@5 0.786 → 0.841**, substantive Faithfulness ~0.841 → **0.905**, 0 regressions. Two of four vocabulary-mismatch questions fixed; the other two are documented out-of-scope misses (see [ADR 0019](./docs/ADR/0019-hybrid-retrieval-rrf.md)).
 
+**Query routing (Phase 5, live behind a toggle):** an LLM **tool-use** layer routes each question. The model picks **`search_content`** (the hybrid retrieval pipeline above — for *what was said*) or **`query_metadata`** (exact aggregations over episode metadata — counts, exact-match filters, min/max/avg, group-by), calls **both in parallel** when a question needs content *and* a fact, or **neither** for greetings/small talk. It is **single-shot** — one round of tool calls, then a final answer from the *unbound* model (no agentic serial loop). The **`TOOL_USE_ENABLED`** env flag selects the path: `false` (default) keeps the byte-identical Phase-4 direct RAG path; `true` routes through the tool layer. **Routing-eval result** (33 labeled questions, live Gemini): **97% routing accuracy (32/33)** — 100% on six of seven categories — see [ADR 0020](./docs/ADR/0020-llm-tool-routing.md) + [ADR 0021](./docs/ADR/0021-tool-use-pipeline-integration.md) and the recorded run in [`evaluation/results/routing-2026-06-26/`](./evaluation/results/routing-2026-06-26/).
+
 > The full project constitution — architectural decisions, hard constraints, conventions, and phase roadmap — lives in [`CLAUDE.md`](./CLAUDE.md). Read it first.
 
 ## How it fits together
@@ -394,6 +396,7 @@ See [`CLAUDE.md`](./CLAUDE.md) for the authoritative architecture, foundation re
 - **Single NestJS service** owns HTTP, CLI, and all LangChain orchestration. No Python sidecar (Elasticsearch, Chroma, and Redis are backing services, not sidecars).
 - **LCEL composition** is mandatory for every retriever and chain.
 - **Hybrid retrieval (Phase 4, live):** Chroma (dense vector) + Elasticsearch (BM25 keyword) fused by Reciprocal Rank Fusion, then ±1 neighbor-chunk expansion — see [ADR 0019](./docs/ADR/0019-hybrid-retrieval-rrf.md).
+- **Query routing (Phase 5, toggle `TOOL_USE_ENABLED`, default off):** single-shot LLM tool use — the model chooses `search_content` vs `query_metadata` (or both, or none), and the *unbound* model writes the final answer (no agentic loop). 97% routing accuracy (32/33) on the live routing eval — see [ADR 0020](./docs/ADR/0020-llm-tool-routing.md) + [ADR 0021](./docs/ADR/0021-tool-use-pipeline-integration.md).
 - **Vector store (Chroma)** holds transcript chunks + metadata (the fusion bridge key and the source of truth).
 - **Graph store (Neo4j, Phase 3 — planned)** will hold the entity graph (Episode / Person / Company).
 - **Bridge** between stores is shared identifiers (`episode_id`, `guest_name`, deterministic `chunk_id`).

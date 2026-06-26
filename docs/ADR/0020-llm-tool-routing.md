@@ -115,6 +115,7 @@ routing back into the QA pipeline; the Phase 4 path stays untouched.
 - **Routing accuracy is NOT measured here** — that is **5.5**. 5.3 asserts mechanics
   (dispatch, single-shot, parallel shape, fallback asymmetry, logging) via a mocked
   LLM, plus a skippable real-Gemini sanity suite.
+- **Pipeline integration (5.4) and the live routing eval (5.5) land in [ADR 0021](./0021-tool-use-pipeline-integration.md)** — `QaFacadeService` behind `TOOL_USE_ENABLED`, context-aware output validation, and the 97% (32/33) routing-eval result that closed Phase 5.
 
 ## Alternatives rejected
 
