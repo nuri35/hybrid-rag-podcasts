@@ -1,0 +1,350 @@
+{
+  "version": "1.0-draft",
+  "created_at": "2026-06-26",
+  "purpose": "Phase 5.5 tool-use routing evaluation. Extends the golden-dataset format with routing-expectation fields (expected_tools, expected_value_or_check). Scores whether ToolRouterService picks the right tool(s) and grounds/refuses honestly. Tool names are the locked constants SEARCH_CONTENT_TOOL_NAME='search_content' and QUERY_METADATA_TOOL_NAME='query_metadata'.",
+  "tool_names": ["search_content", "query_metadata"],
+  "total_questions": 32,
+  "distribution": {
+    "content": 5,
+    "count": 4,
+    "filter": 5,
+    "aggregate": 5,
+    "parallel": 4,
+    "no_tool": 4,
+    "scope_honesty": 5
+  },
+  "value_provenance": {
+    "verified_against": "live podcast_episodes index (319 docs), 2026-06-26",
+    "total_episodes": 319,
+    "distinct_guests": 281,
+    "distinct_titles": 317,
+    "min_duration_min": 33,
+    "max_duration_min": 315,
+    "avg_duration_min": 59.749,
+    "top_guest_episode_count": 4,
+    "top_guests_tied_at_4": ["Eric Weinstein", "Manolis Kellis", "Michael Malice"],
+    "empty_out_of_scope_fields": ["date", "guest_affiliation", "guest_role"]
+  },
+  "questions": [
+    {
+      "id": "r001",
+      "category": "content",
+      "question": "Why does Lee Cronin say biology is not a Turing machine?",
+      "expected_tools": ["search_content"],
+      "expected_value_or_check": "answer explains that Turing machines don't evolve, whereas biology evolved (and eventually produced Turing himself)",
+      "ground_truth": "Because Turing machines don't evolve. Cronin argues people see Turing machines everywhere, but biology evolved and eventually gave rise to Alan Turing, who only then invented the Turing machine abstraction.",
+      "ground_truth_chunk_ids": ["269_chunk_305"],
+      "notes": "Content recall (reused Phase 4 q006). Asks WHAT a guest argued → search_content."
+    },
+    {
+      "id": "r002",
+      "category": "content",
+      "question": "According to Tony Fadell, how did Steve Jobs deliver criticism?",
+      "expected_tools": ["search_content"],
+      "expected_value_or_check": "answer says Jobs critiqued the work, not the person — pushing on details for the right reasons, not bullying",
+      "ground_truth": "Jobs would critique the work, not judge the person, at least not in front of others. He pushed relentlessly on details and challenged people for the right reasons; it was not bullying or demeaning.",
+      "ground_truth_chunk_ids": ["294_chunk_103"],
+      "notes": "Content recall (reused Phase 4 q018). Substance of a conversation → search_content."
+    },
+    {
+      "id": "r003",
+      "category": "content",
+      "question": "Which physicist does Richard Dawkins agree with about there being a genuine mystery to consciousness?",
+      "expected_tools": ["search_content"],
+      "expected_value_or_check": "answer names Roger Penrose",
+      "ground_truth": "Roger Penrose, whom Dawkins calls one of the world's greatest physicists; Dawkins agrees there is a mystery but considers leaping to mystical explanations cowardice.",
+      "ground_truth_chunk_ids": ["87_chunk_16"],
+      "notes": "Content recall (reused Phase 4 q011). A 'which X said' content lookup, not a collection count → search_content."
+    },
+    {
+      "id": "r004",
+      "category": "content",
+      "question": "What did Jo Boaler say about letting kids experience math in different ways?",
+      "expected_tools": ["search_content"],
+      "expected_value_or_check": "answer mentions experiencing math in multiple ways (e.g. visually, with numbers, with words) to accommodate how different brains work",
+      "ground_truth": "Math has traditionally been offered one way (reproduce the shown method); opening it so kids experience it visually, with numbers, or with words lets far more kids access it and fits the different ways their brains work.",
+      "ground_truth_chunk_ids": ["226_chunk_14", "226_chunk_15"],
+      "notes": "New content question grounded in ep 226. Fresh phrasing of a substance question → search_content."
+    },
+    {
+      "id": "r005",
+      "category": "content",
+      "question": "What did Erik Brynjolfsson say about technology and the risk of a public backlash?",
+      "expected_tools": ["search_content"],
+      "expected_value_or_check": "answer mentions redistribution of gains and the risk that, without it, society turns against technology (the Luddite/free-trade parallel)",
+      "ground_truth": "Both free trade and technology expand the pie unevenly; economists prescribe redistributing gains to those hurt, but that didn't happen with trade, causing backlash. Brynjolfsson warns technology faces the same risk, as the Luddites did 200 years ago.",
+      "ground_truth_chunk_ids": ["141_chunk_121", "141_chunk_122", "141_chunk_123"],
+      "notes": "New content question grounded in ep 141. Argument/opinion recall → search_content."
+    },
+    {
+      "id": "r006",
+      "category": "count",
+      "question": "How many episodes are in the collection in total?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 319 (aggregation_type=count, no filter)",
+      "ground_truth": "There are 319 episodes in the collection.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Whole-collection count → query_metadata. Verified count=319."
+    },
+    {
+      "id": "r007",
+      "category": "count",
+      "question": "How many distinct guests have appeared on the podcast?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 281 (count_distinct over guest_name)",
+      "ground_truth": "281 distinct guests have appeared.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Distinct-count over a keyword field → query_metadata. Verified count_distinct(guest_name)=281."
+    },
+    {
+      "id": "r008",
+      "category": "count",
+      "question": "How many unique episode titles are there?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 317 (count_distinct over title)",
+      "ground_truth": "There are 317 unique episode titles.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Distinct-count over title → query_metadata. Verified count_distinct(title)=317 (slightly below 319 because a couple of titles repeat)."
+    },
+    {
+      "id": "r009",
+      "category": "count",
+      "question": "How many separate conversations does the dataset contain?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 319 (count, or count_distinct over episode_id)",
+      "ground_truth": "The dataset contains 319 separate conversations (episodes).",
+      "ground_truth_chunk_ids": [],
+      "notes": "Paraphrased whole-collection count (robustness: 'conversations' instead of 'episodes') → query_metadata. Verified 319."
+    },
+    {
+      "id": "r010",
+      "category": "filter",
+      "question": "How many episodes feature Michael Malice?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 4 (count or filter where guest_name == 'Michael Malice')",
+      "ground_truth": "Michael Malice is featured in 4 episodes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Exact-match filter on guest_name → query_metadata. Verified count=4."
+    },
+    {
+      "id": "r011",
+      "category": "filter",
+      "question": "How many episodes does Eric Weinstein appear in?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 4 (filter where guest_name == 'Eric Weinstein')",
+      "ground_truth": "Eric Weinstein appears in 4 episodes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Exact-match filter on guest_name → query_metadata. Verified count=4."
+    },
+    {
+      "id": "r012",
+      "category": "filter",
+      "question": "How many times has Manolis Kellis been a guest?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 4 (filter where guest_name == 'Manolis Kellis')",
+      "ground_truth": "Manolis Kellis has been a guest 4 times.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Exact-match filter on guest_name → query_metadata. Verified count=4."
+    },
+    {
+      "id": "r013",
+      "category": "filter",
+      "question": "How many episodes feature Charles Hoskinson?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 1 (filter where guest_name == 'Charles Hoskinson')",
+      "ground_truth": "Charles Hoskinson is featured in 1 episode.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Exact-match filter with a single-appearance guest (distinct count from the 4-tied set) → query_metadata. Verified count=1."
+    },
+    {
+      "id": "r014",
+      "category": "filter",
+      "question": "How many episodes feature Andrew Huberman?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 3 (filter where guest_name == 'Andrew Huberman')",
+      "ground_truth": "Andrew Huberman is featured in 3 episodes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Exact-match filter with a 3-appearance guest (another distinct value) → query_metadata. Verified count=3."
+    },
+    {
+      "id": "r015",
+      "category": "aggregate",
+      "question": "What is the longest episode in the collection?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 315 (minutes) as the max duration (aggregation_type=max over duration_min)",
+      "ground_truth": "The longest episode runs 315 minutes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Max over a numeric field → query_metadata. Verified max(duration_min)=315."
+    },
+    {
+      "id": "r016",
+      "category": "aggregate",
+      "question": "What is the shortest episode in the collection?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 33 (minutes) as the min duration (aggregation_type=min over duration_min)",
+      "ground_truth": "The shortest episode runs 33 minutes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Min over a numeric field → query_metadata. Verified min(duration_min)=33."
+    },
+    {
+      "id": "r017",
+      "category": "aggregate",
+      "question": "What is the average episode duration?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains ~59.75 (accept 59-60, rounding tolerant) — aggregation_type=avg over duration_min",
+      "ground_truth": "The average episode duration is about 59.75 minutes.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Average over a numeric field → query_metadata. Verified avg(duration_min)=59.749."
+    },
+    {
+      "id": "r018",
+      "category": "aggregate",
+      "question": "Which guest has appeared in the most episodes?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer reflects the top count of 4; a 3-way tie (Eric Weinstein, Manolis Kellis, Michael Malice) — accept naming any/all of the three at 4 episodes",
+      "ground_truth": "Three guests are tied for the most appearances at 4 episodes each: Eric Weinstein, Manolis Kellis, and Michael Malice.",
+      "ground_truth_chunk_ids": [],
+      "notes": "group_by over guest_name → query_metadata. Verified top bucket count=4 with a 3-way tie. Check must be tie-tolerant."
+    },
+    {
+      "id": "r019",
+      "category": "aggregate",
+      "question": "Who are the most frequent guests on the show?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer lists the top guests at 4 episodes each (Eric Weinstein, Manolis Kellis, Michael Malice) — group_by guest_name, top buckets",
+      "ground_truth": "The most frequent guests, each with 4 episodes, are Eric Weinstein, Manolis Kellis, and Michael Malice.",
+      "ground_truth_chunk_ids": [],
+      "notes": "group_by over guest_name (plural framing → naturally returns the tied set). Verified top buckets all at 4."
+    },
+    {
+      "id": "r020",
+      "category": "parallel",
+      "question": "How many episodes feature Michael Malice, and what did he talk about?",
+      "expected_tools": ["search_content", "query_metadata"],
+      "expected_value_or_check": "BOTH tools used (order-independent); answer contains 4 AND summarizes content from a Malice episode",
+      "ground_truth": "Michael Malice appears in 4 episodes; the answer should also summarize substance from his conversation(s).",
+      "ground_truth_chunk_ids": [],
+      "notes": "Needs an exact fact (count=4 → query_metadata) AND content (what he discussed → search_content). expected_tools = set membership, not order."
+    },
+    {
+      "id": "r021",
+      "category": "parallel",
+      "question": "How many times has Eric Weinstein been on the podcast, and what are some of the ideas he discussed?",
+      "expected_tools": ["search_content", "query_metadata"],
+      "expected_value_or_check": "BOTH tools used (order-independent); answer contains 4 AND summarizes content from a Weinstein episode",
+      "ground_truth": "Eric Weinstein has been on 4 times; the answer should also summarize ideas from his conversation(s).",
+      "ground_truth_chunk_ids": [],
+      "notes": "Count (4 → query_metadata) + content (ideas discussed → search_content). Both tools expected."
+    },
+    {
+      "id": "r022",
+      "category": "parallel",
+      "question": "What is the longest episode, and what was discussed in it?",
+      "expected_tools": ["search_content", "query_metadata"],
+      "expected_value_or_check": "BOTH tools used (order-independent); answer contains 315 (min) AND summarizes content from that episode",
+      "ground_truth": "The longest episode is 315 minutes; the answer should also summarize what was discussed in it.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Aggregate fact (max=315 → query_metadata) + content (what was discussed → search_content). Both tools expected."
+    },
+    {
+      "id": "r023",
+      "category": "parallel",
+      "question": "How many distinct guests are there, and what did Tony Fadell say about Steve Jobs?",
+      "expected_tools": ["search_content", "query_metadata"],
+      "expected_value_or_check": "BOTH tools used (order-independent); answer contains 281 AND describes Fadell on Jobs (critique the work, not the person)",
+      "ground_truth": "There are 281 distinct guests; separately, Fadell said Jobs critiqued the work, not the person.",
+      "ground_truth_chunk_ids": ["294_chunk_103"],
+      "notes": "Global fact (count_distinct=281 → query_metadata) + an unrelated content recall (→ search_content). Stresses that the router splits a compound question across both tools."
+    },
+    {
+      "id": "r024",
+      "category": "no_tool",
+      "question": "Hello! What can you help me with?",
+      "expected_tools": [],
+      "expected_value_or_check": "no tool invoked; a brief direct greeting/capability reply, no fabricated facts",
+      "ground_truth": "A brief, direct answer describing that it answers questions about the podcast collection. No tool call.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Greeting / capability prompt → no tool. ROUTER_SYSTEM_PROMPT: 'If no tool is needed (e.g. a greeting or small talk), answer directly.'"
+    },
+    {
+      "id": "r025",
+      "category": "no_tool",
+      "question": "Hi there, how are you doing today?",
+      "expected_tools": [],
+      "expected_value_or_check": "no tool invoked; a brief direct small-talk reply",
+      "ground_truth": "A brief, direct small-talk reply. No tool call.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Pure small talk → no tool."
+    },
+    {
+      "id": "r026",
+      "category": "no_tool",
+      "question": "Thanks, that was really helpful!",
+      "expected_tools": [],
+      "expected_value_or_check": "no tool invoked; a brief direct acknowledgement",
+      "ground_truth": "A brief, direct acknowledgement. No tool call.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Acknowledgement / closing remark → no tool."
+    },
+    {
+      "id": "r027",
+      "category": "no_tool",
+      "question": "What kinds of questions can I ask you?",
+      "expected_tools": [],
+      "expected_value_or_check": "no tool invoked; a direct description of capabilities (content questions + collection facts), no fabricated stats",
+      "ground_truth": "A direct meta description of capabilities; no tool call and no invented numbers.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Meta question about the assistant itself → no tool. Borderline (could tempt a tool call); the correct routing is a direct capability answer."
+    },
+    {
+      "id": "r028",
+      "category": "scope_honesty",
+      "question": "When was the Michael Malice episode recorded?",
+      "expected_tools": [],
+      "expected_value_or_check": "honest no-info: states it doesn't have date information; MUST NOT fabricate a date. Tolerant on tooling: [] (direct honest) OR ['query_metadata']-then-honest both acceptable",
+      "ground_truth": "The sources do not contain episode date information.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Date is an out-of-scope field (empty across all 319 docs; not in the query_metadata allow-list). ROUTER_SYSTEM_PROMPT tells the model to say it lacks date info. Scored on honesty, not tool choice."
+    },
+    {
+      "id": "r029",
+      "category": "scope_honesty",
+      "question": "What organization is Eric Weinstein affiliated with?",
+      "expected_tools": [],
+      "expected_value_or_check": "honest no-info: states it doesn't have affiliation info; MUST NOT fabricate one. Tooling tolerant ([] or query_metadata-then-honest)",
+      "ground_truth": "The sources do not contain guest-affiliation information.",
+      "ground_truth_chunk_ids": [],
+      "notes": "guest_affiliation is empty across all docs and excluded from the allow-list (CLAUDE.md / metadata.constants). Scope-honesty: refuse, don't invent."
+    },
+    {
+      "id": "r030",
+      "category": "scope_honesty",
+      "question": "What are the professional titles or roles of the guests?",
+      "expected_tools": [],
+      "expected_value_or_check": "honest no-info: states it doesn't have guest role/title info; MUST NOT fabricate. Tooling tolerant ([] or query_metadata-then-honest)",
+      "ground_truth": "The sources do not contain guest role/title information.",
+      "ground_truth_chunk_ids": [],
+      "notes": "guest_role is empty across all docs and excluded from the allow-list. Scope-honesty: refuse, don't invent."
+    },
+    {
+      "id": "r031",
+      "category": "scope_honesty",
+      "question": "On what dates were the episodes published?",
+      "expected_tools": [],
+      "expected_value_or_check": "honest no-info: states it doesn't have publication-date info; MUST NOT fabricate dates. Tooling tolerant ([] or query_metadata-then-honest)",
+      "ground_truth": "The sources do not contain episode publication dates.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Whole-collection date question — date is out of scope (empty field). Scope-honesty: refuse, don't invent."
+    },
+    {
+      "id": "r032",
+      "category": "scope_honesty",
+      "question": "How many episodes are there in total?",
+      "expected_tools": ["query_metadata"],
+      "expected_value_or_check": "answer contains 319 and the request succeeds with NO error (count-all tolerance: model may emit an orphan 'field' with no value; applyCountAllTolerance drops it so no 400/500)",
+      "ground_truth": "There are 319 episodes in total.",
+      "ground_truth_chunk_ids": [],
+      "notes": "Count-all stress case (per task spec). Same semantics as r006 but specifically labeled to verify the count-all tolerance path holds (no error when the model attaches a value-less filter field). Verified 319."
+    }
+  ]
+}
